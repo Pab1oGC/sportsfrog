@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+**/TestResults/
+**/.vs/
+**/.idea/
+tests/
+docker/
+docker-compose.yml
+scripts/
+Dockerfile
+.dockerignore
+.gitignore
+.env
+.env.example
+**/appsettings.Local.json

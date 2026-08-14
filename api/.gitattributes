@@ -1,0 +1,28 @@
+# Line-ending normalization. Development happens on Linux and some people
+# clone on Windows: without this, Git converts to CRLF on clone and some
+# files stop working.
+
+* text=auto eol=lf
+
+# Scripts run by a Linux container must stay LF no matter what. With CRLF,
+# the interpreter fails with "bad interpreter: /bin/bash^M" and the Postgres
+# container starts up without creating the roles.
+*.sh   text eol=lf
+
+# The SQL is executed by the server, not the shell, but it's kept as LF so
+# diffs don't show the whole file changing when the OS changes.
+*.sql  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# PowerShell only runs on Windows.
+*.ps1  text eol=crlf
+
+# Binaries: no conversion.
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.pdf  binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary
