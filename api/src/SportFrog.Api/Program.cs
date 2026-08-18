@@ -1,11 +1,18 @@
+using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Infrastructure.Persistence;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// The connection string is only read here to fail at startup if it's
-// missing. The DbContext isn't registered in the container yet: it's
-// resolved via IDesignTimeDbContextFactory for the EF tools.
-_ = builder.Configuration.GetConnectionString("Default")
+var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException(
         "Missing connection string 'ConnectionStrings:Default'.");
+
+// The application connects as sportfrog_app: it can read and write data but
+// cannot modify the schema or bypass the isolation policies. Migrations are
+// applied out of band, by the schema owner.
+builder.Services.AddSingleton(SportFrogDataSource.Create(connectionString));
+builder.Services.AddDbContext<SportFrogDbContext>((services, options) =>
+    options.UseNpgsql(services.GetRequiredService<Npgsql.NpgsqlDataSource>()));
 
 var app = builder.Build();
 
