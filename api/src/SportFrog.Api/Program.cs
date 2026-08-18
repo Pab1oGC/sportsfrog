@@ -12,7 +12,9 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 // applied out of band, by the schema owner.
 builder.Services.AddSingleton(SportFrogDataSource.Create(connectionString));
 builder.Services.AddDbContext<SportFrogDbContext>((services, options) =>
-    options.UseNpgsql(services.GetRequiredService<Npgsql.NpgsqlDataSource>()));
+    options.UseNpgsql(
+        services.GetRequiredService<Npgsql.NpgsqlDataSource>(),
+        SportFrogDataSource.MapEnums));
 
 var app = builder.Build();
 
