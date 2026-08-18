@@ -31,7 +31,7 @@ public sealed class JwtAccessTokenValidationTests
     private static byte[] Base64UrlDecode(string value)
     {
         var padded = value.Replace('-', '+').Replace('_', '/');
-        padded += padded.Length % 4 switch { 2 => "==", 3 => "=", _ => "" };
+        padded += (padded.Length % 4) switch { 2 => "==", 3 => "=", _ => "" };
         return Convert.FromBase64String(padded);
     }
 
@@ -158,7 +158,14 @@ public sealed class JwtAccessTokenValidationTests
     [Fact]
     public void ValidateToken_RejectsAStringThatIsNotAJwtAtAll()
     {
-        var validating = () => Validate("no-es-un-jwt");
+        // Goes through our own validator rather than the raw handler: the
+        // library reports unreadable input as an ArgumentException, which
+        // would read as a programming fault and become a server error. Every
+        // refusal has to reach the caller as one family it can answer with an
+        // authentication failure.
+        var issuer = new JwtAccessTokenIssuer(SigningKey, Issuer, Audience, Lifetime);
+
+        var validating = () => issuer.Validate("no-es-un-jwt");
 
         validating.Should().Throw<SecurityTokenException>();
     }
