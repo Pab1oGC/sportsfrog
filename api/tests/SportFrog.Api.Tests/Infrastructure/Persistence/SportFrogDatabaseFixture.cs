@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
@@ -34,7 +35,7 @@ public sealed class SportFrogDatabaseFixture : IAsyncLifetime
 
     public SportFrogDatabaseFixture()
     {
-        var rolesScript = FindRepositoryFile("docker/postgres/init/01-roles.sh");
+        var rolesScriptContent = File.ReadAllBytes(FindRepositoryFile("docker/postgres/init/01-roles.sh"));
 
         // 0755: owner read/write/execute, group and other read/execute.
         const uint executableFileMode = 0b111_101_101;
@@ -47,8 +48,11 @@ public sealed class SportFrogDatabaseFixture : IAsyncLifetime
             .WithEnvironment("SPORTFROG_PUBLIC_PASSWORD", PublicPassword)
             // Same script the docker-compose stack uses to create the three
             // roles: one source of truth, not a parallel reimplementation.
+            // Passed as bytes, not as a source path: the (string, string)
+            // overload copied the file in as a directory instead of a file
+            // when this was tried against Testcontainers 4.13.0.
             .WithResourceMapping(
-                rolesScript,
+                rolesScriptContent,
                 "/docker-entrypoint-initdb.d/01-roles.sh",
                 executableFileMode)
             .Build();
@@ -67,6 +71,12 @@ public sealed class SportFrogDatabaseFixture : IAsyncLifetime
         // the ordering mistake this two-step init avoids.
         var migrationOptions = new DbContextOptionsBuilder<SportFrogDbContext>()
             .UseNpgsql(OwnerConnectionString)
+            // This project defines its schema in hand-written SQL and never
+            // runs `dotnet ef migrations add`, so the model snapshot EF
+            // Core 7+ diffs against on every Migrate() is never regenerated
+            // and will legitimately disagree with OnModelCreating. That's
+            // by design here, not a bug this fixture should fail on.
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         await using (var migrationContext = new SportFrogDbContext(migrationOptions))
