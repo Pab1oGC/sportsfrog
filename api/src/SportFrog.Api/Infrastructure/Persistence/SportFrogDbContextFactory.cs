@@ -39,7 +39,7 @@ public sealed class SportFrogDbContextFactory : IDesignTimeDbContextFactory<Spor
         }
 
         var options = new DbContextOptionsBuilder<SportFrogDbContext>()
-            .UseNpgsql(SportFrogDataSource.Create(connectionString))
+            .UseNpgsql(SportFrogDataSource.Create(connectionString), SportFrogDataSource.MapEnums)
             .Options;
 
         return new SportFrogDbContext(options);
