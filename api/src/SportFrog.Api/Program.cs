@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -69,6 +70,10 @@ builder.Services.AddKeyedSingleton(
 
 builder.Services.AddScoped<PublicCompetitionReader>();
 
+// Cost factor left at the default; it travels inside each hash, so raising
+// it later does not invalidate what is already stored.
+builder.Services.AddSingleton<BCryptPasswordHasher>();
+
 var app = builder.Build();
 
 app.UseAuthentication();
@@ -78,6 +83,8 @@ app.UseAuthorization();
 // token, and before any endpoint, so nothing reaches the database outside the
 // isolation context.
 app.UseMiddleware<OrganizationContextMiddleware>();
+
+app.MapRegisterOrganization();
 
 app.MapGet("/health", () => Results.Ok())
     .AllowAnonymous()
