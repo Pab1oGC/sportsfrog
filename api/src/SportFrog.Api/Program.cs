@@ -75,6 +75,7 @@ builder.Services.AddScoped<PublicCompetitionReader>();
 // it later does not invalidate what is already stored.
 builder.Services.AddSingleton<BCryptPasswordHasher>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<SessionIssuer>();
 
 var app = builder.Build();
 
@@ -88,6 +89,8 @@ app.UseMiddleware<OrganizationContextMiddleware>();
 
 app.MapRegisterOrganization();
 app.MapSignIn();
+app.MapRenewSession();
+app.MapSignOut();
 
 app.MapGet("/health", () => Results.Ok())
     .AllowAnonymous()

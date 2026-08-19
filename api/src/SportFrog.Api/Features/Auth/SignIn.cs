@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -9,33 +8,10 @@ namespace SportFrog.Api.Features.Auth;
 
 /// <summary>
 /// Exchanges an email address and password for a session (RF-02).
-///
-/// Two tokens come back. The access one is short-lived and carries the role
-/// held in each organization the account belongs to; the renewal one lives in
-/// the database, which is what makes closing a session possible at all — a
-/// signed token cannot be recalled once handed out.
 /// </summary>
 public static class SignIn
 {
     public sealed record Request(string Email, string Password);
-
-    /// <param name="AccessToken">Short-lived. Sent as a bearer token.</param>
-    /// <param name="RefreshToken">Revocable. Returned once and never again.</param>
-    /// <param name="ExpiresIn">Seconds the access token remains valid.</param>
-    /// <param name="Organizations">Where the account may act, and as what.</param>
-    public sealed record Response(
-        string AccessToken,
-        string RefreshToken,
-        int ExpiresIn,
-        IReadOnlyCollection<OrganizationSummary> Organizations);
-
-    /// <param name="Id">Value for the organization header on later requests.</param>
-    public sealed record OrganizationSummary(Guid Id, string Name, string Slug, string Role);
-
-    /// <summary>
-    /// How long a renewal token stays usable without being exercised.
-    /// </summary>
-    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
 
     /// <summary>
     /// A hash of nothing in particular, verified against when no account
@@ -63,8 +39,7 @@ public static class SignIn
         Request request,
         SportFrogDbContext database,
         BCryptPasswordHasher passwordHasher,
-        JwtAccessTokenIssuer tokenIssuer,
-        IOptions<JwtOptions> jwtOptions,
+        SessionIssuer sessionIssuer,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
@@ -82,9 +57,9 @@ public static class SignIn
             return Rejected();
         }
 
-        var memberships = await ReadMembershipsAsync(database, user!.Id, cancellationToken);
+        var session = await sessionIssuer.IssueAsync(user!.Id, cancellationToken);
 
-        if (memberships.Count == 0)
+        if (session is null)
         {
             // An account that belongs nowhere can act nowhere. Answered like
             // any other failure: which accounts exist, and which of them are
@@ -92,23 +67,10 @@ public static class SignIn
             return Rejected();
         }
 
-        var now = clock.GetUtcNow();
+        user.LastLoginAt = clock.GetUtcNow();
+        await database.SaveChangesAsync(cancellationToken);
 
-        var accessToken = tokenIssuer.IssueForOrganizations(
-            user.Id,
-            [.. memberships.Select(m => new OrganizationAccess(m.OrgId, m.Role))]);
-
-        var refreshToken = await StartSessionAsync(database, user, now, cancellationToken);
-
-        return Results.Ok(new Response(
-            accessToken,
-            refreshToken,
-            (int)jwtOptions.Value.AccessTokenLifetime.TotalSeconds,
-            [.. memberships.Select(m => new OrganizationSummary(
-                m.OrgId,
-                m.Organization!.Name,
-                m.Organization.Slug,
-                m.Role.ToString().ToLowerInvariant()))]));
+        return Results.Ok(SessionResponse.From(session));
     }
 
     /// <summary>
@@ -134,69 +96,6 @@ public static class SignIn
         // reason: a disabled account must not answer faster than a wrong
         // password.
         return matches && user is { IsActive: true };
-    }
-
-    /// <summary>
-    /// The organizations the account belongs to, and the role held in each.
-    /// </summary>
-    /// <remarks>
-    /// This read is what sign-in exists to resolve, and it precedes any
-    /// organization context — there is nothing yet to establish one to. It
-    /// works because the person is established instead: the own_memberships
-    /// policy lets an account read the rows that name it.
-    /// </remarks>
-    private static async Task<List<OrganizationMembership>> ReadMembershipsAsync(
-        SportFrogDbContext database,
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-
-        await database.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_user', {0}, true)",
-            [userId.ToString()],
-            cancellationToken);
-
-        var memberships = await database.Memberships
-            .Include(membership => membership.Organization)
-            .Where(membership => membership.UserId == userId)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-
-        // An organization that was suspended or removed grants nothing, even
-        // though the membership row survives it.
-        return [.. memberships.Where(m => m.Organization is { IsActive: true, DeletedAt: null })];
-    }
-
-    /// <summary>
-    /// Records the session and stamps the sign-in, returning the renewal
-    /// token exactly once.
-    /// </summary>
-    private static async Task<string> StartSessionAsync(
-        SportFrogDbContext database,
-        User user,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
-    {
-        var (token, hash) = RefreshTokenFactory.Create();
-
-        database.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-
-            // Only the digest is kept: a database dump must not hand over
-            // usable sessions.
-            TokenHash = hash,
-            ExpiresAt = now.Add(RefreshTokenLifetime),
-        });
-
-        user.LastLoginAt = now;
-
-        await database.SaveChangesAsync(cancellationToken);
-
-        return token;
     }
 
     /// <summary>
