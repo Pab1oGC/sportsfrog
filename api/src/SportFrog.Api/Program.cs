@@ -56,6 +56,19 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<OrganizationContext>();
 
+// The public view reads with its own database user, which holds no write
+// permission: its read-only condition is enforced by the engine and not by
+// the absence of a write in the code (DD-08).
+var publicConnectionString = builder.Configuration.GetConnectionString("Public")
+    ?? throw new InvalidOperationException(
+        "Missing connection string 'ConnectionStrings:Public'.");
+
+builder.Services.AddKeyedSingleton(
+    PublicCompetitionReader.PublicDataSourceKey,
+    (_, _) => SportFrogDataSource.Create(publicConnectionString));
+
+builder.Services.AddScoped<PublicCompetitionReader>();
+
 var app = builder.Build();
 
 app.UseAuthentication();
