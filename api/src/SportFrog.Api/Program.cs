@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,12 +54,21 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddScoped<OrganizationContext>();
+
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok()).AllowAnonymous();
+// After authentication, so the organization can be resolved from a validated
+// token, and before any endpoint, so nothing reaches the database outside the
+// isolation context.
+app.UseMiddleware<OrganizationContextMiddleware>();
+
+app.MapGet("/health", () => Results.Ok())
+    .AllowAnonymous()
+    .WithoutOrganizationContext();
 
 app.Run();
 
