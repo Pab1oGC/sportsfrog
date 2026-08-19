@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using SportFrog.Api.Infrastructure.Persistence.Entities;
 
 namespace SportFrog.Api.Infrastructure.Auth;
 
@@ -22,6 +23,18 @@ public sealed class JwtAccessTokenIssuer
     /// the reading side so it survives a round trip unchanged.
     /// </summary>
     public const string RoleClaimType = "role";
+
+    /// <summary>
+    /// Prefix of the claim that grants a role inside one organization. The
+    /// full claim type is this prefix followed by the organization
+    /// identifier; its value is the role held there.
+    ///
+    /// The organization travels in the claim *type* rather than packed into
+    /// the value so that checking a permission is one lookup, and — the point
+    /// of it — so a role can never be read without the organization it
+    /// applies to.
+    /// </summary>
+    public const string OrganizationClaimTypePrefix = "org:";
 
     /// <summary>Shortest key HS256 accepts without weakening the MAC.</summary>
     private const int MinimumSigningKeyBytes = 32;
@@ -60,8 +73,91 @@ public sealed class JwtAccessTokenIssuer
     }
 
     /// <summary>
-    /// Issues a token for a user and the roles they hold.
+    /// Issues the token a sign-in hands out: the user, and every organization
+    /// they belong to paired with the role they hold there.
+    ///
+    /// This is the method the authentication flow uses. It deliberately emits
+    /// no unscoped role claim: a token carrying a bare "admin" would let a
+    /// careless permission check pass in an organization the user is only a
+    /// viewer of, which is exactly the confusion the per-organization model
+    /// exists to prevent.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// The user is absent, the collection is empty, an organization is
+    /// absent, or one organization appears twice. A membership is unique per
+    /// (organization, user), so a repeated organization means the caller
+    /// built the list wrong and the token would grant two roles in one place.
+    /// </exception>
+    public string IssueForOrganizations(
+        Guid userId,
+        IReadOnlyCollection<OrganizationAccess> organizations)
+    {
+        if (userId == Guid.Empty)
+        {
+            throw new ArgumentException("The user identifier is required.", nameof(userId));
+        }
+
+        ArgumentNullException.ThrowIfNull(organizations);
+
+        if (organizations.Count == 0)
+        {
+            throw new ArgumentException(
+                "The user must belong to at least one organization.", nameof(organizations));
+        }
+
+        if (organizations.Any(access => access.OrganizationId == Guid.Empty))
+        {
+            throw new ArgumentException(
+                "An organization identifier is required.", nameof(organizations));
+        }
+
+        if (organizations.Select(access => access.OrganizationId).Distinct().Count() != organizations.Count)
+        {
+            throw new ArgumentException(
+                "An organization cannot appear twice.", nameof(organizations));
+        }
+
+        return Write(userId, [
+            .. organizations.Select(access => new Claim(
+                OrganizationClaimTypePrefix + access.OrganizationId,
+                ToClaimValue(access.Role))),
+        ]);
+    }
+
+    /// <summary>
+    /// Reads back the role a validated token grants inside one organization,
+    /// or <c>null</c> when it grants none there.
+    ///
+    /// Returning null rather than throwing is deliberate: "this token does
+    /// not reach that organization" is an authorization answer the caller has
+    /// to turn into a refusal, not an exceptional condition.
+    /// </summary>
+    public static MembershipRole? FindRole(ClaimsPrincipal principal, Guid organizationId)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        var value = principal.FindFirst(OrganizationClaimTypePrefix + organizationId)?.Value;
+
+        return Enum.TryParse<MembershipRole>(value, ignoreCase: true, out var role) ? role : null;
+    }
+
+    /// <summary>
+    /// Lowercase, matching the labels of the database's
+    /// <c>membership_role</c> enum, so the same word means the same thing in
+    /// a token, in a log line and in a row.
+    /// </summary>
+    private static string ToClaimValue(MembershipRole role) =>
+        role.ToString().ToLowerInvariant();
+
+    /// <summary>
+    /// Issues a token carrying flat, unscoped role claims.
+    /// </summary>
+    /// <remarks>
+    /// Kept as a primitive for callers that genuinely have no organization to
+    /// scope to. Sign-in is not one of them: it must use
+    /// <see cref="IssueForOrganizations"/>, because a role means nothing
+    /// without the organization it applies to.
+    /// </remarks>
     /// <exception cref="ArgumentException">
     /// The user is absent, or the role collection is empty or holds a blank
     /// entry. A token with no roles authorizes nothing and signals a bug
@@ -86,6 +182,16 @@ public sealed class JwtAccessTokenIssuer
             throw new ArgumentException("A role cannot be blank.", nameof(roles));
         }
 
+        return Write(userId, [.. roles.Select(role => new Claim(RoleClaimType, role))]);
+    }
+
+    /// <summary>
+    /// Signs a token for a subject plus whatever claims describe what it
+    /// grants. Both issuing paths go through here so signature, lifetime and
+    /// unique identifier are decided in exactly one place.
+    /// </summary>
+    private string Write(Guid userId, IReadOnlyCollection<Claim> grants)
+    {
         var issuedAt = _timeProvider.GetUtcNow();
 
         List<Claim> claims =
@@ -96,7 +202,7 @@ public sealed class JwtAccessTokenIssuer
             // instant, which otherwise would be indistinguishable in a log.
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
 
-            .. roles.Select(role => new Claim(RoleClaimType, role)),
+            .. grants,
         ];
 
         var token = new JwtSecurityToken(
