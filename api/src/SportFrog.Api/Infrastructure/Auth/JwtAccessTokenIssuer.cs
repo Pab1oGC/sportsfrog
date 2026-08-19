@@ -8,8 +8,13 @@ namespace SportFrog.Api.Infrastructure.Auth;
 
 /// <summary>
 /// Issues and validates the short-lived access token. Everything
-/// authorization decides on downstream — who the user is and which roles
-/// they hold — travels in here, signed (RF-02).
+/// authorization decides on downstream — who the user is, and the role they
+/// hold in each organization they belong to — travels in here, signed
+/// (RF-02).
+///
+/// There is deliberately no way to issue a token with an unscoped role: a
+/// role means nothing without the organization it applies to, and one that
+/// travelled without it would grant more than intended rather than less.
 ///
 /// A short lifetime is the point: it bounds the window of misuse if a token
 /// leaks. Closing a session on demand is the renewal token's job, since a
@@ -17,13 +22,6 @@ namespace SportFrog.Api.Infrastructure.Auth;
 /// </summary>
 public sealed class JwtAccessTokenIssuer
 {
-    /// <summary>
-    /// Claim type carrying a role. The short JWT name is used verbatim
-    /// rather than the long WS-* URI, and inbound mapping is switched off on
-    /// the reading side so it survives a round trip unchanged.
-    /// </summary>
-    public const string RoleClaimType = "role";
-
     /// <summary>
     /// Prefix of the claim that grants a role inside one organization. The
     /// full claim type is this prefix followed by the organization
@@ -150,42 +148,6 @@ public sealed class JwtAccessTokenIssuer
         role.ToString().ToLowerInvariant();
 
     /// <summary>
-    /// Issues a token carrying flat, unscoped role claims.
-    /// </summary>
-    /// <remarks>
-    /// Kept as a primitive for callers that genuinely have no organization to
-    /// scope to. Sign-in is not one of them: it must use
-    /// <see cref="IssueForOrganizations"/>, because a role means nothing
-    /// without the organization it applies to.
-    /// </remarks>
-    /// <exception cref="ArgumentException">
-    /// The user is absent, or the role collection is empty or holds a blank
-    /// entry. A token with no roles authorizes nothing and signals a bug
-    /// upstream: every membership carries exactly one role.
-    /// </exception>
-    public string Issue(Guid userId, IReadOnlyCollection<string> roles)
-    {
-        if (userId == Guid.Empty)
-        {
-            throw new ArgumentException("The user identifier is required.", nameof(userId));
-        }
-
-        ArgumentNullException.ThrowIfNull(roles);
-
-        if (roles.Count == 0)
-        {
-            throw new ArgumentException("At least one role is required.", nameof(roles));
-        }
-
-        if (roles.Any(string.IsNullOrWhiteSpace))
-        {
-            throw new ArgumentException("A role cannot be blank.", nameof(roles));
-        }
-
-        return Write(userId, [.. roles.Select(role => new Claim(RoleClaimType, role))]);
-    }
-
-    /// <summary>
     /// Signs a token for a subject plus whatever claims describe what it
     /// grants. Both issuing paths go through here so signature, lifetime and
     /// unique identifier are decided in exactly one place.
@@ -235,8 +197,8 @@ public sealed class JwtAccessTokenIssuer
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
 
-        // Inbound mapping off: "sub" and "role" stay as they were written
-        // instead of being renamed to their WS-* URIs.
+        // Inbound mapping off: "sub" and the "org:" claims stay as they were
+        // written instead of being renamed to their WS-* URIs.
         var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
 
         ClaimsPrincipal principal;
