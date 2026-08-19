@@ -4,6 +4,7 @@ using System.Text;
 using AwesomeAssertions;
 using Microsoft.IdentityModel.Tokens;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Persistence.Entities;
 
 namespace SportFrog.Api.Tests.Infrastructure.Auth;
 
@@ -18,6 +19,12 @@ public sealed class JwtAccessTokenValidationTests
     private const string Audience = "sportfrog-clients";
 
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
+
+    // The organization whose role every token below grants. Fixed rather than
+    // random so the tampering test can name the claim it rewrites.
+    private static readonly Guid AnOrganization = Guid.NewGuid();
+
+    private static string OrganizationClaimType(Guid organizationId) => $"org:{organizationId}";
 
     // A clock the test fully controls, so "expired" doesn't mean Thread.Sleep.
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
@@ -56,7 +63,8 @@ public sealed class JwtAccessTokenValidationTests
             SigningKey, Issuer, Audience, Lifetime,
             new FixedTimeProvider(DateTimeOffset.UtcNow.AddMinutes(-30)));
 
-        var token = issuer.Issue(Guid.NewGuid(), ["viewer"]);
+        var token = issuer.IssueForOrganizations(
+            Guid.NewGuid(), [new OrganizationAccess(AnOrganization, MembershipRole.Viewer)]);
 
         var validating = () => Validate(token);
 
@@ -70,7 +78,8 @@ public sealed class JwtAccessTokenValidationTests
         // specifically, not a blanket failure.
         var issuer = new JwtAccessTokenIssuer(SigningKey, Issuer, Audience, Lifetime);
 
-        var token = issuer.Issue(Guid.NewGuid(), ["viewer"]);
+        var token = issuer.IssueForOrganizations(
+            Guid.NewGuid(), [new OrganizationAccess(AnOrganization, MembershipRole.Viewer)]);
 
         var validating = () => Validate(token);
 
@@ -80,14 +89,20 @@ public sealed class JwtAccessTokenValidationTests
     [Fact]
     public void ValidateToken_RejectsATokenWhoseRoleWasEscalatedAfterSigning()
     {
-        // An attacker edits their own token's payload, promoting "viewer" to
-        // "admin", and resubmits it with the original signature untouched.
+        // An attacker edits their own token's payload, promoting themselves
+        // from viewer to admin *inside the organization they belong to*, and
+        // resubmits it with the original signature untouched. This is the
+        // escalation the per-organization claim has to make detectable.
         var issuer = new JwtAccessTokenIssuer(SigningKey, Issuer, Audience, Lifetime);
-        var token = issuer.Issue(Guid.NewGuid(), ["viewer"]);
+        var token = issuer.IssueForOrganizations(
+            Guid.NewGuid(), [new OrganizationAccess(AnOrganization, MembershipRole.Viewer)]);
         var segments = token.Split('.');
 
         var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(segments[1]));
-        var escalatedJson = payloadJson.Replace("\"role\":\"viewer\"", "\"role\":\"admin\"");
+        var claimType = OrganizationClaimType(AnOrganization);
+        var escalatedJson = payloadJson.Replace(
+            $"\"{claimType}\":\"viewer\"",
+            $"\"{claimType}\":\"admin\"");
         escalatedJson.Should().NotBe(payloadJson, "the substitution must actually change the payload");
 
         var escalatedPayload = Base64UrlEncode(Encoding.UTF8.GetBytes(escalatedJson));
@@ -102,7 +117,8 @@ public sealed class JwtAccessTokenValidationTests
     public void ValidateToken_RejectsATokenWithASingleCharacterAlteredInThePayload()
     {
         var issuer = new JwtAccessTokenIssuer(SigningKey, Issuer, Audience, Lifetime);
-        var token = issuer.Issue(Guid.NewGuid(), ["viewer"]);
+        var token = issuer.IssueForOrganizations(
+            Guid.NewGuid(), [new OrganizationAccess(AnOrganization, MembershipRole.Viewer)]);
         var segments = token.Split('.');
 
         var flippedPayload = FlipOneCharacter(segments[1]);
@@ -117,7 +133,8 @@ public sealed class JwtAccessTokenValidationTests
     public void ValidateToken_RejectsATokenWithASingleCharacterAlteredInTheSignature()
     {
         var issuer = new JwtAccessTokenIssuer(SigningKey, Issuer, Audience, Lifetime);
-        var token = issuer.Issue(Guid.NewGuid(), ["viewer"]);
+        var token = issuer.IssueForOrganizations(
+            Guid.NewGuid(), [new OrganizationAccess(AnOrganization, MembershipRole.Viewer)]);
         var segments = token.Split('.');
 
         var flippedSignature = FlipOneCharacter(segments[2]);
@@ -134,7 +151,8 @@ public sealed class JwtAccessTokenValidationTests
         // The classic "alg: none" downgrade: strip the signature and claim
         // none was needed. Must be rejected, not trusted as unsigned.
         var issuer = new JwtAccessTokenIssuer(SigningKey, Issuer, Audience, Lifetime);
-        var token = issuer.Issue(Guid.NewGuid(), ["viewer"]);
+        var token = issuer.IssueForOrganizations(
+            Guid.NewGuid(), [new OrganizationAccess(AnOrganization, MembershipRole.Viewer)]);
         var segments = token.Split('.');
 
         var headerJson = Encoding.UTF8.GetString(Base64UrlDecode(segments[0]));
@@ -180,7 +198,7 @@ public sealed class JwtAccessTokenValidationTests
         var tokenWithoutSubject = new JwtSecurityToken(
             issuer: Issuer,
             audience: Audience,
-            claims: [new Claim("role", "viewer")],
+            claims: [new Claim(OrganizationClaimType(AnOrganization), "viewer")],
             expires: DateTime.UtcNow.Add(Lifetime),
             signingCredentials: new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
