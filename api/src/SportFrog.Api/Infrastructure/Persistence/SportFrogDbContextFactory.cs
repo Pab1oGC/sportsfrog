@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace SportFrog.Api.Infrastructure.Persistence;
 
@@ -40,6 +41,14 @@ public sealed class SportFrogDbContextFactory : IDesignTimeDbContextFactory<Spor
 
         var options = new DbContextOptionsBuilder<SportFrogDbContext>()
             .UseNpgsql(SportFrogDataSource.Create(connectionString), SportFrogDataSource.MapEnums)
+            // This project defines its schema in hand-written SQL and never
+            // runs `dotnet ef migrations add`, so the model snapshot EF
+            // compares against is never regenerated and will always disagree
+            // with the mapped entities. That disagreement is the design here,
+            // not a missing migration, and without this every
+            // `database update` would refuse to run.
+            .ConfigureWarnings(warnings =>
+                warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         return new SportFrogDbContext(options);

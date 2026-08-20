@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace SportFrog.Domain.ValueObjects;
 
 /// <summary>
@@ -32,7 +34,7 @@ public sealed class Email : IEquatable<Email>
     /// Non-throwing counterpart of <see cref="Parse"/>, for the paths that
     /// report the problem rather than interrupt the operation.
     /// </summary>
-    public static bool TryParse(string? value, out Email? email)
+    public static bool TryParse(string? value, [NotNullWhen(true)] out Email? email)
     {
         if (value is not null && IsWellFormed(value))
         {

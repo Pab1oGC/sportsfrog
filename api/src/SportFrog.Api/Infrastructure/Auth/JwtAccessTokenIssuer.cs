@@ -193,6 +193,30 @@ public sealed class JwtAccessTokenIssuer
     /// authentication failure — never as an error that reads like a bug and
     /// turns into a server fault.
     /// </exception>
+    /// <summary>
+    /// The rules a token must satisfy to be trusted.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so the request pipeline's bearer authentication validates
+    /// tokens by exactly the same rules this class does. Two definitions of
+    /// "valid" would drift, and the looser one would become the real gate.
+    /// </remarks>
+    public TokenValidationParameters CreateValidationParameters() => new()
+    {
+        ValidateIssuer = true,
+        ValidIssuer = _issuer,
+        ValidateAudience = true,
+        ValidAudience = _audience,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = _signingKey,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero,
+
+        // Only HS256 is accepted, which is what refuses a token whose
+        // algorithm was downgraded to "none".
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+    };
+
     public ClaimsPrincipal Validate(string token)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
@@ -204,24 +228,7 @@ public sealed class JwtAccessTokenIssuer
         ClaimsPrincipal principal;
         try
         {
-            principal = handler.ValidateToken(
-                token,
-                new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidIssuer = _issuer,
-                    ValidateAudience = true,
-                    ValidAudience = _audience,
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = _signingKey,
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero,
-
-                    // Only HS256 is accepted, which is what refuses a token
-                    // whose algorithm was downgraded to "none".
-                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
-                },
-                out _);
+            principal = handler.ValidateToken(token, CreateValidationParameters(), out _);
         }
         catch (SecurityTokenMalformedException exception)
         {
