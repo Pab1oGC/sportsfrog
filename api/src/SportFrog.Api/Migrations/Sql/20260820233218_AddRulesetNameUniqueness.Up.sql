@@ -1,0 +1,21 @@
+-- =============================================================================
+-- SPORTFROG — One ruleset name per organization
+--
+-- A ruleset is chosen by name when a competition is created, so two rulesets
+-- called "Liga mayor 2026" in the same organization make that choice a guess.
+-- The initial schema left the name unconstrained.
+--
+-- Enforced by index rather than by a check in the application: two requests
+-- arriving together both find the name free and both write it. Only the
+-- database sees the pair.
+--
+-- Scoped to the organization, not global: two leagues naming their rulesets
+-- the same way is not a collision, and the isolation policies mean neither
+-- can see the other's.
+--
+-- No partial predicate here, unlike clubs and athletes: rulesets carry no
+-- deleted_at. Removing one is physical, and it is refused while a competition
+-- or category still references it.
+-- =============================================================================
+
+CREATE UNIQUE INDEX uq_rulesets_org_name ON rulesets (org_id, name);

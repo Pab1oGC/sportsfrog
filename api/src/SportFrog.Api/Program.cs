@@ -92,6 +92,8 @@ builder.Services.AddSingleton<BCryptPasswordHasher>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionIssuer>();
 
+builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
+
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
 // includeInternalTypes: the validators are internal on purpose — they are an
@@ -127,6 +129,7 @@ api.MapUpdateClub();
 api.MapDeleteClub();
 
 api.MapReadSports();
+api.MapCreateRuleset();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
