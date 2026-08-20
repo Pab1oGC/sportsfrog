@@ -88,6 +88,7 @@ app.UseAuthorization();
 app.UseMiddleware<OrganizationContextMiddleware>();
 
 app.MapRegisterOrganization();
+app.MapAddMember();
 app.MapSignIn();
 app.MapRenewSession();
 app.MapSignOut();

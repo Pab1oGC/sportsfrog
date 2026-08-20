@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace SportFrog.Domain.ValueObjects;
 
 /// <summary>
@@ -36,7 +38,7 @@ public sealed class Password
     /// Non-throwing counterpart of <see cref="Parse"/>, for the paths that
     /// report the problem rather than interrupt the operation.
     /// </summary>
-    public static bool TryParse(string? value, out Password? password)
+    public static bool TryParse(string? value, [NotNullWhen(true)] out Password? password)
     {
         if (value is not null && SatisfiesPolicy(value))
         {
