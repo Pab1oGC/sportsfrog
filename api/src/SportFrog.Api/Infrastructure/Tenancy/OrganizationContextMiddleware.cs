@@ -35,7 +35,8 @@ public sealed class OrganizationContextMiddleware(
     public async Task InvokeAsync(
         HttpContext context,
         SportFrogDbContext database,
-        OrganizationContext organizationContext)
+        OrganizationContext organizationContext,
+        Serilog.IDiagnosticContext diagnosticContext)
     {
         var endpoint = context.GetEndpoint();
 
@@ -116,6 +117,15 @@ public sealed class OrganizationContextMiddleware(
 
         // Structured logging carries the organization, without which a trace
         // cannot be read in a multi-organization system (section 8).
+        //
+        // Twice on purpose, because they reach different places. The scope
+        // tags everything written while handling the request; the diagnostic
+        // context tags the one summary line, which is written by middleware
+        // wrapping this one and would otherwise say nothing about who the
+        // request belonged to.
+        diagnosticContext.Set("OrganizationId", organizationId);
+        diagnosticContext.Set("Role", role.Value.ToString());
+
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {
             ["OrganizationId"] = organizationId,

@@ -4,12 +4,17 @@ using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.RateLimiting;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSportFrogLogging();
+builder.Services.AddSportFrogRateLimiting();
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException(
@@ -93,6 +98,10 @@ builder.Services.AddScoped<SessionIssuer>();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);
 
 var app = builder.Build();
+
+app.UseSportFrogRequestLogging();
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
