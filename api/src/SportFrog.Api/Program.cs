@@ -5,6 +5,7 @@ using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -124,6 +125,8 @@ api.MapCreateClub();
 api.MapReadClubs();
 api.MapUpdateClub();
 api.MapDeleteClub();
+
+api.MapReadSports();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

@@ -26,6 +26,15 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<Athlete> Athletes => Set<Athlete>();
 
+    /// <summary>
+    /// The shared sports catalog. Read-only for the application: its content
+    /// is seeded and amended by migration, because supporting a sport means
+    /// knowing how to score it and not merely having a name for it.
+    /// </summary>
+    public DbSet<Sport> Sports => Set<Sport>();
+
+    public DbSet<SportMetric> SportMetrics => Set<SportMetric>();
+
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
