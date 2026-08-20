@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
+using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Observability;
@@ -117,6 +119,16 @@ var api = app.MapGroup("").ValidateContracts();
 
 api.MapRegisterOrganization();
 api.MapAddMember();
+
+api.MapCreateClub();
+api.MapReadClubs();
+api.MapUpdateClub();
+api.MapDeleteClub();
+
+api.MapCreateAthlete();
+api.MapReadAthletes();
+api.MapUpdateAthlete();
+api.MapDeleteAthlete();
 api.MapSignIn();
 api.MapRenewSession();
 api.MapSignOut();
