@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.RateLimiting;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Domain.ValueObjects;
@@ -89,6 +90,7 @@ public static partial class RegisterOrganization
             // scoped to is the one being created.
             .AllowAnonymous()
             .WithoutOrganizationContext()
+            .RequireRateLimiting(RateLimitPolicies.Authentication)
             .WithName(nameof(RegisterOrganization))
             .WithSummary("Registers an organization and its owner.");
 

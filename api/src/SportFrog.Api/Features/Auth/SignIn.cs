@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.RateLimiting;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
@@ -35,6 +36,7 @@ public static class SignIn
             // contrast every 401 would mean the address was well formed —
             // which is enough to ask which addresses are registered.
             .WithoutContractValidation()
+            .RequireRateLimiting(RateLimitPolicies.Authentication)
             .WithName(nameof(SignIn))
             .WithSummary("Signs in and returns an access and a renewal token.");
 

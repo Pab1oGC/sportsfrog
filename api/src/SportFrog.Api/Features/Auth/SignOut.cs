@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.RateLimiting;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
@@ -30,6 +31,7 @@ public static class SignOut
             // malformed token would mean that a 401 confirms the token at
             // least had the right shape, which is a way of probing for one.
             .WithoutContractValidation()
+            .RequireRateLimiting(RateLimitPolicies.Authentication)
             .WithName(nameof(SignOut))
             .WithSummary("Revokes a renewal token, closing the session.");
 
