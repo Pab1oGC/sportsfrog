@@ -17,10 +17,15 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 // cannot modify the schema or bypass the isolation policies. Migrations are
 // applied out of band, by the schema owner.
 builder.Services.AddSingleton(SportFrogDataSource.Create(connectionString));
+builder.Services.AddScoped<AuditInterceptor>();
 builder.Services.AddDbContext<SportFrogDbContext>((services, options) =>
-    options.UseNpgsql(
-        services.GetRequiredService<Npgsql.NpgsqlDataSource>(),
-        SportFrogDataSource.MapEnums));
+    options
+        .UseNpgsql(
+            services.GetRequiredService<Npgsql.NpgsqlDataSource>(),
+            SportFrogDataSource.MapEnums)
+        // At the save point, so a change is recorded because it happened and
+        // not because a feature remembered to say so (DD-07).
+        .AddInterceptors(services.GetRequiredService<AuditInterceptor>()));
 
 // Validated on start rather than on first use: a missing or too-short signing
 // key must stop the process, not surface as a failed login much later.

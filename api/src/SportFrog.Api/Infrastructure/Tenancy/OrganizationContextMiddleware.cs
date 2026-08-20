@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -78,6 +79,19 @@ public sealed class OrganizationContextMiddleware(
             return;
         }
 
+        if (!TryReadUser(context, out var userId))
+        {
+            // The token validated but names no usable subject. Nothing can be
+            // attributed to it, and the audit log would have no author to
+            // record, so it is refused rather than run anonymously.
+            await RefuseAsync(
+                context,
+                StatusCodes.Status401Unauthorized,
+                "Authentication required.",
+                "the token carries no usable subject");
+            return;
+        }
+
         var role = JwtAccessTokenIssuer.FindRole(context.User, organizationId);
         if (role is null)
         {
@@ -94,7 +108,11 @@ public sealed class OrganizationContextMiddleware(
             return;
         }
 
-        organizationContext.Establish(organizationId, role.Value);
+        organizationContext.Establish(
+            organizationId,
+            role.Value,
+            userId,
+            context.Connection.RemoteIpAddress);
 
         // Structured logging carries the organization, without which a trace
         // cannot be read in a multi-organization system (section 8).
@@ -179,6 +197,14 @@ public sealed class OrganizationContextMiddleware(
             .Problem(detail: clientDetail, statusCode: statusCode)
             .ExecuteAsync(context);
     }
+
+    /// <summary>
+    /// The person the validated token names.
+    /// </summary>
+    private static bool TryReadUser(HttpContext context, out Guid userId) =>
+        Guid.TryParse(
+            context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value,
+            out userId);
 
     private static bool TryReadOrganization(HttpContext context, out Guid organizationId)
     {

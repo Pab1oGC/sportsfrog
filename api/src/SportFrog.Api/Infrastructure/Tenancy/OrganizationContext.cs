@@ -15,6 +15,16 @@ public sealed class OrganizationContext
 {
     public Guid? OrganizationId { get; private set; }
 
+    /// <summary>
+    /// The person the request acts as. The audit log needs it to name an
+    /// author, which is the one thing a change record cannot be reconstructed
+    /// without.
+    /// </summary>
+    public Guid? UserId { get; private set; }
+
+    /// <summary>Where the request came from, recorded alongside a change.</summary>
+    public System.Net.IPAddress? IpAddress { get; private set; }
+
     public MembershipRole? Role { get; private set; }
 
     /// <summary>
@@ -44,7 +54,11 @@ public sealed class OrganizationContext
     /// could change the organization mid-request would be acting outside the
     /// context the database has already fixed for the transaction.
     /// </summary>
-    internal void Establish(Guid organizationId, MembershipRole role)
+    internal void Establish(
+        Guid organizationId,
+        MembershipRole role,
+        Guid userId,
+        System.Net.IPAddress? ipAddress)
     {
         if (IsEstablished)
         {
@@ -54,5 +68,7 @@ public sealed class OrganizationContext
 
         OrganizationId = organizationId;
         Role = role;
+        UserId = userId;
+        IpAddress = ipAddress;
     }
 }
