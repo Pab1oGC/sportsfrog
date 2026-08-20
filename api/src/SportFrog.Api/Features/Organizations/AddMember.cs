@@ -1,3 +1,4 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -21,6 +22,34 @@ public static class AddMember
 
     public sealed record Response(Guid UserId, string Role, bool AccountCreated);
 
+    internal sealed class Validator : AbstractValidator<Request>
+    {
+        public Validator()
+        {
+            RuleFor(request => request.FullName)
+                .NotEmpty()
+                .WithMessage("The person's name is required.");
+
+            RuleFor(request => request.Email)
+                .Must(email => Email.TryParse(email?.Trim(), out _))
+                .WithMessage("The email address is not well formed.");
+
+            RuleFor(request => request.Role)
+                .Must(role => TryReadRole(role, out _))
+                .WithMessage("The role is not one this organization defines.");
+
+            // Ownership is established by registering the organization and is
+            // not something an administrator hands out: allowing it would let
+            // an administrator create a peer they cannot then remove.
+            RuleFor(request => request.Role)
+                .Must(role => !TryReadRole(role, out var parsed) || parsed != MembershipRole.Owner)
+                .WithMessage("Ownership cannot be granted.");
+        }
+    }
+
+    private static bool TryReadRole(string? value, out MembershipRole role) =>
+        Enum.TryParse(value, ignoreCase: true, out role);
+
     public static IEndpointRouteBuilder MapAddMember(this IEndpointRouteBuilder routes)
     {
         routes.MapPost("/members", HandleAsync)
@@ -40,29 +69,11 @@ public static class AddMember
         BCryptPasswordHasher passwordHasher,
         CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<MembershipRole>(request.Role, ignoreCase: true, out var role))
-        {
-            return Invalid("The role is not one this organization defines.");
-        }
-
-        if (role == MembershipRole.Owner)
-        {
-            // Ownership is established by registering the organization and is
-            // not something an administrator hands out. Allowing it here
-            // would let an administrator create a peer they cannot then
-            // remove.
-            return Invalid("Ownership cannot be granted.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.FullName))
-        {
-            return Invalid("The person's name is required.");
-        }
-
-        if (!Email.TryParse(request.Email?.Trim(), out var email))
-        {
-            return Invalid("The email address is not well formed.");
-        }
+        // Shape was already checked by the validation filter, so parsing here
+        // cannot fail. If it ever did, that is a defect in the wiring rather
+        // than bad input, and it should surface as one.
+        var role = Enum.Parse<MembershipRole>(request.Role, ignoreCase: true);
+        var email = Email.Parse(request.Email.Trim());
 
         var organizationId = organization.RequireOrganizationId();
 

@@ -6,6 +6,8 @@ using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Tenancy;
+using SportFrog.Api.Infrastructure.Validation;
+using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -82,6 +84,14 @@ builder.Services.AddSingleton<BCryptPasswordHasher>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionIssuer>();
 
+// A validator exists, so its contract is validated. Nothing is wired per
+// endpoint (DD-07).
+// includeInternalTypes: the validators are internal on purpose — they are an
+// implementation detail of their slice, not part of anyone's API — and the
+// scanner skips those unless told otherwise. Without this the filter finds no
+// validator and every contract passes unchecked, silently.
+builder.Services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);
+
 var app = builder.Build();
 
 app.UseAuthentication();
@@ -92,11 +102,15 @@ app.UseAuthorization();
 // isolation context.
 app.UseMiddleware<OrganizationContextMiddleware>();
 
-app.MapRegisterOrganization();
-app.MapAddMember();
-app.MapSignIn();
-app.MapRenewSession();
-app.MapSignOut();
+// Every endpoint hangs off this group, so validation covers an operation by
+// the operation existing rather than by its author remembering.
+var api = app.MapGroup("").ValidateContracts();
+
+api.MapRegisterOrganization();
+api.MapAddMember();
+api.MapSignIn();
+api.MapRenewSession();
+api.MapSignOut();
 
 app.MapGet("/health", () => Results.Ok())
     .AllowAnonymous()

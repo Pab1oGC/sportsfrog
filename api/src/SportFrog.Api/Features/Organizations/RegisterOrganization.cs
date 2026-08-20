@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
@@ -33,6 +34,44 @@ public static partial class RegisterOrganization
     public sealed record Response(Guid OrganizationId, Guid OwnerUserId);
 
     /// <summary>
+    /// Checked before the handler runs, by the group's validation filter.
+    /// Living beside the contract it describes is the point of a vertical
+    /// slice: what the operation accepts is readable in one place.
+    /// </summary>
+    internal sealed class Validator : AbstractValidator<Request>
+    {
+        public Validator()
+        {
+            RuleFor(request => request.Name)
+                .NotEmpty()
+                .WithMessage("The organization name is required.");
+
+            RuleFor(request => request.OwnerFullName)
+                .NotEmpty()
+                .WithMessage("The owner's name is required.");
+
+            // Checked against the normalized form, since that is what gets
+            // stored: an address typed in capitals is accepted and lowercased,
+            // not rejected.
+            RuleFor(request => request.Slug)
+                .Must(slug => IsAcceptableSlug(Normalize(slug)))
+                .WithMessage(
+                    $"The address must be between {SlugMinimumLength} and {SlugMaximumLength} " +
+                    "characters, using lowercase letters, digits and single hyphens.");
+
+            RuleFor(request => request.OwnerEmail)
+                .Must(email => Email.TryParse(email?.Trim(), out _))
+                .WithMessage("The email address is not well formed.");
+
+            RuleFor(request => request.OwnerPassword)
+                .Must(password => Password.TryParse(password, out _))
+                .WithMessage(
+                    $"The password must be at least {Password.MinimumLength} characters and " +
+                    "include an uppercase letter, a lowercase letter, a digit and a special character.");
+        }
+    }
+
+    /// <summary>
     /// A slug appears in a public address, so it is restricted to what reads
     /// and travels well there: lowercase letters, digits and single hyphens
     /// between them.
@@ -62,12 +101,7 @@ public static partial class RegisterOrganization
         BCryptPasswordHasher passwordHasher,
         CancellationToken cancellationToken)
     {
-        var slug = request.Slug?.Trim().ToLowerInvariant() ?? string.Empty;
-
-        if (Validate(request, slug) is { } invalid)
-        {
-            return invalid;
-        }
+        var slug = Normalize(request.Slug);
 
         // A soft-deleted organization still holds its slug, and a soft-deleted
         // user still holds their address: both unique constraints span every
@@ -176,39 +210,15 @@ public static partial class RegisterOrganization
     }
 
     /// <summary>
-    /// Rejects a malformed request before anything is written, reporting the
-    /// first problem found.
+    /// The form an address is stored in. Typing it in capitals is a typo, not
+    /// a different organization.
     /// </summary>
-    private static IResult? Validate(Request request, string slug)
-    {
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            return Invalid("The organization name is required.");
-        }
+    private static string Normalize(string? slug) =>
+        slug?.Trim().ToLowerInvariant() ?? string.Empty;
 
-        if (slug.Length is < SlugMinimumLength or > SlugMaximumLength || !SlugPattern.IsMatch(slug))
-        {
-            return Invalid(
-                $"The address must be between {SlugMinimumLength} and {SlugMaximumLength} " +
-                "characters, using lowercase letters, digits and single hyphens.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.OwnerFullName))
-        {
-            return Invalid("The owner's name is required.");
-        }
-
-        if (!Email.TryParse(request.OwnerEmail?.Trim(), out _))
-        {
-            return Invalid("The email address is not well formed.");
-        }
-
-        return !Password.TryParse(request.OwnerPassword, out _)
-            ? Invalid(
-                $"The password must be at least {Password.MinimumLength} characters and " +
-                "include an uppercase letter, a lowercase letter, a digit and a special character.")
-            : null;
-    }
+    private static bool IsAcceptableSlug(string slug) =>
+        slug.Length is >= SlugMinimumLength and <= SlugMaximumLength
+        && SlugPattern.IsMatch(slug);
 
     /// <summary>
     /// Whether the write failed because a unique constraint rejected it,
@@ -216,7 +226,4 @@ public static partial class RegisterOrganization
     /// </summary>
     private static bool IsUniqueViolation(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
-
-    private static IResult Invalid(string detail) =>
-        Results.Problem(detail: detail, statusCode: StatusCodes.Status400BadRequest);
 }

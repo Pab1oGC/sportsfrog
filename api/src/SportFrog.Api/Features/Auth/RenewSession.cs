@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Tenancy;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Auth;
 
@@ -25,6 +26,10 @@ public static class RenewSession
             // is the point; the renewal token is the credential here.
             .AllowAnonymous()
             .WithoutOrganizationContext()
+            // Every refusal here is the same refusal. Answering 400 to a
+            // malformed token would mean that a 401 confirms the token at
+            // least had the right shape, which is a way of probing for one.
+            .WithoutContractValidation()
             .WithName(nameof(RenewSession))
             .WithSummary("Exchanges a renewal token for a new session.");
 

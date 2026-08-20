@@ -3,6 +3,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Auth;
 
@@ -29,6 +30,11 @@ public static class SignIn
             // them, nor an organization it has not yet reported.
             .AllowAnonymous()
             .WithoutOrganizationContext()
+            // Rejections here are deliberately indistinguishable. A validation
+            // failure would answer 400 for a malformed address, and by
+            // contrast every 401 would mean the address was well formed —
+            // which is enough to ask which addresses are registered.
+            .WithoutContractValidation()
             .WithName(nameof(SignIn))
             .WithSummary("Signs in and returns an access and a renewal token.");
 
