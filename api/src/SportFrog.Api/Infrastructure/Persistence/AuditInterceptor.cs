@@ -203,8 +203,22 @@ public sealed class AuditInterceptor(OrganizationContext organization) : SaveCha
     /// Enum values are written by name. A role recorded as "3" asks whoever
     /// reads the log years later to know how the enum was ordered then.
     /// </summary>
+    /// <remarks>
+    /// Snake case for the same reason, one level down. The keys of the entry
+    /// are column names, which already read that way; a value that is itself
+    /// an object — a ruleset configuration is the first — would otherwise be
+    /// recorded with the property names C# spells it with, and the log would
+    /// describe the column in a different shape than the column holds it.
+    /// Anyone comparing the two would be reading a difference that is not a
+    /// change.
+    ///
+    /// Nulls stay. The stored column omits them because absent and null say
+    /// the same thing there, but a log entry saying a field was set to
+    /// nothing is not the same as one that never mentions the field.
+    /// </remarks>
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
     };
 

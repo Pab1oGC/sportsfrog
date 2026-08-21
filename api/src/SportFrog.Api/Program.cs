@@ -5,6 +5,7 @@ using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -91,6 +92,9 @@ builder.Services.AddSingleton<BCryptPasswordHasher>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionIssuer>();
 
+builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
+
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
 // includeInternalTypes: the validators are internal on purpose — they are an
@@ -124,6 +128,12 @@ api.MapCreateClub();
 api.MapReadClubs();
 api.MapUpdateClub();
 api.MapDeleteClub();
+
+api.MapReadSports();
+api.MapCreateRuleset();
+api.MapReadRulesets();
+api.MapUpdateRuleset();
+api.MapDeleteRuleset();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
