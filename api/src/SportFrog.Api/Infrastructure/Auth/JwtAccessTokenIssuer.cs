@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -230,12 +231,25 @@ public sealed class JwtAccessTokenIssuer
         {
             principal = handler.ValidateToken(token, CreateValidationParameters(), out _);
         }
-        catch (SecurityTokenMalformedException exception)
+        catch (ArgumentException exception)
         {
-            // A string that isn't a JWT at all arrives from the library as an
-            // ArgumentException, which would read as a programming fault. It
-            // is a rejected credential like any other.
-            throw new SecurityTokenException("The token is not a readable JWT.", exception);
+            // The handler reads a token before it verifies it, so anything
+            // that stops it reading — a string that is not a JWT at all, a
+            // payload edited into something that is no longer JSON — surfaces
+            // as an ArgumentException, which would read as a programming
+            // fault. These are rejected credentials like any other.
+            //
+            // Which refusal it is cannot be decided by the failure to read.
+            // The signature covers the header and payload as they were
+            // written, so it can be checked even when the payload no longer
+            // parses; and a token whose bytes were altered is a token whose
+            // signature no longer matches. Saying so is more accurate than
+            // reporting it as unreadable, and it is the same answer a subtler
+            // edit — one that leaves valid JSON — already gets.
+            throw SignatureMatches(token)
+                ? new SecurityTokenException("The token is not a readable JWT.", exception)
+                : new SecurityTokenInvalidSignatureException(
+                    "The token signature does not match its contents.", exception);
         }
 
         var subject = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -245,5 +259,46 @@ public sealed class JwtAccessTokenIssuer
         }
 
         return principal;
+    }
+
+    /// <summary>
+    /// Whether the signature still matches the header and payload it was
+    /// written over.
+    /// </summary>
+    /// <remarks>
+    /// Computed here rather than asked of the handler, because this is only
+    /// reached when the handler could not read the token far enough to check
+    /// anything. The signature does not depend on the payload being readable:
+    /// it is taken over the two segments as text, so it answers the question
+    /// even when they no longer decode to anything sensible.
+    ///
+    /// Compared in fixed time. The comparison is not secret-dependent in any
+    /// obvious way — the caller supplied both sides — but a signature check
+    /// that returns early on the first differing byte is the shape of a
+    /// mistake worth never making.
+    /// </remarks>
+    private bool SignatureMatches(string token)
+    {
+        var segments = token.Split('.');
+
+        if (segments.Length != 3)
+        {
+            return false;
+        }
+
+        try
+        {
+            var signed = Encoding.UTF8.GetBytes($"{segments[0]}.{segments[1]}");
+            var expected = HMACSHA256.HashData(_signingKey.Key, signed);
+            var presented = Base64UrlEncoder.DecodeBytes(segments[2]);
+
+            return CryptographicOperations.FixedTimeEquals(expected, presented);
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            // The signature segment is not even base64url. Nothing matches
+            // that.
+            return false;
+        }
     }
 }

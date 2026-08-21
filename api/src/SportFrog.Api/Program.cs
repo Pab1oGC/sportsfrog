@@ -8,6 +8,7 @@ using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Features.Rulebook;
+using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -99,6 +100,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Competitions.CompetitionActivity>();
+builder.Services.AddScoped<SportFrog.Api.Features.Teams.TeamUsage>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -151,6 +153,11 @@ api.MapCreateCategory();
 api.MapReadCategories();
 api.MapUpdateCategory();
 api.MapDeleteCategory();
+
+api.MapCreateTeam();
+api.MapReadTeams();
+api.MapUpdateTeam();
+api.MapDeleteTeam();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
