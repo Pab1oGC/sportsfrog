@@ -4,6 +4,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Categories;
 
@@ -75,7 +76,7 @@ public static class CreateCategory
             CompetitionId = competitionId,
             RulesetId = contract.RulesetId,
             Name = name,
-            Gender = EligibleSex.Normalize(contract.Gender),
+            Gender = Sex.Normalize(contract.Gender),
             BirthDateFrom = contract.BirthDateFrom,
             BirthDateTo = contract.BirthDateTo,
             MaxRosterSize = contract.MaxRosterSize,

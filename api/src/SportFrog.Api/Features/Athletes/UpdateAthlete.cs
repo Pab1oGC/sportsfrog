@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Athletes;
 
@@ -41,6 +42,16 @@ public static class UpdateAthlete
                 .Must(date => date > EarliestPlausibleBirth
                     && date < DateOnly.FromDateTime(DateTime.UtcNow))
                 .WithMessage("The date of birth is not a plausible date.");
+
+            // Checked because a category admits one of these and a roster is
+            // accepted by comparing the two. Free text here would let an
+            // athlete be recorded in a form no category can ever match, and
+            // the mismatch would surface as an eligible player being refused
+            // rather than as a refusal to save this.
+            RuleFor(request => request.Gender)
+                .Must(gender => Sex.IsAcceptable(gender))
+                .When(request => request.Gender is not null)
+                .WithMessage(Sex.Requirement);
         }
     }
 
@@ -85,7 +96,7 @@ public static class UpdateAthlete
         athlete.LastName = request.LastName.Trim();
         athlete.DocumentId = document;
         athlete.BirthDate = request.BirthDate;
-        athlete.Gender = request.Gender?.Trim();
+        athlete.Gender = Sex.Normalize(request.Gender);
         athlete.GuardianName = request.GuardianName?.Trim();
         athlete.GuardianPhone = request.GuardianPhone?.Trim();
         athlete.IsActive = request.IsActive;

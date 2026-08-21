@@ -3,6 +3,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Categories;
 
@@ -56,7 +57,7 @@ public static class UpdateCategory
             .AsNoTracking()
             .SingleAsync(candidate => candidate.Id == competitionId, cancellationToken);
 
-        var gender = EligibleSex.Normalize(contract.Gender);
+        var gender = Sex.Normalize(contract.Gender);
 
         if (competition.Status != CompetitionState.Draft && EligibilityChanged(category, contract, gender))
         {

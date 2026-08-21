@@ -1,4 +1,5 @@
 using FluentValidation;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Categories;
 
@@ -35,9 +36,9 @@ internal sealed class CategoryContractValidator : AbstractValidator<CategoryCont
             .MaximumLength(80);
 
         RuleFor(contract => contract.Gender)
-            .Must(gender => EligibleSex.IsAcceptable(gender))
+            .Must(gender => Sex.IsAcceptable(gender))
             .When(contract => contract.Gender is not null)
-            .WithMessage(EligibleSex.Requirement);
+            .WithMessage("The category is open to F or M, or left unset to admit anyone.");
 
         // Read as the window of birth dates the category admits: the earliest
         // is its oldest player, the latest its youngest. Either end may be
@@ -59,33 +60,3 @@ internal sealed class CategoryContractValidator : AbstractValidator<CategoryCont
     }
 }
 
-/// <summary>
-/// The sexes a category can be restricted to.
-/// </summary>
-/// <remarks>
-/// Closed, because this value is compared against the one recorded on an
-/// athlete when a roster is checked. A category admitting "Femenino" and an
-/// athlete recorded as "F" describe the same person and would never match, and
-/// the failure would surface as an eligible player being refused rather than
-/// as a refusal to save nonsense.
-///
-/// Stored uppercase, which is the form the athletes already hold.
-///
-/// Absent means open: a mixed category, or one where the distinction is not
-/// drawn. That is a third state and not a third value, so it is left as null
-/// rather than given a label of its own.
-/// </remarks>
-internal static class EligibleSex
-{
-    public const string Female = "F";
-    public const string Male = "M";
-
-    public static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
-
-    public static bool IsAcceptable(string? value) =>
-        Normalize(value) is Female or Male;
-
-    public static string Requirement =>
-        $"The category is open to {Female} or {Male}, or left unset to admit anyone.";
-}
