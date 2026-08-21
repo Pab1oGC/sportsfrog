@@ -78,7 +78,7 @@ public static class CreateCompetition
             Slug = slug,
             Season = contract.Season.Trim(),
             Format = contract.Format,
-            CaptureLevel = Enum.Parse<CaptureLevel>(contract.CaptureLevel, ignoreCase: true),
+            CaptureLevel = WireEnum.Parse<CaptureLevel>(contract.CaptureLevel),
 
             // Every competition begins in draft. Nothing is published and
             // nothing is played until someone moves it on.

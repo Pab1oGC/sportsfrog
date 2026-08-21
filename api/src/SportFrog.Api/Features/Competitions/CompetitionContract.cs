@@ -41,7 +41,7 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
     /// what it accepts.
     /// </summary>
     public static bool TryReadCaptureLevel(string? value, out CaptureLevel level) =>
-        Enum.TryParse(value, ignoreCase: true, out level);
+        WireEnum.TryParse(value, out level);
 
     public CompetitionContractValidator()
     {
@@ -70,7 +70,8 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
 
         RuleFor(contract => contract.CaptureLevel)
             .Must(level => TryReadCaptureLevel(level, out _))
-            .WithMessage("Unknown capture level. Available: basic, detailed.");
+            .WithMessage(
+                $"Unknown capture level. Available: {WireEnum.Options<CaptureLevel>()}.");
 
         // Mirrors ck_competition_dates. Stated here as well so the caller is
         // told which field is wrong instead of receiving the constraint's

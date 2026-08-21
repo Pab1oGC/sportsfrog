@@ -98,6 +98,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Competitions.CompetitionActivity>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -143,6 +144,8 @@ api.MapCreateCompetition();
 api.MapReadCompetitions();
 api.MapUpdateCompetition();
 api.MapDeleteCompetition();
+api.MapChangeCompetitionStatus();
+api.MapPublishCompetition();
 
 api.MapCreateCategory();
 api.MapReadCategories();

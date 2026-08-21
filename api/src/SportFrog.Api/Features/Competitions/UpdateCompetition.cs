@@ -61,7 +61,7 @@ public static class UpdateCompetition
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        var captureLevel = Enum.Parse<CaptureLevel>(contract.CaptureLevel, ignoreCase: true);
+        var captureLevel = WireEnum.Parse<CaptureLevel>(contract.CaptureLevel);
 
         if (settled && captureLevel != competition.CaptureLevel)
         {

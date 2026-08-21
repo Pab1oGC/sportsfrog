@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Competitions;
 
@@ -71,14 +72,13 @@ public static class ReadCompetitions
 
         if (status is not null)
         {
-            if (!Enum.TryParse<CompetitionState>(status, ignoreCase: true, out var parsed))
+            if (!WireEnum.TryParse<CompetitionState>(status, out var parsed))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
                     ["status"] =
                     [
-                        "Unknown state. Available: " +
-                        string.Join(", ", Enum.GetValues<CompetitionState>().Select(Label)) + ".",
+                        $"Unknown state. Available: {WireEnum.Options<CompetitionState>()}.",
                     ],
                 });
             }
@@ -95,13 +95,6 @@ public static class ReadCompetitions
                 .ThenBy(competition => competition.Name))
             .ToListAsync(cancellationToken));
     }
-
-    /// <summary>
-    /// The wire form of a state, so the message lists what the caller may
-    /// actually send rather than what C# happens to call it.
-    /// </summary>
-    private static string Label(CompetitionState state) =>
-        System.Text.Json.JsonNamingPolicy.SnakeCaseLower.ConvertName(state.ToString());
 
     private static async Task<IResult> ReadAsync(
         Guid id,
