@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
+using SportFrog.Api.Features.Competitions;
+using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Features.Rulebook;
@@ -94,6 +96,9 @@ builder.Services.AddScoped<SessionIssuer>();
 
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Competitions.CompetitionActivity>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -134,6 +139,18 @@ api.MapCreateRuleset();
 api.MapReadRulesets();
 api.MapUpdateRuleset();
 api.MapDeleteRuleset();
+
+api.MapCreateCompetition();
+api.MapReadCompetitions();
+api.MapUpdateCompetition();
+api.MapDeleteCompetition();
+api.MapChangeCompetitionStatus();
+api.MapPublishCompetition();
+
+api.MapCreateCategory();
+api.MapReadCategories();
+api.MapUpdateCategory();
+api.MapDeleteCategory();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
