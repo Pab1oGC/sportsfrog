@@ -44,7 +44,11 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
         InspectAthlete(category, athlete, violations);
 
         await InspectPlaceAsync(team, category, athlete, excluding, violations, cancellationToken);
-        await InspectJerseyAsync(team, jerseyNumber, excluding, violations, cancellationToken);
+
+        if (await InspectJerseyAsync(team, jerseyNumber, excluding, cancellationToken) is { } taken)
+        {
+            violations.Add(taken);
+        }
 
         return violations;
     }
@@ -169,23 +173,27 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
     }
 
     /// <summary>
-    /// Whether the shirt is free.
+    /// Whether the shirt is free, or who is wearing it.
     /// </summary>
     /// <remarks>
+    /// Public and separate from the rest because correcting a registration
+    /// asks only this. The other rules were settled when the player was
+    /// registered, and re-running them to change a number would refuse the
+    /// change for reasons that have nothing to do with numbers.
+    ///
     /// Checked here for the message; the partial unique index is what makes it
     /// true, and it is the one that settles two registrations racing for the
     /// same number.
     /// </remarks>
-    private async Task InspectJerseyAsync(
+    public async Task<RosterViolation?> InspectJerseyAsync(
         Team team,
         short? jerseyNumber,
         Guid? excluding,
-        List<RosterViolation> violations,
         CancellationToken cancellationToken)
     {
         if (jerseyNumber is not { } number)
         {
-            return;
+            return null;
         }
 
         var wearer = await database.RosterEntries
@@ -196,11 +204,8 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
             .Select(entry => entry.Athlete!.FirstName + " " + entry.Athlete.LastName)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (wearer is not null)
-        {
-            violations.Add(new RosterViolation(
-                "JerseyNumber",
-                $"{wearer} already wears {number} for {team.Name}."));
-        }
+        return wearer is null
+            ? null
+            : new RosterViolation("JerseyNumber", $"{wearer} already wears {number} for {team.Name}.");
     }
 }
