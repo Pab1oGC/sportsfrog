@@ -39,6 +39,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<Competition> Competitions => Set<Competition>();
 
+    public DbSet<Category> Categories => Set<Category>();
+
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

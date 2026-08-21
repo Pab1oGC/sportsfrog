@@ -12,12 +12,21 @@ namespace SportFrog.Api.Features.Rulebook;
 /// else.
 /// </summary>
 /// <remarks>
-/// Written as SQL rather than as a query over entities because the entities
-/// do not exist yet — competitions and categories are the next module, and
-/// their tables are already in the schema with the foreign keys pointing
-/// here. Isolating that in one method is the point of this class: when those
-/// entities land, this becomes an ordinary navigation and nothing outside
-/// this file has to change.
+/// This was raw SQL while competitions and categories had no entities. They
+/// have them now, so it is an ordinary query, and nothing outside this file
+/// had to change for that — which is what putting the question in one place
+/// was for.
+///
+/// A category counts as a use only when it overrides the ruleset itself.
+/// Categories that follow their competition are reached through the
+/// competition, and counting them again would report one use as two.
+///
+/// The visibility filters are set aside deliberately. A withdrawn competition
+/// is hidden from the people using the product but its row is still there,
+/// still holding the foreign key; asking only about visible rows would answer
+/// that the ruleset is free and then have the database refuse the delete. The
+/// question here is whether anything references it, not whether anything
+/// anyone can see does.
 ///
 /// The count runs under the isolation policies like every other read, so it
 /// only ever sees this organization. That is correct for the message it
@@ -26,22 +35,11 @@ namespace SportFrog.Api.Features.Rulebook;
 /// </remarks>
 internal sealed class RulesetUsage(SportFrogDbContext database)
 {
-    public async Task<bool> IsInUseAsync(Guid rulesetId, CancellationToken cancellationToken)
-    {
-        // Both tables reference rulesets: a competition binds one for the
-        // whole event, a category may override it for its own draw.
-        var references = await database.Database
-            .SqlQuery<int>(
-                $"""
-                 SELECT count(*)::int AS "Value"
-                 FROM (
-                     SELECT 1 FROM competitions WHERE ruleset_id = {rulesetId}
-                     UNION ALL
-                     SELECT 1 FROM categories   WHERE ruleset_id = {rulesetId}
-                 ) AS uses
-                 """)
-            .SingleAsync(cancellationToken);
-
-        return references > 0;
-    }
+    public async Task<bool> IsInUseAsync(Guid rulesetId, CancellationToken cancellationToken) =>
+        await database.Competitions
+            .IgnoreQueryFilters()
+            .AnyAsync(competition => competition.RulesetId == rulesetId, cancellationToken)
+        || await database.Categories
+            .IgnoreQueryFilters()
+            .AnyAsync(category => category.RulesetId == rulesetId, cancellationToken);
 }
