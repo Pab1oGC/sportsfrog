@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -7,6 +6,7 @@ using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.RateLimiting;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
+using SportFrog.Api.Infrastructure.Validation;
 using SportFrog.Domain.ValueObjects;
 
 namespace SportFrog.Api.Features.Organizations;
@@ -18,7 +18,7 @@ namespace SportFrog.Api.Features.Organizations;
 /// that necessarily runs with no session and no organization context: both
 /// are what it creates.
 /// </summary>
-public static partial class RegisterOrganization
+public static class RegisterOrganization
 {
     /// <param name="Name">Display name of the organization.</param>
     /// <param name="Slug">First segment of its public address.</param>
@@ -55,10 +55,8 @@ public static partial class RegisterOrganization
             // stored: an address typed in capitals is accepted and lowercased,
             // not rejected.
             RuleFor(request => request.Slug)
-                .Must(slug => IsAcceptableSlug(Normalize(slug)))
-                .WithMessage(
-                    $"The address must be between {SlugMinimumLength} and {SlugMaximumLength} " +
-                    "characters, using lowercase letters, digits and single hyphens.");
+                .Must(slug => Slug.IsAcceptable(Slug.Normalize(slug)))
+                .WithMessage(Slug.Requirement);
 
             RuleFor(request => request.OwnerEmail)
                 .Must(email => Email.TryParse(email?.Trim(), out _))
@@ -71,17 +69,6 @@ public static partial class RegisterOrganization
                     "include an uppercase letter, a lowercase letter, a digit and a special character.");
         }
     }
-
-    /// <summary>
-    /// A slug appears in a public address, so it is restricted to what reads
-    /// and travels well there: lowercase letters, digits and single hyphens
-    /// between them.
-    /// </summary>
-    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$")]
-    private static partial Regex SlugPattern { get; }
-
-    private const int SlugMinimumLength = 3;
-    private const int SlugMaximumLength = 63;
 
     public static IEndpointRouteBuilder MapRegisterOrganization(this IEndpointRouteBuilder routes)
     {
@@ -103,7 +90,7 @@ public static partial class RegisterOrganization
         BCryptPasswordHasher passwordHasher,
         CancellationToken cancellationToken)
     {
-        var slug = Normalize(request.Slug);
+        var slug = Slug.Normalize(request.Slug);
 
         // A soft-deleted organization still holds its slug, and a soft-deleted
         // user still holds their address: both unique constraints span every
@@ -210,17 +197,6 @@ public static partial class RegisterOrganization
 
         await transaction.CommitAsync(cancellationToken);
     }
-
-    /// <summary>
-    /// The form an address is stored in. Typing it in capitals is a typo, not
-    /// a different organization.
-    /// </summary>
-    private static string Normalize(string? slug) =>
-        slug?.Trim().ToLowerInvariant() ?? string.Empty;
-
-    private static bool IsAcceptableSlug(string slug) =>
-        slug.Length is >= SlugMinimumLength and <= SlugMaximumLength
-        && SlugPattern.IsMatch(slug);
 
     /// <summary>
     /// Whether the write failed because a unique constraint rejected it,

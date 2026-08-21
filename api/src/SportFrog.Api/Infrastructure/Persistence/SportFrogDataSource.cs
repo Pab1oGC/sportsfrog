@@ -23,6 +23,8 @@ public static class SportFrogDataSource
         var builder = new NpgsqlDataSourceBuilder(connectionString);
 
         builder.MapEnum<MembershipRole>("membership_role");
+        builder.MapEnum<CompetitionState>("competition_state");
+        builder.MapEnum<CaptureLevel>("capture_level");
 
         return builder.Build();
     }
@@ -31,6 +33,10 @@ public static class SportFrogDataSource
     /// Applies the same enum mapping to EF Core's own type resolution. Pass
     /// it to the <c>UseNpgsql</c> overload that takes an options action.
     /// </summary>
-    public static void MapEnums(NpgsqlDbContextOptionsBuilder builder) =>
+    public static void MapEnums(NpgsqlDbContextOptionsBuilder builder)
+    {
         builder.MapEnum<MembershipRole>("membership_role");
+        builder.MapEnum<CompetitionState>("competition_state");
+        builder.MapEnum<CaptureLevel>("capture_level");
+    }
 }

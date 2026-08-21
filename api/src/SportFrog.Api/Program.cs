@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
+using SportFrog.Api.Features.Competitions;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Features.Rulebook;
@@ -134,6 +135,11 @@ api.MapCreateRuleset();
 api.MapReadRulesets();
 api.MapUpdateRuleset();
 api.MapDeleteRuleset();
+
+api.MapCreateCompetition();
+api.MapReadCompetitions();
+api.MapUpdateCompetition();
+api.MapDeleteCompetition();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

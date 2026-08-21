@@ -37,6 +37,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<Ruleset> Rulesets => Set<Ruleset>();
 
+    public DbSet<Competition> Competitions => Set<Competition>();
+
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -46,6 +48,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
         // Declared so the provider translates the CLR enum to the database
         // enum type instead of to text.
         modelBuilder.HasPostgresEnum<MembershipRole>("public", "membership_role");
+        modelBuilder.HasPostgresEnum<CompetitionState>("public", "competition_state");
+        modelBuilder.HasPostgresEnum<CaptureLevel>("public", "capture_level");
 
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }
