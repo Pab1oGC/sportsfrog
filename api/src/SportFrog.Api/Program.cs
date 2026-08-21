@@ -93,6 +93,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionIssuer>();
 
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -130,6 +131,9 @@ api.MapDeleteClub();
 
 api.MapReadSports();
 api.MapCreateRuleset();
+api.MapReadRulesets();
+api.MapUpdateRuleset();
+api.MapDeleteRuleset();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

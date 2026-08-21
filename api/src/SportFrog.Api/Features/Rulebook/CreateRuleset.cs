@@ -1,5 +1,3 @@
-using FluentValidation;
-using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
@@ -14,45 +12,7 @@ namespace SportFrog.Api.Features.Rulebook;
 /// </summary>
 public static class CreateRuleset
 {
-    public sealed record Request(string SportCode, string Name, RulesetConfiguration Config);
-
     public sealed record Response(Guid Id);
-
-    internal sealed class Validator : AbstractValidator<Request>
-    {
-        public Validator(RulesetPolicy policy)
-        {
-            RuleFor(request => request.SportCode)
-                .NotEmpty().WithMessage("The sport is required.")
-                .MaximumLength(50);
-
-            RuleFor(request => request.Name)
-                .NotEmpty().WithMessage("The ruleset name is required.")
-                .MaximumLength(120);
-
-            RuleFor(request => request.Config)
-                .NotNull().WithMessage("The configuration is required.")
-                .SetValidator(new RulesetShapeValidator());
-
-            // Held back until the structure is sound, so a configuration
-            // missing its periods is reported as missing them rather than as
-            // pricing the wrong outcomes for a number of sets it never gave.
-            RuleFor(request => request)
-                .CustomAsync(async (request, context, cancellationToken) =>
-                {
-                    var violations = await policy.InspectAsync(
-                        request.SportCode, request.Config, cancellationToken);
-
-                    foreach (var violation in violations)
-                    {
-                        context.AddFailure(
-                            new ValidationFailure(violation.Property, violation.Message));
-                    }
-                })
-                .When(request => request.SportCode is { Length: > 0 }
-                    && request.Config is { Periods: not null, Points: not null, Tiebreakers: not null });
-        }
-    }
 
     public static IEndpointRouteBuilder MapCreateRuleset(this IEndpointRouteBuilder routes)
     {
@@ -70,15 +30,14 @@ public static class CreateRuleset
     }
 
     private static async Task<IResult> HandleAsync(
-        Request request,
+        RulesetContract contract,
         SportFrogDbContext database,
         OrganizationContext organization,
         CancellationToken cancellationToken)
     {
-        var name = request.Name.Trim();
+        var name = contract.Name.Trim();
 
-        if (await database.Rulesets.AnyAsync(
-                ruleset => ruleset.Name == name, cancellationToken))
+        if (await database.Rulesets.AnyAsync(ruleset => ruleset.Name == name, cancellationToken))
         {
             return Results.Problem(
                 detail: "A ruleset with that name already exists.",
@@ -89,9 +48,9 @@ public static class CreateRuleset
         {
             Id = Guid.NewGuid(),
             OrgId = organization.RequireOrganizationId(),
-            SportCode = request.SportCode,
+            SportCode = contract.SportCode,
             Name = name,
-            Config = request.Config,
+            Config = contract.Config,
         };
 
         database.Rulesets.Add(ruleset);
