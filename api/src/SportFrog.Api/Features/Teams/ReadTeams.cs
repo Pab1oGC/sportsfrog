@@ -23,7 +23,8 @@ public static class ReadTeams
         string ClubName,
         string Name,
         string? GroupLabel,
-        bool IsActive);
+        bool IsActive,
+        int RosterSize);
 
     public static IEndpointRouteBuilder MapReadTeams(this IEndpointRouteBuilder routes)
     {
@@ -81,6 +82,12 @@ public static class ReadTeams
     /// Shared so the list and the single read cannot drift into describing
     /// the same team differently.
     /// </summary>
+    /// <remarks>
+    /// The squad size counts only players still on the team: not withdrawn,
+    /// not struck off. It is the number a category caps, so answering it here
+    /// keeps every caller from fetching a squad to count it — and from each
+    /// of them deciding differently what counts.
+    /// </remarks>
     private static IQueryable<Summary> Project(IQueryable<Team> teams) =>
         teams.Select(team => new Summary(
             team.Id,
@@ -89,5 +96,6 @@ public static class ReadTeams
             team.Club!.Name,
             team.Name,
             team.GroupLabel,
-            team.IsActive));
+            team.IsActive,
+            team.Roster.Count(entry => entry.WithdrawnAt == null && entry.DeletedAt == null)));
 }

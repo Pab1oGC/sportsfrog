@@ -61,4 +61,10 @@ public sealed class Team
 
     public Club? Club { get; set; }
     public Category? Category { get; set; }
+
+    /// <summary>
+    /// Everyone ever registered for this team, including those who withdrew.
+    /// Who is currently available is a filter over this, not a separate list.
+    /// </summary>
+    public ICollection<RosterEntry> Roster { get; set; } = [];
 }
