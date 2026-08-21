@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Clubs;
 
@@ -34,13 +35,17 @@ public static class ReadClubs
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
         CancellationToken cancellationToken,
-        string? search = null) =>
-        Results.Ok(await database.Clubs
+        string? search = null)
+    {
+        search = QueryFilter.OrAbsent(search);
+
+        return Results.Ok(await database.Clubs
             .Where(club => search == null || EF.Functions.ILike(club.Name, $"%{search}%"))
             .OrderBy(club => club.Name)
             .Select(club => new Summary(
                 club.Id, club.Name, club.ShortName, club.LogoUrl, club.IsActive))
             .ToListAsync(cancellationToken));
+    }
 
     private static async Task<IResult> ReadAsync(
         Guid id,

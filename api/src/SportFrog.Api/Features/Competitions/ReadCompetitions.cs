@@ -70,9 +70,12 @@ public static class ReadCompetitions
         // it disliked.
         CompetitionState? state = null;
 
-        if (status is not null)
+        sport = QueryFilter.OrAbsent(sport);
+        search = QueryFilter.OrAbsent(search);
+
+        if (QueryFilter.OrAbsent(status) is { } requested)
         {
-            if (!WireEnum.TryParse<CompetitionState>(status, out var parsed))
+            if (!WireEnum.TryParse<CompetitionState>(requested, out var parsed))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {

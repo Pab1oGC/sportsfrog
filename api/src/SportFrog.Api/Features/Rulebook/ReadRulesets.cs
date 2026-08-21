@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Rulebook;
 
@@ -57,13 +58,22 @@ public static class ReadRulesets
         SportFrogDbContext database,
         CancellationToken cancellationToken,
         string? sport = null,
-        string? search = null) =>
-        Results.Ok(await Project(database.Rulesets
+        string? search = null)
+    {
+        // Resolved before the query rather than inside it: this runs in C#,
+        // and a call the provider cannot translate would either be refused or
+        // silently pull the whole table into memory to evaluate.
+        sport = QueryFilter.OrAbsent(sport);
+        search = QueryFilter.OrAbsent(search);
+
+        return Results.Ok(await Project(database.Rulesets
                 .Where(ruleset => sport == null || ruleset.SportCode == sport)
-                .Where(ruleset => search == null || EF.Functions.ILike(ruleset.Name, $"%{search}%"))
+                .Where(ruleset => search == null
+                    || EF.Functions.ILike(ruleset.Name, $"%{search}%"))
                 .OrderBy(ruleset => ruleset.SportCode)
                 .ThenBy(ruleset => ruleset.Name))
             .ToListAsync(cancellationToken));
+    }
 
     private static async Task<IResult> ReadAsync(
         Guid id,

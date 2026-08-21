@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Athletes;
 
@@ -52,8 +53,11 @@ public static class ReadAthletes
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
         CancellationToken cancellationToken,
-        string? search = null) =>
-        Results.Ok(await database.Athletes
+        string? search = null)
+    {
+        search = QueryFilter.OrAbsent(search);
+
+        return Results.Ok(await database.Athletes
             .Where(athlete => search == null
                 || athlete.DocumentId == search
                 || EF.Functions.ILike(athlete.LastName, $"%{search}%")
@@ -62,6 +66,7 @@ public static class ReadAthletes
             .ThenBy(athlete => athlete.FirstName)
             .Select(athlete => Project(athlete))
             .ToListAsync(cancellationToken));
+    }
 
     private static async Task<IResult> ReadAsync(
         Guid id,

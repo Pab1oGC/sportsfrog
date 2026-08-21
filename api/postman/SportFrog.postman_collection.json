@@ -1,0 +1,1381 @@
+{
+  "info": {
+    "name": "SportFrog API",
+    "description": "Autenticacion, organizaciones, miembros, clubes, deportistas, reglamento, competencias y categorias.\n\nOrden sugerido la primera vez:\n1. 0 - Salud\n2. 1 - Autenticacion > Registrar organizacion\n3. 1 - Autenticacion > Iniciar sesion  (guarda los testigos y la organizacion)\n4. 5 - Reglamento > Crear reglamento   (guarda rulesetId)\n5. 6 - Competencias > Crear competencia (guarda competitionId)\n6. 7 - Categorias > Crear categoria     (guarda categoryId)\n\nA partir de ahi cualquier peticion, en cualquier orden. El testigo de acceso dura 15 minutos: si aparece un 401, volver a ejecutar 'Iniciar sesion'.\n\nDos avisos sobre correr la coleccion entera (Run collection):\n\n- Las peticiones de la carpeta 1 estan limitadas a 10 por minuto por IP. Correr la coleccion varias veces seguidas devuelve 429 ahi y arrastra 401 en todo lo demas: esperar un minuto y repetir.\n- Las dos ultimas de la carpeta 8 fallan a proposito, porque una competencia finalizada no se cancela ni se retira. Una corrida limpia da 39 de 41.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5299"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "organizationId",
+      "value": ""
+    },
+    {
+      "key": "clubId",
+      "value": ""
+    },
+    {
+      "key": "athleteId",
+      "value": ""
+    },
+    {
+      "key": "rulesetId",
+      "value": ""
+    },
+    {
+      "key": "spareRulesetId",
+      "value": ""
+    },
+    {
+      "key": "competitionId",
+      "value": ""
+    },
+    {
+      "key": "organizationSlug",
+      "value": "liga-municipal"
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "ownerEmail",
+      "value": "ana@liga.test"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "Contrasena-1"
+    }
+  ],
+  "item": [
+    {
+      "name": "0 - Salud",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - Autenticacion",
+      "item": [
+        {
+          "name": "Registrar organizacion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('organizationId', pm.response.json().organizationId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Liga Municipal\",\n  \"slug\": \"{{organizationSlug}}\",\n  \"ownerFullName\": \"Ana Rojas\",\n  \"ownerEmail\": \"{{ownerEmail}}\",\n  \"ownerPassword\": \"{{ownerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "organizations"
+              ]
+            },
+            "description": "El slug y el correo son la primera mitad de la direccion publica y la cuenta propietaria. Si esta organizacion ya existe devuelve 409: cambiar las variables organizationSlug y ownerEmail para registrar otra."
+          }
+        },
+        {
+          "name": "Iniciar sesion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "    if (body.organizations.length > 0) {",
+                  "        pm.collectionVariables.set('organizationId', body.organizations[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "session"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Renovar sesion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/session/renewal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "session",
+                "renewal"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cerrar sesion",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/session/revocation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "session",
+                "revocation"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Miembros",
+      "item": [
+        {
+          "name": "Agregar miembro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"arbitro@liga.test\",\n  \"fullName\": \"Carlos Arbitro\",\n  \"password\": \"Contrasena-1\",\n  \"role\": \"operator\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "members"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Clubes",
+      "item": [
+        {
+          "name": "Crear club",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('clubId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Deportivo Central\",\n  \"shortName\": \"DCE\",\n  \"logoUrl\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clubs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clubs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar clubes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clubs?search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clubs"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer un club",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clubs/{{clubId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clubs",
+                "{{clubId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar club",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Deportivo Central\",\n  \"shortName\": \"DCE\",\n  \"logoUrl\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clubs/{{clubId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clubs",
+                "{{clubId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar club",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clubs/{{clubId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clubs",
+                "{{clubId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 - Deportistas",
+      "item": [
+        {
+          "name": "Registrar deportista",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.id) { pm.collectionVariables.set('athleteId', body.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Lucia\",\n  \"lastName\": \"Fernandez\",\n  \"documentId\": \"7654321\",\n  \"birthDate\": \"2012-05-14\",\n  \"gender\": \"F\",\n  \"guardianName\": \"Marta Fernandez\",\n  \"guardianPhone\": \"70011223\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/athletes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "athletes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar deportistas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/athletes?search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "athletes"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer un deportista",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/athletes/{{athleteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "athletes",
+                "{{athleteId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Corregir deportista",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Lucia\",\n  \"lastName\": \"Fernandez Rojas\",\n  \"documentId\": \"7654321\",\n  \"birthDate\": \"2012-05-14\",\n  \"gender\": \"F\",\n  \"guardianName\": \"Marta Fernandez\",\n  \"guardianPhone\": \"70011223\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/athletes/{{athleteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "athletes",
+                "{{athleteId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar deportista",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/athletes/{{athleteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "athletes",
+                "{{athleteId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - Reglamento",
+      "item": [
+        {
+          "name": "Listar deportes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Catalogo compartido, sembrado por migracion. Solo lectura: cada deporte trae sus metricas, que son las que un reglamento puede elegir.",
+            "url": {
+              "raw": "{{baseUrl}}/sports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer un deporte",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Codigos disponibles: football, futsal, basketball, volleyball, wally.",
+            "url": {
+              "raw": "{{baseUrl}}/sports/football",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sports",
+                "football"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear reglamento (futbol)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('rulesetId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Las metricas que deciden el marcador (goal, own_goal) no se pueden omitir. Los desempates disponibles son head_to_head, score_difference, score_for, score_against y wins; el orden importa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sportCode\": \"football\",\n  \"name\": \"Liga mayor 2026\",\n  \"config\": {\n    \"periods\": { \"count\": 2, \"label\": \"tiempo\", \"minutes\": 45 },\n    \"points\": { \"win\": 3, \"draw\": 1, \"loss\": 0 },\n    \"tiebreakers\": [\"score_difference\", \"score_for\", \"head_to_head\"],\n    \"walkover\": { \"winnerScore\": 3, \"loserScore\": 0 },\n    \"metrics\": [\"goal\", \"own_goal\", \"assist\", \"yellow_card\", \"red_card\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rulesets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear reglamento (voleibol)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "En un deporte por sets los resultados se cotizan por marcador de sets, no por victoria y empate. Con 5 sets se gana en 3, y hay que darle valor a los seis resultados posibles. El numero de sets tiene que ser impar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sportCode\": \"volleyball\",\n  \"name\": \"Voley femenino 2026\",\n  \"config\": {\n    \"periods\": { \"count\": 5, \"label\": \"set\" },\n    \"points\": {\n      \"win_3_0\": 3,\n      \"win_3_1\": 3,\n      \"win_3_2\": 2,\n      \"loss_2_3\": 1,\n      \"loss_1_3\": 0,\n      \"loss_0_3\": 0\n    },\n    \"tiebreakers\": [\"wins\", \"score_difference\"],\n    \"walkover\": { \"winnerScore\": 3, \"loserScore\": 0 }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rulesets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('spareRulesetId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar reglamentos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets?sport=&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets"
+              ],
+              "query": [
+                {
+                  "key": "sport",
+                  "value": ""
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer un reglamento",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets",
+                "{{rulesetId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Corregir reglamento",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Si el reglamento ya esta en uso por una competencia, solo se puede renombrar: reescribir las reglas devuelve 409. El deporte nunca cambia.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sportCode\": \"football\",\n  \"name\": \"Liga mayor 2026 - Apertura\",\n  \"config\": {\n    \"periods\": { \"count\": 2, \"label\": \"tiempo\", \"minutes\": 45 },\n    \"points\": { \"win\": 3, \"draw\": 1, \"loss\": 0 },\n    \"tiebreakers\": [\"score_difference\", \"score_for\", \"head_to_head\"],\n    \"walkover\": { \"winnerScore\": 3, \"loserScore\": 0 },\n    \"metrics\": [\"goal\", \"own_goal\", \"assist\", \"yellow_card\", \"red_card\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets",
+                "{{rulesetId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar reglamento (el de voleibol)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Apunta al reglamento de voleibol, que ninguna competencia usa. Devuelve 409 si alguna competencia o categoria lo usa: probarlo con {{rulesetId}} despues de crear la competencia para ver ese caso.",
+            "url": {
+              "raw": "{{baseUrl}}/rulesets/{{spareRulesetId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets",
+                "{{spareRulesetId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - Competencias",
+      "item": [
+        {
+          "name": "Crear competencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('competitionId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "El deporte no se manda: sale del reglamento. Formatos: league, knockout, groups. Nivel de captura: basic (solo el marcador) o detailed (cada evento atribuido a un jugador). Nace en borrador y no publica.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesetId\": \"{{rulesetId}}\",\n  \"name\": \"Clausura 2026\",\n  \"slug\": \"clausura-2026\",\n  \"season\": \"2026\",\n  \"format\": \"league\",\n  \"captureLevel\": \"detailed\",\n  \"startsOn\": \"2026-09-01\",\n  \"endsOn\": \"2026-12-15\",\n  \"settings\": {\n    \"public\": {\n      \"showStandings\": true,\n      \"showLeaders\": true,\n      \"showRosters\": false\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar competencias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "status admite draft, scheduled, in_progress, finished o cancelled.",
+            "url": {
+              "raw": "{{baseUrl}}/competitions?status=&sport=&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": ""
+                },
+                {
+                  "key": "sport",
+                  "value": ""
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer una competencia",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Corregir competencia",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Fuera de borrador, el reglamento y el nivel de captura quedan fijos: cambiarlos devuelve 409. Nombre, temporada, fechas y ajustes se corrigen siempre.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesetId\": \"{{rulesetId}}\",\n  \"name\": \"Clausura 2026 - Primera\",\n  \"slug\": \"clausura-2026\",\n  \"season\": \"2026\",\n  \"format\": \"league\",\n  \"captureLevel\": \"detailed\",\n  \"startsOn\": \"2026-09-01\",\n  \"endsOn\": \"2026-12-20\",\n  \"settings\": {\n    \"public\": {\n      \"showStandings\": true,\n      \"showLeaders\": true,\n      \"showRosters\": false\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 - Categorias",
+      "item": [
+        {
+          "name": "Crear categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('categoryId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "gender admite F, M o null (categoria abierta). rulesetId null hace que siga al reglamento de la competencia; si se le pone uno propio, tiene que ser del mismo deporte. Las fechas van de la mas vieja admitida a la mas joven.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesetId\": null,\n  \"name\": \"Sub-15 masculino\",\n  \"gender\": \"M\",\n  \"birthDateFrom\": \"2012-01-01\",\n  \"birthDateTo\": \"2013-12-31\",\n  \"maxRosterSize\": 18,\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear categoria abierta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Sin restriccion de sexo ni de edad, y sin tope de plantilla.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesetId\": null,\n  \"name\": \"Mixta libre\",\n  \"gender\": null,\n  \"birthDateFrom\": null,\n  \"birthDateTo\": null,\n  \"maxRosterSize\": null,\n  \"displayOrder\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar categorias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Cada una trae effectiveRulesetId: el reglamento propio si lo tiene, si no el de la competencia.",
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer una categoria",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Corregir categoria",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Fuera de borrador solo se puede cambiar el nombre y el orden: tocar sexo, fechas, tope de plantilla o reglamento devuelve 409, porque las plantillas se aceptaron contra esas reglas.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesetId\": null,\n  \"name\": \"Sub-15 varones\",\n  \"gender\": \"M\",\n  \"birthDateFrom\": \"2012-01-01\",\n  \"birthDateTo\": \"2013-12-31\",\n  \"maxRosterSize\": 18,\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar categoria",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Devuelve 409 si ya tiene equipos o partidos.",
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8 - Ciclo de vida",
+      "description": "Las transiciones, en el orden en que ocurren. Anunciar exige que la competencia ya tenga al menos una categoria, por eso esta carpeta va despues de la 7.\n\nEn una corrida completa las dos ultimas fallan a proposito: una competencia finalizada no se puede cancelar (solo reabrir), y solo se retira una que este en borrador o ya cancelada. Son caminos alternativos, no parte de la secuencia.",
+      "item": [
+        {
+          "name": "Anunciar (a programada)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Requiere al menos una categoria: si no hay ninguna devuelve 409. Crear la categoria antes de ejecutar esto.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"scheduled\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Arrancar (a en curso)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Publicar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Una competencia en borrador no se puede publicar: hay que anunciarla primero. Despublicar (isPublic false) nunca se rechaza.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isPublic\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/publication",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "publication"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Despublicar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isPublic\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/publication",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "publication"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cerrar (a finalizada)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Devuelve 409 si algun partido sigue en juego. Una competencia finalizada se puede reabrir volviendo a in_progress.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"finished\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancelar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Exige rol admin, a diferencia del resto de las transiciones que alcanza con operator. Cancelada es un estado terminal: no se sale de ahi.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"cancelled\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retirar competencia",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{organizationId}}"
+              }
+            ],
+            "description": "Solo en borrador o ya cancelada. Una competencia anunciada, en curso o finalizada se cancela, no se retira.",
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
