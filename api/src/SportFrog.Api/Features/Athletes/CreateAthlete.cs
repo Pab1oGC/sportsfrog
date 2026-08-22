@@ -83,6 +83,7 @@ public static class CreateAthlete
         Request request,
         SportFrogDbContext database,
         OrganizationContext organization,
+        AthletePhoto photos,
         CancellationToken cancellationToken)
     {
         var document = request.DocumentId.Trim();
@@ -99,9 +100,31 @@ public static class CreateAthlete
             return Results.Ok(new Response(existing.Id, AlreadyRegistered: true));
         }
 
+        // The identifier is settled here rather than by the database because
+        // the photograph is filed under it, and the picture has to be stored
+        // before the row that points at it exists.
+        var athleteId = Guid.NewGuid();
+
+        string? photoKey = null;
+
+        if (request.PhotoUrl is { Length: > 0 } upload)
+        {
+            // After the duplicate check, so registering somebody who is
+            // already on the register does not leave their photograph behind
+            // in the bucket. Before the insert, so a row never points at
+            // something that was never written — the reverse leaves a broken
+            // reference, which is worse than a few unreferenced kilobytes.
+            photoKey = await photos.StoreAsync(athleteId, upload, cancellationToken);
+
+            if (photoKey is null)
+            {
+                return AthletePhoto.NotAnImage();
+            }
+        }
+
         var athlete = new Athlete
         {
-            Id = Guid.NewGuid(),
+            Id = athleteId,
             OrgId = organization.RequireOrganizationId(),
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
@@ -110,7 +133,7 @@ public static class CreateAthlete
             Gender = Sex.Normalize(request.Gender),
             GuardianName = request.GuardianName?.Trim(),
             GuardianPhone = request.GuardianPhone?.Trim(),
-            PhotoUrl = request.PhotoUrl,
+            PhotoKey = photoKey,
         };
 
         database.Athletes.Add(athlete);

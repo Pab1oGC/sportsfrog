@@ -96,7 +96,12 @@ services:
       # Required: the options are validated on start, so the API refuses to
       # boot without it rather than failing at the first sign-in.
       Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
+      # Object storage. The API creates the bucket on first start if it is
+      # missing, so a fresh volume needs nothing done to it by hand.
       Storage__Endpoint: "http://minio:9000"
+      Storage__Bucket: "sportfrog"
+      Storage__AccessKey: ${MINIO_ROOT_USER}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
     ports:
       - "${API_PORT}:8080"
     depends_on:

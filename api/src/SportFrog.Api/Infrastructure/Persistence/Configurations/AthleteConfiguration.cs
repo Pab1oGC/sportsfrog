@@ -20,7 +20,7 @@ internal sealed class AthleteConfiguration : IEntityTypeConfiguration<Athlete>
         builder.Property(x => x.DocumentId).HasColumnName("document_id").IsRequired();
         builder.Property(x => x.BirthDate).HasColumnName("birth_date");
         builder.Property(x => x.Gender).HasColumnName("gender");
-        builder.Property(x => x.PhotoUrl).HasColumnName("photo_url");
+        builder.Property(x => x.PhotoKey).HasColumnName("photo_key");
         builder.Property(x => x.GuardianName).HasColumnName("guardian_name");
         builder.Property(x => x.GuardianPhone).HasColumnName("guardian_phone");
         builder.Property(x => x.IsActive).HasColumnName("is_active");

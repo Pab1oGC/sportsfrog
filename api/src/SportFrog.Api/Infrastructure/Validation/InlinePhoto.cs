@@ -60,4 +60,48 @@ public static class InlinePhoto
 
     public static string Requirement =>
         $"The photo must be a PNG, JPEG or WebP data URL under {MaximumLength / (1024 * 1024)} MB.";
+
+    /// <summary>
+    /// Reads the bytes out of an accepted data URL.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="IsAcceptable"/> because they answer different
+    /// questions at different moments. That one runs in a validator and
+    /// decides whether a request is well formed; this one runs in the feature
+    /// and produces something to store. Merging them would make a validator
+    /// allocate megabytes on every request just to reach a boolean.
+    ///
+    /// Still no claim that the bytes are an image. Base64 that decodes is
+    /// base64 that decodes; whether it is a photograph is settled by
+    /// <see cref="Storage.ImageNormalizer"/>, which finds out by decoding it.
+    /// </remarks>
+    public static bool TryRead(string value, out byte[] content)
+    {
+        content = [];
+
+        var separator = value.IndexOf(',', StringComparison.Ordinal);
+        if (separator < 0)
+        {
+            return false;
+        }
+
+        // Only base64 payloads. A data URL may also carry percent-encoded
+        // text, which no image arrives as, and accepting it would mean
+        // guessing at an encoding nobody sent.
+        if (!value[..separator].EndsWith(";base64", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            content = Convert.FromBase64String(value[(separator + 1)..]);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return content.Length > 0;
+    }
 }

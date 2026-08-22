@@ -21,6 +21,23 @@ public static class UpdateAthlete
         string? PhotoUrl,
         bool IsActive);
 
+    /// <summary>
+    /// What an empty photograph means: remove the one on file.
+    /// </summary>
+    /// <remarks>
+    /// The field has three states rather than two, and it has to. Since
+    /// photographs moved into object storage a reader receives a temporary
+    /// link, not the image, so a client editing a person's telephone number
+    /// has nothing to send back that would mean "the same photograph as
+    /// before" — and a correction that silently deleted the picture every
+    /// time somebody fixed a surname would be a very quiet way to lose them
+    /// all.
+    ///
+    /// So an absent photograph leaves the existing one alone, an empty one
+    /// removes it, and a data URL replaces it.
+    /// </remarks>
+    private const string RemovePhoto = "";
+
     private static readonly DateOnly EarliestPlausibleBirth = new(1900, 1, 1);
 
     internal sealed class Validator : AbstractValidator<Request>
@@ -56,6 +73,7 @@ public static class UpdateAthlete
 
             RuleFor(request => request.PhotoUrl)
                 .Must(InlinePhoto.IsAcceptable)
+                .When(request => request.PhotoUrl != RemovePhoto)
                 .WithMessage(InlinePhoto.Requirement);
         }
     }
@@ -74,6 +92,7 @@ public static class UpdateAthlete
         Guid id,
         Request request,
         SportFrogDbContext database,
+        AthletePhoto photos,
         CancellationToken cancellationToken)
     {
         var athlete = await database.Athletes.SingleOrDefaultAsync(
@@ -97,6 +116,28 @@ public static class UpdateAthlete
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        var replaced = athlete.PhotoKey;
+
+        switch (request.PhotoUrl)
+        {
+            case null:
+                break;
+
+            case RemovePhoto:
+                athlete.PhotoKey = null;
+                break;
+
+            default:
+                if (await photos.StoreAsync(id, request.PhotoUrl, cancellationToken)
+                    is not { } stored)
+                {
+                    return AthletePhoto.NotAnImage();
+                }
+
+                athlete.PhotoKey = stored;
+                break;
+        }
+
         athlete.FirstName = request.FirstName.Trim();
         athlete.LastName = request.LastName.Trim();
         athlete.DocumentId = document;
@@ -104,10 +145,17 @@ public static class UpdateAthlete
         athlete.Gender = Sex.Normalize(request.Gender);
         athlete.GuardianName = request.GuardianName?.Trim();
         athlete.GuardianPhone = request.GuardianPhone?.Trim();
-        athlete.PhotoUrl = request.PhotoUrl;
         athlete.IsActive = request.IsActive;
 
         await database.SaveChangesAsync(cancellationToken);
+
+        // Only once the row has been pointed somewhere else, and only if it
+        // actually moved. Dropping the old image before the save would leave
+        // an athlete with no photograph if the save then failed.
+        if (replaced is not null && replaced != athlete.PhotoKey)
+        {
+            await photos.ForgetAsync(replaced, cancellationToken);
+        }
 
         return Results.NoContent();
     }

@@ -29,10 +29,19 @@ public sealed class Athlete
     public string? Gender { get; set; }
 
     /// <summary>
-    /// Set once the image has been normalized. The original upload is not
-    /// kept, and nothing here is written by these operations yet.
+    /// Where the normalized photograph is kept, not the photograph itself.
     /// </summary>
-    public string? PhotoUrl { get; set; }
+    /// <remarks>
+    /// A key into object storage, under this organization's prefix. The
+    /// original upload is not kept: the stored image has been turned upright,
+    /// resized and re-encoded, which is also what removes the location the
+    /// camera recorded in it.
+    ///
+    /// May still be an inline data URL for photographs uploaded before the
+    /// images moved out of the database. Nothing but
+    /// <c>Features.Athletes.AthletePhoto</c> needs to know that.
+    /// </remarks>
+    public string? PhotoKey { get; set; }
 
     public string? GuardianName { get; set; }
 

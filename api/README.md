@@ -315,8 +315,27 @@ el archivo.
 | `ConnectionStrings__Public` | `sportfrog_public` |
 | `ConnectionStrings__Migrations` | `sportfrog_owner` |
 
+El almacenamiento de objetos se configura igual: el endpoint y el bucket están
+en `appsettings.Development.json`, las credenciales no. En desarrollo son las
+mismas `MINIO_ROOT_*` del `.env`.
+
+| Variable | Para qué |
+|---|---|
+| `Storage__AccessKey` | Usuario de MinIO / S3 |
+| `Storage__SecretKey` | Su contraseña |
+
+La API crea el bucket al arrancar si no existe, así que un volumen nuevo no
+necesita que nadie lo prepare a mano. Si el almacenamiento no responde la API
+igual arranca y lo deja anotado en el log: una caída de MinIO no puede llevarse
+puesto el registro de un partido que se está jugando.
+
 Para el trabajo diario, `dotnet user-secrets` mantiene las credenciales fuera
 del árbol del repositorio.
+
+```bash
+dotnet user-secrets set "Storage:AccessKey" "..." --project src/SportFrog.Api
+dotnet user-secrets set "Storage:SecretKey" "..." --project src/SportFrog.Api
+```
 
 ---
 

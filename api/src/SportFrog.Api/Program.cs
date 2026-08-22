@@ -21,6 +21,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.RateLimiting;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 using FluentValidation;
@@ -99,6 +100,11 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<OrganizationContext>();
 
+// Files live in object storage rather than in a column: a photograph is a
+// megabyte no query ever filters on, and a column carries it into every
+// backup, every replica and every listing that reads the row.
+builder.Services.AddSportFrogStorage(builder.Configuration);
+
 // The public view reads with its own database user, which holds no write
 // permission: its read-only condition is enforced by the engine and not by
 // the absence of a write in the code (DD-08).
@@ -130,6 +136,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -226,6 +233,8 @@ api.MapAdvanceBracket();
 
 api.MapReadPublicCompetition();
 api.MapReadPublicTables();
+api.MapReadPublicCalendar();
+api.MapReadPublicRoster();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
