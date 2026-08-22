@@ -51,6 +51,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<Match> Matches => Set<Match>();
 
+    public DbSet<PlayerEvent> PlayerEvents => Set<PlayerEvent>();
+
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

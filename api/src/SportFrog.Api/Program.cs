@@ -8,6 +8,7 @@ using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Features.Rosters;
+using SportFrog.Api.Features.MatchEvents;
 using SportFrog.Api.Features.Matches;
 using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Features.Teams;
@@ -124,6 +125,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -205,6 +207,11 @@ api.MapDeleteMatch();
 api.MapRecordResult();
 api.MapChangeMatchStatus();
 api.MapAwardWalkover();
+
+api.MapRecordEvent();
+api.MapReadEvents();
+api.MapCorrectEvent();
+api.MapDeleteEvent();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
