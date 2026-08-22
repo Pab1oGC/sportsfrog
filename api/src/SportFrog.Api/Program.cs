@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
+using SportFrog.Api.Features.Draw;
 using SportFrog.Api.Features.Competitions;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
@@ -217,6 +218,8 @@ api.MapDeleteEvent();
 
 api.MapReadStandings();
 api.MapReadLeaders();
+
+api.MapDrawCalendar();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
