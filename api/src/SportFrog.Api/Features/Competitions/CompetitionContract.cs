@@ -43,6 +43,16 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
     public static bool TryReadCaptureLevel(string? value, out CaptureLevel level) =>
         WireEnum.TryParse(value, out level);
 
+    /// <summary>
+    /// Whether one scheduling window says enough to be scheduled against.
+    /// </summary>
+    private static bool IsUsableWindow(ScheduleSpace window) =>
+        window.VenueSpaceId != Guid.Empty
+        && (window.Days is null || window.Days.All(day => day is >= 0 and <= 6))
+        && TimeOnly.TryParse(window.From, out var opens)
+        && TimeOnly.TryParse(window.To, out var closes)
+        && opens <= closes;
+
     public CompetitionContractValidator()
     {
         RuleFor(contract => contract.RulesetId)
@@ -72,6 +82,24 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
             .Must(level => TryReadCaptureLevel(level, out _))
             .WithMessage(
                 $"Unknown capture level. Available: {WireEnum.Options<CaptureLevel>()}.");
+
+        // The scheduling windows are checked for shape only. Whether the
+        // spaces they name exist is not asked here: the venues module already
+        // refuses to remove a space a competition schedules against, so the
+        // reference cannot go stale, and a window naming one that was never
+        // real simply places nothing — which the placement reports.
+        When(contract => contract.Settings?.Schedule is not null, () =>
+        {
+            RuleFor(contract => contract.Settings!.Schedule!.SlotMinutes)
+                .InclusiveBetween((short)1, (short)600)
+                .WithMessage("A fixture occupies its space for between 1 and 600 minutes.");
+
+            RuleFor(contract => contract.Settings!.Schedule!.Spaces)
+                .Must(spaces => spaces == null || spaces.All(IsUsableWindow))
+                .WithMessage("Each scheduling window needs a space, days between 0 (Sunday) and " +
+                             "6, and times written as HH:mm with the first no later than the " +
+                             "last.");
+        });
 
         // Mirrors ck_competition_dates. Stated here as well so the caller is
         // told which field is wrong instead of receiving the constraint's

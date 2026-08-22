@@ -4,18 +4,71 @@ namespace SportFrog.Api.Infrastructure.Persistence.Entities;
 /// Settings of a competition that do not deserve a column each.
 /// </summary>
 /// <remarks>
-/// The schema documents two sections. Only <see cref="Public"/> is modelled
-/// here; the scheduling section belongs to the module that generates
-/// fixtures, and its entries name venue spaces that have no table row yet —
-/// writing a type for it now would be writing validation for something
-/// nothing can produce.
-///
-/// That module adds its section to this record. Until it does, a competition
-/// stores only what this describes, so nothing can be lost by the omission.
+/// The schema documents two sections and both are here. <see cref="Public"/>
+/// decides what a visitor is shown; <see cref="Schedule"/> says when and
+/// where the competition can be played, which is what turns a draw into a
+/// calendar.
 /// </remarks>
 public sealed record CompetitionSettings
 {
     public PublicSettings? Public { get; init; }
+
+    public ScheduleSettings? Schedule { get; init; }
+}
+
+/// <summary>
+/// When and where this competition can put a fixture.
+/// </summary>
+/// <remarks>
+/// Availability rather than a calendar: it describes the windows an
+/// organization has — Saturdays and Sundays, eight to two, on these three
+/// pitches — and the placement works out what fits. Writing the calendar
+/// itself here would mean editing settings every time a fixture moves.
+/// </remarks>
+public sealed record ScheduleSettings
+{
+    /// <summary>
+    /// How long a fixture occupies its pitch, including whatever the
+    /// organizers leave between matches.
+    /// </summary>
+    /// <remarks>
+    /// One number rather than a duration per sport, because what is being
+    /// booked is the ground: a futsal match and a football one both take the
+    /// slot the organization hands out, and the slot is what the next team
+    /// waits for.
+    /// </remarks>
+    public short SlotMinutes { get; init; }
+
+    public IReadOnlyList<ScheduleSpace>? Spaces { get; init; }
+}
+
+/// <summary>One pitch, and the hours it can be used.</summary>
+public sealed record ScheduleSpace
+{
+    public Guid VenueSpaceId { get; init; }
+
+    /// <summary>
+    /// Days of the week it is available, Sunday being zero.
+    /// </summary>
+    /// <remarks>
+    /// Matches <see cref="DayOfWeek"/>, so the documented <c>[6, 0]</c> reads
+    /// as Saturday and Sunday — the weekend, which is when amateur sport is
+    /// played. Absent or empty means every day.
+    /// </remarks>
+    public IReadOnlyList<int>? Days { get; init; }
+
+    /// <summary>First kick-off of the day, as "08:00".</summary>
+    public string? From { get; init; }
+
+    /// <summary>
+    /// The last moment a fixture may still start.
+    /// </summary>
+    /// <remarks>
+    /// A start time and not a closing time: a slot beginning at the boundary
+    /// is allowed, and how long it then runs is the slot's business. Reading
+    /// it the other way would silently drop the last fixture of every day.
+    /// </remarks>
+    public string? To { get; init; }
 }
 
 /// <summary>

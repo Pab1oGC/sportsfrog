@@ -220,6 +220,7 @@ api.MapReadStandings();
 api.MapReadLeaders();
 
 api.MapDrawCalendar();
+api.MapScheduleCalendar();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
