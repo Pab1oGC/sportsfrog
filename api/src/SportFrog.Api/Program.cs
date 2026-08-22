@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Draw;
+using SportFrog.Api.Features.Public;
 using SportFrog.Api.Features.Competitions;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
@@ -222,6 +223,8 @@ api.MapReadLeaders();
 api.MapDrawCalendar();
 api.MapScheduleCalendar();
 api.MapAdvanceBracket();
+
+api.MapReadPublicCompetition();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
