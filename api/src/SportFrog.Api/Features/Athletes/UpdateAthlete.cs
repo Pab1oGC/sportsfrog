@@ -18,6 +18,7 @@ public static class UpdateAthlete
         string? Gender,
         string? GuardianName,
         string? GuardianPhone,
+        string? PhotoUrl,
         bool IsActive);
 
     private static readonly DateOnly EarliestPlausibleBirth = new(1900, 1, 1);
@@ -52,6 +53,10 @@ public static class UpdateAthlete
                 .Must(gender => Sex.IsAcceptable(gender))
                 .When(request => request.Gender is not null)
                 .WithMessage(Sex.Requirement);
+
+            RuleFor(request => request.PhotoUrl)
+                .Must(InlinePhoto.IsAcceptable)
+                .WithMessage(InlinePhoto.Requirement);
         }
     }
 
@@ -99,6 +104,7 @@ public static class UpdateAthlete
         athlete.Gender = Sex.Normalize(request.Gender);
         athlete.GuardianName = request.GuardianName?.Trim();
         athlete.GuardianPhone = request.GuardianPhone?.Trim();
+        athlete.PhotoUrl = request.PhotoUrl;
         athlete.IsActive = request.IsActive;
 
         await database.SaveChangesAsync(cancellationToken);

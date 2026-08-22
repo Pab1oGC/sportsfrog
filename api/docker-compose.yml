@@ -92,7 +92,10 @@ services:
       # Inside the Compose network the database isn't localhost but the
       # service name. These variables take precedence over appsettings.
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
-      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
+      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=;Username=sportfrog_public;Password="
+      # Required: the options are validated on start, so the API refuses to
+      # boot without it rather than failing at the first sign-in.
+      Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
       Storage__Endpoint: "http://minio:9000"
     ports:
       - "${API_PORT}:8080"

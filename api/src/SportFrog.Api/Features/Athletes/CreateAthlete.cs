@@ -18,7 +18,8 @@ public static class CreateAthlete
         DateOnly BirthDate,
         string? Gender,
         string? GuardianName,
-        string? GuardianPhone);
+        string? GuardianPhone,
+        string? PhotoUrl);
 
     /// <param name="AlreadyRegistered">
     /// True when the document already named someone here. The existing person
@@ -61,6 +62,10 @@ public static class CreateAthlete
                 .Must(gender => Sex.IsAcceptable(gender))
                 .When(request => request.Gender is not null)
                 .WithMessage(Sex.Requirement);
+
+            RuleFor(request => request.PhotoUrl)
+                .Must(InlinePhoto.IsAcceptable)
+                .WithMessage(InlinePhoto.Requirement);
         }
     }
 
@@ -105,6 +110,7 @@ public static class CreateAthlete
             Gender = Sex.Normalize(request.Gender),
             GuardianName = request.GuardianName?.Trim(),
             GuardianPhone = request.GuardianPhone?.Trim(),
+            PhotoUrl = request.PhotoUrl,
         };
 
         database.Athletes.Add(athlete);

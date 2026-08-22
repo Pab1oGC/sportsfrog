@@ -22,6 +22,9 @@ using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Named once so the registration and the use cannot drift apart.
+const string FrontendCors = "FrontendDevelopment";
+
 builder.Host.UseSportFrogLogging();
 builder.Services.AddSportFrogRateLimiting();
 
@@ -77,6 +80,18 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// The browser refuses a cross-origin call unless the API says the origin is
+// welcome, and the development front-end runs on its own port. Origins are
+// listed rather than reflected: echoing back whatever origin asked would let
+// any page on the internet call this API with the visitor's cookies.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(FrontendCors, policy => policy
+        .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
 builder.Services.AddScoped<OrganizationContext>();
 
 // The public view reads with its own database user, which holds no write
@@ -120,6 +135,13 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTyp
 var app = builder.Build();
 
 app.UseSportFrogRequestLogging();
+
+// Before everything that can refuse a request. A preflight is an OPTIONS with
+// no credentials on it, so the entry channel would answer it with a 401 long
+// before any header was added — and the browser would report the refusal as a
+// CORS failure, which is the least helpful way to be told about it. Ahead of
+// the rate limiter too, so preflights do not spend a caller's budget.
+app.UseCors(FrontendCors);
 
 app.UseRateLimiter();
 

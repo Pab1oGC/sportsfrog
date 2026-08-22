@@ -1,0 +1,20 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Output of `tsc -b`: tsconfig.node.json compiles vite.config.ts and emits
+# these beside it. Two Vite configs with the same content is a trap — an edit
+# to the .ts is silently ignored if the .js is the one that gets picked up.
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+.env
+.env.*
+!.env.example
+api/src/**/bin/
+api/src/**/obj/
+api/tests/**/bin/
+api/tests/**/obj/
+.vscode/
+*.user
+*.suo
