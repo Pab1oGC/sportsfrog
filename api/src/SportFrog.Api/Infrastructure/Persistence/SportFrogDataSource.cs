@@ -25,6 +25,7 @@ public static class SportFrogDataSource
         builder.MapEnum<MembershipRole>("membership_role");
         builder.MapEnum<CompetitionState>("competition_state");
         builder.MapEnum<CaptureLevel>("capture_level");
+        builder.MapEnum<MatchState>("match_state");
 
         return builder.Build();
     }
@@ -38,5 +39,6 @@ public static class SportFrogDataSource
         builder.MapEnum<MembershipRole>("membership_role");
         builder.MapEnum<CompetitionState>("competition_state");
         builder.MapEnum<CaptureLevel>("capture_level");
+        builder.MapEnum<MatchState>("match_state");
     }
 }
