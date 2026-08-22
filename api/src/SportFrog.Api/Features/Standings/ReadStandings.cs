@@ -70,70 +70,32 @@ public static class ReadStandings
         SportFrogDbContext database,
         CancellationToken cancellationToken)
     {
-        var category = await database.Categories
-            .AsNoTracking()
-            .Where(candidate => candidate.Id == categoryId)
-            .Select(candidate => new
-            {
-                candidate.Id,
-                candidate.Name,
-                candidate.Competition!.SportCode,
-                RulesetId = candidate.RulesetId ?? candidate.Competition.RulesetId,
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (category is null)
+        if (await StandingsQuery.ForCategoryAsync(database, categoryId, cancellationToken)
+            is not { } table)
         {
             return Results.NotFound();
         }
 
-        var sport = await database.Sports
-            .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Code == category.SportCode, cancellationToken);
+        return Results.Ok(Present(table));
+    }
 
-        var ruleset = await database.Rulesets
-            .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == category.RulesetId, cancellationToken);
-
-        if (sport is null || ruleset is null)
-        {
-            return Results.Problem(
-                detail: "The rules for this category cannot be read, so its table cannot be built.",
-                statusCode: StatusCodes.Status409Conflict);
-        }
-
-        // Every team entered, including one that withdrew: it keeps what it
-        // played and keeps its place in the table, which is exactly why
-        // withdrawing is a flag and not a deletion.
-        var contenders = await database.Teams
-            .AsNoTracking()
-            .Where(team => team.CategoryId == categoryId)
-            .Select(team => new Contender(team.Id, team.Name, team.GroupLabel))
-            .ToListAsync(cancellationToken);
-
-        // A match counts once it has a result. Finished is the ordinary way;
-        // a walkover is the other, and it counts for the same reason it is a
-        // state of its own — nobody played it, but it stands.
-        var played = await database.Matches
-            .AsNoTracking()
-            .Where(match => match.CategoryId == categoryId)
-            .Where(match => match.Status == MatchState.Finished
-                || match.Status == MatchState.Walkover)
-            .Where(match => match.HomeTotal != null && match.AwayTotal != null)
-            .Select(match => new PlayedMatch(
-                match.HomeTeamId, match.AwayTeamId, match.HomeTotal!.Value, match.AwayTotal!.Value))
-            .ToListAsync(cancellationToken);
-
-        var groups = StandingsCalculator.Build(contenders, played, sport.ScoreMode, ruleset.Config);
-
-        return Results.Ok(new Response(
-            category.Id,
-            category.Name,
-            category.SportCode,
-            ruleset.Id,
-            ruleset.Name,
-            ruleset.Config.Tiebreakers,
-            [.. groups.Select(group => new Group(
+    /// <summary>
+    /// Numbers the rows and hands the table over.
+    /// </summary>
+    /// <remarks>
+    /// Shared with the public reading, so the two describe the same table the
+    /// same way — including the positions, which is the part a caller cannot
+    /// recompute correctly when two teams are level.
+    /// </remarks>
+    internal static Response Present(StandingsResult table) =>
+        new(
+            table.CategoryId,
+            table.CategoryName,
+            table.SportCode,
+            table.RulesetId,
+            table.RulesetName,
+            table.Tiebreakers,
+            [.. table.Groups.Select(group => new Group(
                 group.Label,
                 [.. group.Rows.Select((row, index) => new Row(
                     index + 1,
@@ -146,6 +108,5 @@ public static class ReadStandings
                     row.ScoreFor,
                     row.ScoreAgainst,
                     row.ScoreDifference,
-                    row.Points))]))]));
-    }
+                    row.Points))]))]);
 }

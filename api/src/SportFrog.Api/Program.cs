@@ -225,6 +225,7 @@ api.MapScheduleCalendar();
 api.MapAdvanceBracket();
 
 api.MapReadPublicCompetition();
+api.MapReadPublicTables();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
