@@ -123,6 +123,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -201,6 +202,9 @@ api.MapScheduleMatch();
 api.MapReadMatches();
 api.MapRescheduleMatch();
 api.MapDeleteMatch();
+api.MapRecordResult();
+api.MapChangeMatchStatus();
+api.MapAwardWalkover();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

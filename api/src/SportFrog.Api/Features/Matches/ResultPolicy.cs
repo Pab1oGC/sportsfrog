@@ -1,0 +1,207 @@
+using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.Persistence.Entities;
+
+namespace SportFrog.Api.Features.Matches;
+
+/// <summary>The rules a match is played and read under.</summary>
+/// <param name="Configuration">
+/// The category's own ruleset where it has one, otherwise the competition's.
+/// A category is allowed to vary the rules of its division, so the effective
+/// one is the only one worth asking about.
+/// </param>
+internal sealed record MatchRules(Sport Sport, RulesetConfiguration Configuration);
+
+/// <summary>Something a result says that its sport does not allow.</summary>
+internal sealed record ResultViolation(string Property, string Message);
+
+/// <summary>
+/// Whether a score could have happened in this sport, under these rules.
+/// </summary>
+/// <remarks>
+/// The schema checks that a finished match has totals and an author. It has
+/// no way to check that a volleyball match ended in three sets rather than
+/// four and a half, or that a football match reports both halves — those
+/// depend on the ruleset, which lives in a jsonb column two joins away.
+/// </remarks>
+internal sealed class ResultPolicy(SportFrogDbContext database)
+{
+    /// <summary>
+    /// The sport and the effective ruleset behind a fixture.
+    /// </summary>
+    public async Task<MatchRules?> FindRulesAsync(Match match, CancellationToken cancellationToken)
+    {
+        var context = await database.Matches
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == match.Id)
+            .Select(candidate => new
+            {
+                candidate.Competition!.SportCode,
+
+                // The override where the category sets one, and the
+                // competition's otherwise. Resolved in the query so the
+                // fallback is not a rule every caller has to remember.
+                RulesetId = candidate.Category!.RulesetId ?? candidate.Competition.RulesetId,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (context is null)
+        {
+            return null;
+        }
+
+        var sport = await database.Sports
+            .AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Code == context.SportCode, cancellationToken);
+
+        var ruleset = await database.Rulesets
+            .AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == context.RulesetId, cancellationToken);
+
+        return sport is null || ruleset is null ? null : new MatchRules(sport, ruleset.Config);
+    }
+
+    /// <summary>
+    /// Everything wrong with the periods reported, or nothing.
+    /// </summary>
+    public static IReadOnlyList<ResultViolation> Inspect(
+        MatchRules rules,
+        IReadOnlyList<PeriodScore> periods)
+    {
+        var violations = new List<ResultViolation>();
+
+        if (periods.Count == 0)
+        {
+            return [new ResultViolation("PeriodScores", "A result needs at least one period.")];
+        }
+
+        InspectNumbering(periods, violations);
+
+        if (violations.Count > 0)
+        {
+            // Everything below reads the periods as a sequence. Judging a
+            // sequence that is not one produces confident nonsense.
+            return violations;
+        }
+
+        if (rules.Sport.ScoreMode == ScoreMode.Sets)
+        {
+            InspectSets(rules, periods, violations);
+        }
+        else
+        {
+            InspectCumulative(rules, periods, violations);
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// The periods have to be one, two, three — each once.
+    /// </summary>
+    private static void InspectNumbering(
+        IReadOnlyList<PeriodScore> periods,
+        List<ResultViolation> violations)
+    {
+        var numbers = periods.Select(period => period.Period).ToList();
+
+        if (numbers.Distinct().Count() != numbers.Count)
+        {
+            violations.Add(new ResultViolation(
+                "PeriodScores", "A period is reported twice."));
+        }
+        else if (!numbers.Order().SequenceEqual(Enumerable.Range(1, numbers.Count).Select(n => (short)n)))
+        {
+            violations.Add(new ResultViolation(
+                "PeriodScores",
+                $"The periods must be numbered 1 to {numbers.Count} with none missing."));
+        }
+
+        if (periods.Any(period => period.Home < 0 || period.Away < 0))
+        {
+            violations.Add(new ResultViolation(
+                "PeriodScores", "A period score cannot be negative."));
+        }
+    }
+
+    /// <summary>
+    /// Under a cumulative score every period is played, so every period is
+    /// reported.
+    /// </summary>
+    /// <remarks>
+    /// A match abandoned halfway is not a short result: it is postponed or
+    /// cancelled, and those are states rather than scores.
+    /// </remarks>
+    private static void InspectCumulative(
+        MatchRules rules,
+        IReadOnlyList<PeriodScore> periods,
+        List<ResultViolation> violations)
+    {
+        var expected = rules.Configuration.Periods.Count;
+
+        if (periods.Count != expected)
+        {
+            violations.Add(new ResultViolation(
+                "PeriodScores",
+                $"{rules.Sport.Name} is played in " +
+                $"{PeriodLabel.Count(expected, rules.Configuration.Periods.Label)} under these " +
+                $"rules, and {PeriodLabel.Count(periods.Count, rules.Configuration.Periods.Label)} " +
+                (periods.Count == 1 ? "was" : "were") + " reported."));
+        }
+    }
+
+    /// <summary>
+    /// A match played in sets stops the moment one side has enough of them.
+    /// </summary>
+    private static void InspectSets(
+        MatchRules rules,
+        IReadOnlyList<PeriodScore> periods,
+        List<ResultViolation> violations)
+    {
+        var label = rules.Configuration.Periods.Label;
+
+        if (periods.Any(period => period.Home == period.Away))
+        {
+            // Nothing decides a tied set, so a tied one was not finished.
+            violations.Add(new ResultViolation(
+                "PeriodScores", $"A {label} cannot end level."));
+            return;
+        }
+
+        var toWin = ScoreConsolidation.PeriodsToWin(rules.Configuration.Periods.Count);
+        var (home, away) = ScoreConsolidation.Consolidate(ScoreMode.Sets, periods);
+        var winner = Math.Max(home, away);
+        var loser = Math.Min(home, away);
+
+        if (winner != toWin)
+        {
+            violations.Add(new ResultViolation(
+                "PeriodScores",
+                winner < toWin
+                    ? $"Neither side reached {PeriodLabel.Count(toWin, label)}, so this match " +
+                      "was not finished. Postpone it if it will be resumed."
+                    : $"A match is won at {PeriodLabel.Count(toWin, label)}, and one side has " +
+                      $"{winner}. Nothing is played after the deciding {label}."));
+        }
+
+        if (loser >= toWin)
+        {
+            violations.Add(new ResultViolation(
+                "PeriodScores", $"Both sides cannot reach {PeriodLabel.Count(toWin, label)}."));
+        }
+    }
+
+    /// <summary>
+    /// The score a walkover is recorded with, as the ruleset defines it.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the rules rather than from the request, because a walkover
+    /// is awarded rather than played: what it is worth was decided when the
+    /// competition was set up, and letting it be typed in per match would make
+    /// two walkovers in one league worth different things.
+    /// </remarks>
+    public static (int Winner, int Loser)? WalkoverScore(MatchRules rules) =>
+        rules.Configuration.Walkover is { } walkover
+            ? (walkover.WinnerScore, walkover.LoserScore)
+            : null;
+}
