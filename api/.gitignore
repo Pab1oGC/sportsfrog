@@ -1,0 +1,27 @@
+# Local environment secrets. Never versioned: the template is .env.example.
+.env
+.env.local
+
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+*.userprefs
+
+# Tooling
+.vs/
+.idea/
+.vscode/
+*.received.*
+TestResults/
+coverage*.json
+coverage*.xml
+*.coverage
+
+# Local configuration with credentials
+appsettings.Local.json
+appsettings.*.Local.json

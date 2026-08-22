@@ -1,0 +1,111 @@
+name: sportfrog
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sportfrog-postgres
+    restart: unless-stopped
+    environment:
+      # Container superuser. Only used to create the database and the three
+      # roles; the application never connects with it.
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Consumed by the initialization script.
+      SPORTFROG_OWNER_USER: ${SPORTFROG_OWNER_USER}
+      SPORTFROG_OWNER_PASSWORD: ${SPORTFROG_OWNER_PASSWORD}
+      SPORTFROG_APP_PASSWORD: ${SPORTFROG_APP_PASSWORD}
+      SPORTFROG_PUBLIC_PASSWORD: ${SPORTFROG_PUBLIC_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: sportfrog-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Applies migrations and exits. Runs once, between Postgres and the API, so
+  # whoever doesn't have the SDK doesn't need 'dotnet ef'.
+  #
+  # Connects as the schema owner. The API itself never applies migrations.
+  migrate:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrations
+    container_name: sportfrog-migrate
+    restart: "no"
+    environment:
+      SPORTFROG_MIGRATIONS_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${SPORTFROG_OWNER_USER};Password=${SPORTFROG_OWNER_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # The API doesn't start as part of the normal development flow: whoever is
+  # writing it runs it from their IDE against the data containers, with a
+  # debugger and hot reload.
+  #
+  # This service exists for whoever just wants to try the application
+  # without installing the .NET SDK. It sits behind a profile, so
+  # 'docker compose up -d' ignores it:
+  #
+  #   docker compose up -d                    postgres and minio only
+  #   docker compose --profile full up -d     + the API
+  #
+  # Doesn't apply migrations at startup: that's done separately, with a
+  # different user. See the README.
+  api:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: sportfrog-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Inside the Compose network the database isn't localhost but the
+      # service name. These variables take precedence over appsettings.
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
+      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
+      Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
+      Storage__Endpoint: "http://minio:9000"
+    ports:
+      - "${API_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      # Doesn't start until the schema has been applied.
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  minio-data:

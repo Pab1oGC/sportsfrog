@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SportFrog.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Deliberately no PackageReference or ProjectReference: the domain must
+    compile against the base library and nothing else.
+  -->
+
+</Project>

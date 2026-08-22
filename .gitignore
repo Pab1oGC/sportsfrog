@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+api/src/**/bin/
+api/src/**/obj/
+api/tests/**/bin/
+api/tests/**/obj/
+.vscode/
+*.user
+*.suo
