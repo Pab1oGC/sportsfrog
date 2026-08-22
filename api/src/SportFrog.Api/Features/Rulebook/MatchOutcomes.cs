@@ -31,6 +31,24 @@ internal static class MatchOutcomes
         mode == ScoreMode.Sets ? BySetScore(periods) : [Win, Loss];
 
     /// <summary>
+    /// Which outcome a finished match was, seen from one side.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the same idea, and it belongs here rather than in
+    /// the standings for one reason: this has to produce exactly the keys
+    /// <see cref="RequiredFor"/> asked the ruleset to price. Written twice
+    /// they would drift by a character, and a table would silently award zero
+    /// for a result nobody had failed to price — the ruleset would look
+    /// complete and the points would be wrong.
+    /// </remarks>
+    public static string For(ScoreMode mode, int own, int against) =>
+        mode == ScoreMode.Sets
+            ? Format(own > against ? "win" : "loss", own, against)
+            : own > against ? Win
+            : own == against ? Draw
+            : Loss;
+
+    /// <summary>
     /// Outcomes it may price, but need not.
     /// </summary>
     /// <remarks>

@@ -11,6 +11,7 @@ using SportFrog.Api.Features.Rosters;
 using SportFrog.Api.Features.MatchEvents;
 using SportFrog.Api.Features.Matches;
 using SportFrog.Api.Features.Rulebook;
+using SportFrog.Api.Features.Standings;
 using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Features.Venues;
 using SportFrog.Api.Infrastructure.Auth;
@@ -212,6 +213,8 @@ api.MapRecordEvent();
 api.MapReadEvents();
 api.MapCorrectEvent();
 api.MapDeleteEvent();
+
+api.MapReadStandings();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();
