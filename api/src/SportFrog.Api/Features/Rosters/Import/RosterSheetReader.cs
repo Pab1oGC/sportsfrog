@@ -23,8 +23,7 @@ internal sealed record SheetRow(
     string? JerseyText,
     string? Position,
     string? Guardian,
-    string? GuardianPhone,
-    string? PhotoFile);
+    string? GuardianPhone);
 
 /// <summary>
 /// What a workbook turned out to contain.
@@ -223,14 +222,13 @@ internal static class RosterSheetReader
         var position = Text(RosterSheet.Position);
         var guardian = Text(RosterSheet.Guardian);
         var guardianPhone = Text(RosterSheet.GuardianPhone);
-        var photo = Text(RosterSheet.Photo);
 
         // A row where nothing was typed is not an empty row of a squad, it is
         // the end of the squad. Reporting four hundred blank rows as errors is
         // the fastest way to make a report unreadable.
         if (document is null && lastName is null && firstName is null && birthText is null
             && sex is null && jerseyText is null && position is null
-            && guardian is null && guardianPhone is null && photo is null)
+            && guardian is null && guardianPhone is null)
         {
             return null;
         }
@@ -247,8 +245,7 @@ internal static class RosterSheetReader
             jerseyText,
             position,
             guardian,
-            guardianPhone,
-            photo);
+            guardianPhone);
     }
 
     /// <summary>

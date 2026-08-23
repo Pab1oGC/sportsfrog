@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -68,78 +67,24 @@ public static class PreviewRosterImport
         RosterImportReview review,
         CancellationToken cancellationToken)
     {
-        if (file.Length == 0)
-        {
-            return Refuse("El archivo está vacío.");
-        }
-
-        if (file.Length > MaximumUpload)
-        {
-            return Refuse($"El archivo pesa más de {MaximumUpload / (1024 * 1024)} MB.");
-        }
-
-        var team = await database.Teams
-            .AsNoTracking()
-            .Include(candidate => candidate.Category)
-                .ThenInclude(category => category!.Competition)
-            .SingleOrDefaultAsync(candidate => candidate.Id == teamId, cancellationToken);
-
-        if (team?.Category is not { Competition: { } competition } category)
+        if (await RosterImportGate.OpenAsync(
+                teamId, file, MaximumUpload, database, cancellationToken) is not { } opened)
         {
             return Results.NotFound();
         }
 
-        // The same two refusals a single registration makes, made here as
-        // well so the preview does not promise something the import would
-        // then decline forty times over.
-        if (competition.Status is CompetitionState.Finished or CompetitionState.Cancelled)
+        if (opened.Refusal is { } refusal)
         {
-            return Results.Problem(
-                detail: "Esta competencia terminó, así que sus planteles están cerrados.",
-                statusCode: StatusCodes.Status409Conflict);
+            return refusal;
         }
 
-        if (!team.IsActive)
-        {
-            return Results.Problem(
-                detail: $"{team.Name} se retiró de esta categoría, así que no está recibiendo "
-                        + "inscripciones.",
-                statusCode: StatusCodes.Status409Conflict);
-        }
-
-        using var contents = file.OpenReadStream();
-        var sheet = RosterSheetReader.Read(contents);
-
-        if (sheet.Problem is { } problem)
-        {
-            return Refuse(problem);
-        }
-
-        // The workbook says which team it was made for, and it says another
-        // one. Refused outright rather than reported row by row, because
-        // every row would pass: a squad sheet for the under-fifteens is a
-        // perfectly valid squad sheet, and registering it for the wrong club
-        // is the failure this stamp exists to prevent.
-        if (sheet.StampedTeam is { } stamped && stamped != team.Id)
-        {
-            return Refuse(sheet.StampedSubject is { } subject
-                ? $"Esta planilla se generó para {subject}, no para {team.Name}. Hay que subirla "
-                    + "contra ese equipo, o descargar la plantilla de este."
-                : $"Esta planilla se generó para otro equipo. Hay que descargar la plantilla de "
-                    + $"{team.Name}.");
-        }
-
-        if (sheet.Rows.Count == 0)
-        {
-            return Refuse("La hoja tiene los encabezados pero ninguna fila llena.");
-        }
-
-        var reviewed = await review.ReviewAsync(team, category, sheet.Rows, cancellationToken);
+        var reviewed = await review.ReviewAsync(
+            opened.Team!, opened.Category!, opened.Sheet!.Rows, cancellationToken);
 
         return Results.Ok(new Response(
-            team.Id,
-            team.Name,
-            category.Name,
+            opened.Team!.Id,
+            opened.Team.Name,
+            opened.Category!.Name,
             reviewed.Rows.Count,
             reviewed.Register,
             reviewed.Create,
@@ -148,13 +93,4 @@ public static class PreviewRosterImport
             [.. reviewed.Rows.Select(row => new Row(
                 row.Number, row.Document, row.Name, row.Outcome, row.Problems))]));
     }
-
-    /// <summary>
-    /// Something wrong with the file itself, rather than with a row in it.
-    /// </summary>
-    private static IResult Refuse(string message) =>
-        Results.ValidationProblem(new Dictionary<string, string[]>
-        {
-            ["file"] = [message],
-        });
 }

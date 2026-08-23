@@ -74,14 +74,21 @@ internal static class RosterSheet
     public static readonly SheetColumn GuardianPhone =
         new("Teléfono del apoderado", "Teléfono de contacto del apoderado.", Required: false);
 
-    public static readonly SheetColumn Photo =
-        new("Foto", "Solo si el archivo de la foto no se llama como el documento. Normalmente se deja vacío.", Required: false);
-
     /// <summary>The columns, in the order the template lays them out.</summary>
+    /// <remarks>
+    /// There is no column for the photograph, and there was one for exactly
+    /// as long as it took to build the thing that would have read it.
+    /// Photographs arrive in their own archive, matched to a person by their
+    /// identity document, and a column naming a file would only have meant
+    /// something if the archive and the spreadsheet were one upload — which is
+    /// precisely what they are not. A column the system cannot honour is
+    /// worse than no column: somebody fills it in and believes it did
+    /// something.
+    /// </remarks>
     public static readonly IReadOnlyList<SheetColumn> Columns =
     [
         Document, LastName, FirstName, BirthDate, Sex,
-        Jersey, Position, Guardian, GuardianPhone, Photo,
+        Jersey, Position, Guardian, GuardianPhone,
     ];
 
     /// <summary>Rows of the hidden sheet that says what this workbook is.</summary>

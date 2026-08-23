@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
+using SportFrog.Api.Features.Athletes.Photos;
 using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Draw;
 using SportFrog.Api.Features.Public;
@@ -19,6 +20,7 @@ using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Features.Venues;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Jobs;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.RateLimiting;
@@ -105,6 +107,13 @@ builder.Services.AddScoped<OrganizationContext>();
 // megabyte no query ever filters on, and a column carries it into every
 // backup, every replica and every listing that reads the row.
 builder.Services.AddSportFrogStorage(builder.Configuration);
+
+// Work that outlives a request: a batch of photographs is minutes of decoding
+// and uploading, and no browser waits for that. The queue lives in the same
+// database, so a job and the row it is about are written together or not at
+// all.
+builder.Services.AddSportFrogJobs(connectionString);
+builder.Services.AddScoped<AttachAthletePhotosJob>();
 
 // The public view reads with its own database user, which holds no write
 // permission: its read-only condition is enforced by the engine and not by
@@ -211,6 +220,10 @@ api.MapWithdrawPlayer();
 api.MapStrikeRegistration();
 api.MapBuildRosterTemplate();
 api.MapPreviewRosterImport();
+api.MapApplyRosterImport();
+
+api.MapImportAthletePhotos();
+api.MapReadPhotoImports();
 
 api.MapVenues();
 api.MapVenueSpaces();

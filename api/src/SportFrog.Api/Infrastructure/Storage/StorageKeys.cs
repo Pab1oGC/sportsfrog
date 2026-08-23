@@ -29,6 +29,17 @@ internal static class StorageKeys
         $"{Prefix(organizationId)}athletes/{athleteId:n}/{Guid.NewGuid():n}.{extension}";
 
     /// <summary>
+    /// An uploaded archive of photographs, kept under its batch.
+    /// </summary>
+    /// <remarks>
+    /// Named after the batch rather than after the file somebody uploaded,
+    /// because two people sending fotos.zip on the same afternoon is not an
+    /// unusual thing to happen and the second one must not land on the first.
+    /// </remarks>
+    public static string PhotoArchive(Guid organizationId, Guid batchId) =>
+        $"{Prefix(organizationId)}photo-imports/{batchId:n}/archive.zip";
+
+    /// <summary>
     /// Whether a key is one of this organization's.
     /// </summary>
     /// <remarks>

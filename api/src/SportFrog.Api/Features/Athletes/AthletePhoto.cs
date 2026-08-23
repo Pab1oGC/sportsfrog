@@ -34,13 +34,26 @@ public sealed class AthletePhoto(ObjectStore store, OrganizationContext organiza
     public async Task<string?> StoreAsync(
         Guid athleteId,
         string dataUrl,
+        CancellationToken cancellationToken) =>
+        InlinePhoto.TryRead(dataUrl, out var uploaded)
+            ? await StoreAsync(athleteId, uploaded, cancellationToken)
+            : null;
+
+    /// <summary>
+    /// The same, for a photograph that did not arrive as a data URL.
+    /// </summary>
+    /// <remarks>
+    /// A batch of images out of an archive is bytes already. Sharing the rest
+    /// of the path matters more than it looks: the normalization is where the
+    /// picture is turned upright and where the camera's record of where it
+    /// was taken is removed, and a second way in that skipped it would
+    /// publish four hundred children's locations rather than one.
+    /// </remarks>
+    public async Task<string?> StoreAsync(
+        Guid athleteId,
+        byte[] uploaded,
         CancellationToken cancellationToken)
     {
-        if (!InlinePhoto.TryRead(dataUrl, out var uploaded))
-        {
-            return null;
-        }
-
         if (ImageNormalizer.Normalize(uploaded) is not { } photo)
         {
             return null;
