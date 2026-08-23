@@ -31,19 +31,28 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
     /// The entry being corrected, left out of the counts and the collision
     /// checks. Absent when registering someone new.
     /// </param>
+    /// <param name="pending">
+    /// Registrations already accepted in the same operation but not yet
+    /// written. Zero for a single registration, which is the only kind that
+    /// existed when this was written; an import accepts a squad at once, and
+    /// without this the twenty-first row of a file would be told the team has
+    /// room because the first twenty are not in the database yet.
+    /// </param>
     public async Task<IReadOnlyList<RosterViolation>> InspectAsync(
         Team team,
         Category category,
         Athlete athlete,
         short? jerseyNumber,
         Guid? excluding,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int pending = 0)
     {
         var violations = new List<RosterViolation>();
 
         InspectAthlete(category, athlete, violations);
 
-        await InspectPlaceAsync(team, category, athlete, excluding, violations, cancellationToken);
+        await InspectPlaceAsync(
+            team, category, athlete, excluding, pending, violations, cancellationToken);
 
         if (await InspectJerseyAsync(team, jerseyNumber, excluding, cancellationToken) is { } taken)
         {
@@ -65,8 +74,8 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
         {
             violations.Add(new RosterViolation(
                 "AthleteId",
-                $"{athlete.FirstName} {athlete.LastName} is not active in this organization, " +
-                "so they cannot be registered."));
+                $"La persona {athlete.FirstName} {athlete.LastName} no está activa en la " +
+                "organización, así que no se la puede inscribir."));
         }
 
         // A category with no restriction admits anyone, and an athlete whose
@@ -80,14 +89,15 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
             {
                 violations.Add(new RosterViolation(
                     "AthleteId",
-                    $"This category admits {admitted} only, and no sex is recorded for " +
-                    $"{athlete.FirstName} {athlete.LastName}. Record it before registering them."));
+                    $"Esta categoría admite solo {admitted}, y no hay sexo registrado para " +
+                    $"{athlete.FirstName} {athlete.LastName}. Hay que registrarlo antes de " +
+                    "inscribir a esta persona."));
             }
             else if (athlete.Gender != admitted)
             {
                 violations.Add(new RosterViolation(
                     "AthleteId",
-                    $"This category admits {admitted} only."));
+                    $"Esta categoría admite solo {admitted}."));
             }
         }
 
@@ -98,16 +108,17 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
         {
             violations.Add(new RosterViolation(
                 "AthleteId",
-                $"{athlete.FirstName} {athlete.LastName} was born on {athlete.BirthDate:yyyy-MM-dd}, " +
-                $"before {earliest:yyyy-MM-dd}, so they are too old for this category."));
+                $"{athlete.FirstName} {athlete.LastName} nació el {athlete.BirthDate:yyyy-MM-dd}, " +
+                $"antes del {earliest:yyyy-MM-dd}, así que excede la edad de esta categoría."));
         }
 
         if (category.BirthDateTo is { } latest && athlete.BirthDate > latest)
         {
             violations.Add(new RosterViolation(
                 "AthleteId",
-                $"{athlete.FirstName} {athlete.LastName} was born on {athlete.BirthDate:yyyy-MM-dd}, " +
-                $"after {latest:yyyy-MM-dd}, so they are too young for this category."));
+                $"{athlete.FirstName} {athlete.LastName} nació el {athlete.BirthDate:yyyy-MM-dd}, " +
+                $"después del {latest:yyyy-MM-dd}, así que todavía no llega a la edad de esta " +
+                "categoría."));
         }
     }
 
@@ -120,6 +131,7 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
         Category category,
         Athlete athlete,
         Guid? excluding,
+        int pending,
         List<RosterViolation> violations,
         CancellationToken cancellationToken)
     {
@@ -144,11 +156,11 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
             violations.Add(new RosterViolation(
                 "AthleteId",
                 elsewhere.Withdrawn
-                    ? $"{athlete.FirstName} {athlete.LastName} was registered for " +
-                      $"{elsewhere.Name} in this category and withdrew. Striking that " +
-                      "registration is what frees them, and only if nothing was recorded for it."
-                    : $"{athlete.FirstName} {athlete.LastName} already plays for " +
-                      $"{elsewhere.Name} in this category. Nobody plays twice in one division."));
+                    ? $"La inscripción de {athlete.FirstName} {athlete.LastName} en " +
+                      $"{elsewhere.Name} de esta categoría figura como retirada. Lo que la " +
+                      "libera es anular esa inscripción, y solo si no se registró nada en ella."
+                    : $"{athlete.FirstName} {athlete.LastName} ya juega en {elsewhere.Name} en " +
+                      "esta categoría. Nadie juega en dos equipos de una misma división."));
         }
 
         if (category.MaxRosterSize is not { } cap)
@@ -163,12 +175,12 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
             .Where(entry => entry.TeamId == team.Id && entry.WithdrawnAt == null)
             .CountAsync(cancellationToken);
 
-        if (registered >= cap)
+        if (registered + pending >= cap)
         {
             violations.Add(new RosterViolation(
                 "AthleteId",
-                $"{team.Name} already has the {cap} players this category allows. Withdraw " +
-                "someone before registering another."));
+                $"{team.Name} ya tiene los {cap} jugadores que admite esta categoría. Hay que " +
+                "retirar a alguien antes de inscribir a otra persona."));
         }
     }
 
@@ -206,6 +218,7 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
 
         return wearer is null
             ? null
-            : new RosterViolation("JerseyNumber", $"{wearer} already wears {number} for {team.Name}.");
+            : new RosterViolation(
+                "JerseyNumber", $"{wearer} ya lleva el {number} en {team.Name}.");
     }
 }
