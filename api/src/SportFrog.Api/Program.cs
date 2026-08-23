@@ -7,6 +7,7 @@ using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Draw;
 using SportFrog.Api.Features.Public;
 using SportFrog.Api.Features.Competitions;
+using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
@@ -148,6 +149,8 @@ builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportReview>();
+builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
+builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -224,6 +227,13 @@ api.MapApplyRosterImport();
 
 api.MapImportAthletePhotos();
 api.MapReadPhotoImports();
+
+api.MapReadTemplateDesign();
+api.MapUploadTemplateBackground();
+api.MapCreateTemplate();
+api.MapReadTemplates();
+api.MapUpdateTemplate();
+api.MapDeleteTemplate();
 
 api.MapVenues();
 api.MapVenueSpaces();

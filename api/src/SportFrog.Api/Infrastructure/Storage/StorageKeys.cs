@@ -40,6 +40,17 @@ internal static class StorageKeys
         $"{Prefix(organizationId)}photo-imports/{batchId:n}/archive.zip";
 
     /// <summary>
+    /// Artwork a document design is laid out over.
+    /// </summary>
+    /// <remarks>
+    /// Not filed under a template, because it is uploaded before there is one:
+    /// a designer picks the artwork, lays fields over it and only then saves
+    /// anything. The key travels back with the upload and into the layout.
+    /// </remarks>
+    public static string TemplateBackground(Guid organizationId, string extension) =>
+        $"{Prefix(organizationId)}document-templates/{Guid.NewGuid():n}.{extension}";
+
+    /// <summary>
     /// Whether a key is one of this organization's.
     /// </summary>
     /// <remarks>

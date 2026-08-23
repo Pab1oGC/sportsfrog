@@ -63,7 +63,13 @@ public static class ImageNormalizer
     /// <summary>
     /// Normalizes an uploaded image, or answers null if it is not one.
     /// </summary>
-    public static NormalizedImage? Normalize(byte[] source)
+    /// <param name="maximumEdge">
+    /// How large it may stay. Defaults to what a face on a credential needs;
+    /// artwork printed at card size asks for more, and passing it here keeps
+    /// the decoding, the straightening and the stripping of the camera's
+    /// metadata identical for both.
+    /// </param>
+    public static NormalizedImage? Normalize(byte[] source, int maximumEdge = MaximumEdge)
     {
         using var data = SKData.CreateCopy(source);
 
@@ -90,7 +96,7 @@ public static class ImageNormalizer
 
         // Only ever downwards. Enlarging a small photograph invents detail it
         // does not have and makes the file bigger for the privilege.
-        var scale = Math.Min(1d, (double)MaximumEdge / Math.Max(sourceWidth, sourceHeight));
+        var scale = Math.Min(1d, (double)maximumEdge / Math.Max(sourceWidth, sourceHeight));
         var width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
         var height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
 

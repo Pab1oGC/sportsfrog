@@ -53,6 +53,10 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<PlayerEvent> PlayerEvents => Set<PlayerEvent>();
 
+    public DbSet<DocumentTemplate> DocumentTemplates => Set<DocumentTemplate>();
+
+    public DbSet<DocumentTemplateVersion> DocumentTemplateVersions => Set<DocumentTemplateVersion>();
+
     public DbSet<PhotoImport> PhotoImports => Set<PhotoImport>();
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
@@ -68,6 +72,7 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
         modelBuilder.HasPostgresEnum<CaptureLevel>("public", "capture_level");
         modelBuilder.HasPostgresEnum<MatchState>("public", "match_state");
         modelBuilder.HasPostgresEnum<PhotoImportState>("public", "photo_import_state");
+        modelBuilder.HasPostgresEnum<DocumentKind>("public", "document_kind");
 
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }

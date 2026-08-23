@@ -27,6 +27,7 @@ public static class SportFrogDataSource
         builder.MapEnum<CaptureLevel>("capture_level");
         builder.MapEnum<MatchState>("match_state");
         builder.MapEnum<PhotoImportState>("photo_import_state");
+        builder.MapEnum<DocumentKind>("document_kind");
 
         return builder.Build();
     }
@@ -42,5 +43,6 @@ public static class SportFrogDataSource
         builder.MapEnum<CaptureLevel>("capture_level");
         builder.MapEnum<MatchState>("match_state");
         builder.MapEnum<PhotoImportState>("photo_import_state");
+        builder.MapEnum<DocumentKind>("document_kind");
     }
 }
