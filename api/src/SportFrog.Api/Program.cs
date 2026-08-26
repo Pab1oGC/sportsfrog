@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Athletes.Photos;
@@ -35,6 +36,11 @@ var builder = WebApplication.CreateBuilder(args);
 // Named once so the registration and the use cannot drift apart.
 const string FrontendCors = "FrontendDevelopment";
 
+// QuestPDF asks which licence this runs under and refuses to generate
+// anything until it is told. Community is the one that applies: this is not a
+// product sold on, and the threshold it sets is revenue nobody here is near.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 builder.Host.UseSportFrogLogging();
 builder.Services.AddSportFrogRateLimiting();
 
@@ -54,7 +60,29 @@ builder.Services.AddDbContext<SportFrogDbContext>((services, options) =>
             SportFrogDataSource.MapEnums)
         // At the save point, so a change is recorded because it happened and
         // not because a feature remembered to say so (DD-07).
-        .AddInterceptors(services.GetRequiredService<AuditInterceptor>()));
+        .AddInterceptors(services.GetRequiredService<AuditInterceptor>())
+
+        // Several entities are the required end of a relationship whose
+        // principal is soft-deleted, and EF warns that filtering the principal
+        // away may give unexpected results. Here it gives exactly the intended
+        // one, in every case, which is why the warning is silenced rather than
+        // answered by adding filters:
+        //
+        //   · An issued document and the batch that printed it outlive the
+        //     competition being retired. A credential somebody is carrying does
+        //     not stop existing because a league was tidied up, and it still
+        //     has to verify (RF-45).
+        //   · A stored template version outlives its template for the same
+        //     reason: retiring a design must not make everything printed from
+        //     it unreprintable.
+        //   · A membership of a deleted organization, and a refresh token of a
+        //     deleted user, should indeed disappear — which is what the filter
+        //     already does.
+        //
+        // Left on, it is five lines of noise at every start-up, and noise at
+        // start-up is how a real warning goes unread.
+        .ConfigureWarnings(warnings => warnings.Ignore(
+            CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
 
 // Validated on start rather than on first use: a missing or too-short signing
 // key must stop the process, not surface as a failed login much later.
@@ -99,7 +127,16 @@ builder.Services.AddCors(options =>
     options.AddPolicy(FrontendCors, policy => policy
         .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
         .AllowAnyHeader()
-        .AllowAnyMethod());
+        .AllowAnyMethod()
+
+        // AllowAnyHeader speaks about the request. A response header the
+        // browser is not told to expose is hidden from the script that made
+        // the call, and Content-Disposition is where every download carries
+        // its filename — a spreadsheet named after its team, a credential
+        // named after its batch. Without this the front-end reads nothing
+        // there and falls back to one generic name for all of them, which
+        // only shows up when somebody stops using the development proxy.
+        .WithExposedHeaders("Content-Disposition"));
 });
 
 builder.Services.AddScoped<OrganizationContext>();
@@ -128,6 +165,7 @@ builder.Services.AddKeyedSingleton(
     (_, _) => SportFrogDataSource.Create(publicConnectionString));
 
 builder.Services.AddScoped<PublicCompetitionReader>();
+builder.Services.AddScoped<PublicDocumentReader>();
 
 // Cost factor left at the default; it travels inside each hash, so raising
 // it later does not invalidate what is already stored.
@@ -151,6 +189,15 @@ builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
+builder.Services.AddScoped<SportFrog.Api.Features.Documents.IssueDocumentsJob>();
+
+// Printed on physical cards, so a wrong address is unrecoverable. Validated
+// on start rather than discovered on a laminated credential.
+builder.Services
+    .AddOptions<SportFrog.Api.Features.Documents.DocumentOptions>()
+    .Bind(builder.Configuration.GetSection(SportFrog.Api.Features.Documents.DocumentOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -234,6 +281,9 @@ api.MapCreateTemplate();
 api.MapReadTemplates();
 api.MapUpdateTemplate();
 api.MapDeleteTemplate();
+api.MapRequestDocumentBatch();
+api.MapReadDocuments();
+api.MapRevokeDocument();
 
 api.MapVenues();
 api.MapVenueSpaces();
@@ -258,10 +308,12 @@ api.MapDrawCalendar();
 api.MapScheduleCalendar();
 api.MapAdvanceBracket();
 
+api.MapReadPublicCompetitions();
 api.MapReadPublicCompetition();
 api.MapReadPublicTables();
 api.MapReadPublicCalendar();
 api.MapReadPublicRoster();
+api.MapVerifyDocument();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

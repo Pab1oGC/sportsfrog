@@ -135,7 +135,7 @@ public static class ReadPublicTables
         string organizationSlug,
         string competitionSlug,
         PublicCompetitionReader reader,
-        Func<Infrastructure.Persistence.Entities.PublicSettings, bool> published,
+        Func<PublicSettings, bool> published,
         Func<SportFrogDbContext, IReadOnlyList<Guid>, Task<object>> read,
         CancellationToken cancellationToken)
     {
@@ -152,7 +152,7 @@ public static class ReadPublicTables
 
                 // No settings at all means the defaults the record declares,
                 // which publish the table and the boards.
-                if (!published(settings.Public ?? new Infrastructure.Persistence.Entities.PublicSettings()))
+                if (!published(settings.Public ?? new PublicSettings()))
                 {
                     return new Gate(null);
                 }

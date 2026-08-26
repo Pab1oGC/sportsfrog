@@ -87,12 +87,34 @@ public sealed class ObjectStore(
     /// leaves the process — so producing a link per row of a listing costs
     /// nothing beyond the arithmetic.
     /// </remarks>
-    public async Task<string> ReadLinkAsync(
+    public async Task<string?> ReadLinkAsync(
         Guid organizationId,
         string key,
         CancellationToken cancellationToken)
     {
-        Require(organizationId, key);
+        // A key that is not this organization's produces no link and does not
+        // stop the reading it was part of.
+        //
+        // The guard's job is that no signed link is ever handed out for
+        // somebody else's object, and refusing to sign one achieves that.
+        // Throwing achieves it as well and takes the whole page down with it:
+        // one bad row among four hundred athletes and nobody can open the
+        // register at all. That trade is never worth making for a picture.
+        //
+        // Loud in the log, because there is no legitimate way to get here.
+        // Keys are read from rows the database already filtered by
+        // organization, so one that does not match means something upstream is
+        // wrong and somebody should find out which row.
+        if (!StorageKeys.Belongs(organizationId, key))
+        {
+            logger.LogWarning(
+                "The stored object {Key} does not belong to organization {Organization}; "
+                    + "no link was produced for it.",
+                key,
+                organizationId);
+
+            return null;
+        }
 
         return await client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
         {
@@ -138,7 +160,19 @@ public sealed class ObjectStore(
         string key,
         CancellationToken cancellationToken)
     {
-        Require(organizationId, key);
+        // Refused rather than thrown, for the same reason as the link — and
+        // more so here, because this runs after a replacement has already been
+        // saved. Failing now would turn a stale key into a failed correction.
+        if (!StorageKeys.Belongs(organizationId, key))
+        {
+            logger.LogWarning(
+                "Not removing the stored object {Key}: it does not belong to organization "
+                    + "{Organization}.",
+                key,
+                organizationId);
+
+            return;
+        }
 
         try
         {
@@ -158,6 +192,13 @@ public sealed class ObjectStore(
     /// <summary>
     /// Refuses a key that is not this organization's.
     /// </summary>
+    /// <remarks>
+    /// Only the paths that fetch bytes throw. Producing a link or dropping an
+    /// object are things a page can do without, so those refuse quietly and
+    /// carry on; reading the contents is done to build something — a document,
+    /// a workbook — and there is no sensible way to carry on with the wrong
+    /// file, or with none.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">The key belongs elsewhere.</exception>
     private static void Require(Guid organizationId, string key)
     {

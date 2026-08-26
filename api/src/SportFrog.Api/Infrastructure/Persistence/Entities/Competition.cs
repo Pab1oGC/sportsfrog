@@ -39,7 +39,7 @@ public sealed class Competition
     /// <summary>What the organizers call this edition: "2026", "Apertura 2026", "Verano".</summary>
     public required string Season { get; set; }
 
-    /// <summary>How the fixtures are drawn. See <see cref="Features.Competitions.CompetitionFormat"/>.</summary>
+    /// <summary>How the fixtures are drawn. See <see cref="CompetitionFormat"/>.</summary>
     public required string Format { get; set; }
 
     public CaptureLevel CaptureLevel { get; set; } = CaptureLevel.Basic;

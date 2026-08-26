@@ -1,3 +1,4 @@
+using SportFrog.Api.Infrastructure.Storage;
 using System.Text.Json;
 using FluentValidation;
 using SportFrog.Api.Infrastructure.Auth;
@@ -81,7 +82,7 @@ public static class CreateTemplate
         // Everything wrong with the design at once. Somebody who has just
         // laid out a card should not learn about its problems one refusal at
         // a time.
-        if (LayoutPolicy.Inspect(layout, kind, organizationId) is { Count: > 0 } faults)
+        if (LayoutPolicy.Inspect(layout, kind, key => StorageKeys.Belongs(organizationId, key)) is { Count: > 0 } faults)
         {
             return TemplateFaults.Refuse(faults);
         }

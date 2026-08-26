@@ -259,7 +259,8 @@ La nueva tiene que aparecer en la lista y **sin** `(Pending)`. Si dice
 
 **6. Actualizar la entidad**
 
-Si la tabla ya tiene una entidad mapeada en `SportFrog.Domain/Entities/`, hay
+Si la tabla ya tiene una entidad mapeada en
+`SportFrog.Api/Infrastructure/Persistence/Entities/`, hay
 que agregarle la propiedad y declararla en su `IEntityTypeConfiguration`. El
 SQL y el modelo son dos verdades separadas: nada las sincroniza solo.
 
@@ -352,11 +353,15 @@ dotnet user-secrets set "Storage:SecretKey" "..." --project src/SportFrog.Api
 | `src/SportFrog.Api/Infrastructure/Documents/` | Composición de credenciales y certificados en PDF a partir de las plantillas. |
 | `src/SportFrog.Api/Infrastructure/Caching/` | Almacenamiento temporal de las consultas de la vista pública. |
 | `src/SportFrog.Api/Migrations/` | Migraciones de EF Core y el SQL incrustado que ejecutan. |
-| `src/SportFrog.Domain/Entities/` | Entidades del dominio, con sus invariantes. |
-| `src/SportFrog.Domain/ValueObjects/` | Tipos sin identidad propia: marcadores, rangos de fechas, documentos. |
-| `src/SportFrog.Domain/Rules/` | Reglamentos: puntuación, desempates y validación de la configuración. |
-| `src/SportFrog.Domain/Scheduling/` | Generación de fixtures y asignación de encuentros a espacios y horarios. |
-| `src/SportFrog.Domain/Abstractions/` | Contratos que el dominio declara y la infraestructura implementa. |
+| `src/SportFrog.Domain/Competitions/` | El ciclo de vida de una competencia, sus formatos y su configuración. |
+| `src/SportFrog.Domain/Documents/` | Qué es un diseño válido de credencial o certificado, y cómo se numera. |
+| `src/SportFrog.Domain/Matches/` | El ciclo de vida de un partido, el marcador por período y su consolidación. |
+| `src/SportFrog.Domain/Rules/` | Reglamentos: cómo se puntúa cada desenlace y qué desempata. |
+| `src/SportFrog.Domain/Standings/` | La tabla de posiciones y la aplicación de los desempates. |
+| `src/SportFrog.Domain/Statistics/` | Los tableros de líderes. |
+| `src/SportFrog.Domain/Scheduling/` | Sorteo de fixtures y reparto de encuentros entre espacios y horarios. |
+| `src/SportFrog.Domain/ValueObjects/` | Tipos sin identidad propia: correo, contraseña, dirección pública, sexo. |
+| `src/SportFrog.Domain/Serialization/` | Cómo viajan los enums por el cable: en texto, en snake case. |
 | `tests/SportFrog.Domain.Tests/` | Pruebas del dominio, sin base de datos ni contenedores. |
 | `tests/SportFrog.Api.Tests/` | Pruebas de extremo a extremo sobre la API, con PostgreSQL en Testcontainers. |
 | `docker/` | Script de inicialización de PostgreSQL: crea los tres roles. |

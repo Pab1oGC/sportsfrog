@@ -50,6 +50,20 @@ internal static class StorageKeys
     public static string TemplateBackground(Guid organizationId, string extension) =>
         $"{Prefix(organizationId)}document-templates/{Guid.NewGuid():n}.{extension}";
 
+    /// <summary>One issued document's own PDF.</summary>
+    /// <remarks>
+    /// Filed under the document rather than under the batch that printed it,
+    /// because the document outlives the batch: it is sent to one person, it
+    /// is reprinted years later, and it stays valid long after nobody
+    /// remembers which run produced it.
+    /// </remarks>
+    public static string IssuedDocument(Guid organizationId, Guid documentId) =>
+        $"{Prefix(organizationId)}documents/{documentId:n}.pdf";
+
+    /// <summary>The imposed sheet a batch produced, which is what gets printed.</summary>
+    public static string DocumentSheet(Guid organizationId, Guid batchId) =>
+        $"{Prefix(organizationId)}document-batches/{batchId:n}/sheet.pdf";
+
     /// <summary>
     /// Whether a key is one of this organization's.
     /// </summary>

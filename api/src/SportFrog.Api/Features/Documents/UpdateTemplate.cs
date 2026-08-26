@@ -1,3 +1,4 @@
+using SportFrog.Api.Infrastructure.Storage;
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -84,7 +85,7 @@ public static class UpdateTemplate
             return TemplateFaults.Refuse([unreadable]);
         }
 
-        if (LayoutPolicy.Inspect(layout, template.Kind, organizationId)
+        if (LayoutPolicy.Inspect(layout, template.Kind, key => StorageKeys.Belongs(organizationId, key))
             is { Count: > 0 } faults)
         {
             return TemplateFaults.Refuse(faults);

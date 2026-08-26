@@ -1,7 +1,8 @@
 {
   "info": {
+    "_postman_id": "sportfrog-api-collection",
     "name": "SportFrog API",
-    "description": "Autenticacion, organizaciones, miembros, clubes, deportistas, reglamento, competencias y categorias.\n\nOrden sugerido la primera vez:\n1. 0 - Salud\n2. 1 - Autenticacion > Registrar organizacion\n3. 1 - Autenticacion > Iniciar sesion  (guarda los testigos y la organizacion)\n4. 5 - Reglamento > Crear reglamento   (guarda rulesetId)\n5. 6 - Competencias > Crear competencia (guarda competitionId)\n6. 7 - Categorias > Crear categoria     (guarda categoryId)\n\nA partir de ahi cualquier peticion, en cualquier orden. El testigo de acceso dura 15 minutos: si aparece un 401, volver a ejecutar 'Iniciar sesion'.\n\nDos avisos sobre correr la coleccion entera (Run collection):\n\n- Las peticiones de la carpeta 1 estan limitadas a 10 por minuto por IP. Correr la coleccion varias veces seguidas devuelve 429 ahi y arrastra 401 en todo lo demas: esperar un minuto y repetir.\n- Las dos ultimas de la carpeta 8 fallan a proposito, porque una competencia finalizada no se cancela ni se retira. Una corrida limpia da 39 de 41.",
+    "description": "# SportFrog API\n\nColeccion completa: **102 peticiones**, una por cada endpoint que la API expone.\n\n## Como usarla\n\n1. Levanta la API (`dotnet run --project src/SportFrog.Api`), que queda en `http://localhost:5293`.\n2. Corre **01 · Autenticacion › Iniciar sesion**. Guarda solo el token, el token de renovacion y el identificador de la organizacion en las variables de la coleccion.\n3. Desde ahi, el resto funciona: cada alta guarda su identificador en una variable y las peticiones siguientes lo usan.\n\nLas carpetas estan numeradas en el orden en que tiene sentido recorrerlas: sin reglamento no hay competencia, sin competencia no hay categoria, sin categoria no hay equipos.\n\n## Autenticacion\n\nCasi todo pide dos cosas: el token en `Authorization: Bearer` y la organizacion activa en `X-Organization-Id`. Las dos estan puestas a nivel de coleccion, asi que no hay que tocarlas.\n\nLas excepciones no las mandan a proposito: la carpeta 01, porque la sesion todavia no existe, y la 18, porque es el portal publico.\n\n## Aislamiento\n\nLa cabecera `X-Organization-Id` no es un filtro: establece el contexto que las politicas de PostgreSQL usan para decidir que filas existen. Sin ella, casi todo responde 400; con la de otra organizacion, 404 en lugar de 403.\n\n## Variables\n\nSolo `baseUrl`, `orgSlug` y `compSlug` se cargan a mano. Las demas las completan las pruebas de cada peticion.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -14,71 +15,16 @@
       }
     ]
   },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:5299"
-    },
-    {
-      "key": "accessToken",
-      "value": ""
-    },
-    {
-      "key": "refreshToken",
-      "value": ""
-    },
-    {
-      "key": "organizationId",
-      "value": ""
-    },
-    {
-      "key": "clubId",
-      "value": ""
-    },
-    {
-      "key": "athleteId",
-      "value": ""
-    },
-    {
-      "key": "rulesetId",
-      "value": ""
-    },
-    {
-      "key": "spareRulesetId",
-      "value": ""
-    },
-    {
-      "key": "competitionId",
-      "value": ""
-    },
-    {
-      "key": "organizationSlug",
-      "value": "liga-municipal"
-    },
-    {
-      "key": "categoryId",
-      "value": ""
-    },
-    {
-      "key": "ownerEmail",
-      "value": "ana@liga.test"
-    },
-    {
-      "key": "ownerPassword",
-      "value": "Contrasena-1"
-    }
-  ],
   "item": [
     {
-      "name": "0 - Salud",
+      "name": "00 · Salud",
+      "description": "Lo primero que hay que ver responder antes de culpar a otra cosa.",
       "item": [
         {
-          "name": "GET /health",
+          "name": "Estado de la API",
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
             "method": "GET",
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
               "host": [
@@ -87,33 +33,33 @@
               "path": [
                 "health"
               ]
+            },
+            "description": "Responde 200 sin tocar la base de datos. Si esto falla, la API no esta levantada.",
+            "auth": {
+              "type": "noauth"
             }
-          }
-        }
-      ]
-    },
-    {
-      "name": "1 - Autenticacion",
-      "item": [
-        {
-          "name": "Registrar organizacion",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    pm.collectionVariables.set('organizationId', pm.response.json().organizationId);",
-                  "}"
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
                 ]
               }
             }
-          ],
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 · Autenticacion",
+      "description": "Todo empieza aca. \"Iniciar sesion\" guarda el token, el token de renovacion y\nel identificador de la organizacion en las variables de la coleccion, asi que\nel resto de las carpetas funcionan sin copiar y pegar nada.\n\nNinguna peticion de esta carpeta manda credenciales ni cabecera de organizacion:\nla sesion todavia no existe.",
+      "item": [
+        {
+          "name": "Registrar organizacion",
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
             "method": "POST",
             "header": [
               {
@@ -121,10 +67,6 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Liga Municipal\",\n  \"slug\": \"{{organizationSlug}}\",\n  \"ownerFullName\": \"Ana Rojas\",\n  \"ownerEmail\": \"{{ownerEmail}}\",\n  \"ownerPassword\": \"{{ownerPassword}}\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/organizations",
               "host": [
@@ -134,33 +76,41 @@
                 "organizations"
               ]
             },
-            "description": "El slug y el correo son la primera mitad de la direccion publica y la cuenta propietaria. Si esta organizacion ya existe devuelve 409: cambiar las variables organizationSlug y ownerEmail para registrar otra."
-          }
-        },
-        {
-          "name": "Iniciar sesion",
+            "description": "Crea la liga y su primer usuario, que queda como owner. Es el unico alta que no necesita sesion.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Liga Deportiva Altiplano\",\n  \"slug\": \"altiplano\",\n  \"ownerFullName\": \"Ana Quispe\",\n  \"ownerEmail\": \"admin@altiplano.test\",\n  \"ownerPassword\": \"Altiplano-2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const body = pm.response.json();",
-                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
-                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
-                  "    if (body.organizations.length > 0) {",
-                  "        pm.collectionVariables.set('organizationId', body.organizations[0].id);",
-                  "    }",
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.organizationId !== undefined && body.organizationId !== null) pm.collectionVariables.set(\"orgId\", body.organizationId);",
                   "}"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Iniciar sesion",
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
             "method": "POST",
             "header": [
               {
@@ -168,10 +118,6 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/auth/session",
               "host": [
@@ -181,30 +127,44 @@
                 "auth",
                 "session"
               ]
+            },
+            "description": "Devuelve el token de acceso (15 minutos), el de renovacion (30 dias) y las organizaciones del usuario.\n\nGuarda las tres cosas en variables de la coleccion.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@altiplano.test\",\n  \"password\": \"Altiplano-2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          }
-        },
-        {
-          "name": "Renovar sesion",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const body = pm.response.json();",
-                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
-                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.accessToken !== undefined && body.accessToken !== null) pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "  if (body.refreshToken !== undefined && body.refreshToken !== null) pm.collectionVariables.set(\"refreshToken\", body.refreshToken);",
+                  "  if (body.organizations && body.organizations.length) pm.collectionVariables.set(\"orgId\", body.organizations[0].id);",
                   "}"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Renovar sesion",
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
             "method": "POST",
             "header": [
               {
@@ -212,10 +172,6 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/auth/session/renewal",
               "host": [
@@ -226,15 +182,43 @@
                 "session",
                 "renewal"
               ]
+            },
+            "description": "Cambia el token de renovacion por una sesion nueva.\n\nEl token ROTA: el anterior deja de servir en cuanto se usa este. Por eso la prueba vuelve a guardar los dos.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.accessToken !== undefined && body.accessToken !== null) pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "  if (body.refreshToken !== undefined && body.refreshToken !== null) pm.collectionVariables.set(\"refreshToken\", body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Cerrar sesion",
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
             "method": "POST",
             "header": [
               {
@@ -242,10 +226,6 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/auth/session/revocation",
               "host": [
@@ -256,13 +236,27 @@
                 "session",
                 "revocation"
               ]
+            },
+            "description": "Anula el token de renovacion del lado del servidor. Devuelve 204.\n\nOjo: dejalo para el final, despues corta el resto de la coleccion.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         }
       ]
     },
     {
-      "name": "2 - Miembros",
+      "name": "02 · Miembros",
+      "description": "Quien mas entra a la organizacion, y con que alcance.",
       "item": [
         {
           "name": "Agregar miembro",
@@ -275,13 +269,9 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"arbitro@liga.test\",\n  \"fullName\": \"Carlos Arbitro\",\n  \"password\": \"Contrasena-1\",\n  \"role\": \"operator\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/members",
               "host": [
@@ -290,29 +280,132 @@
               "path": [
                 "members"
               ]
+            },
+            "description": "Roles: owner, admin, operator, recorder, viewer.\n\nSi el correo ya tiene cuenta se lo suma a esta organizacion en vez de crear un usuario nuevo; `accountCreated` dice cual de las dos cosas paso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"planillero@altiplano.test\",\n  \"fullName\": \"Luis Mamani\",\n  \"password\": \"Planilla-2026\",\n  \"role\": \"recorder\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          }
-        }
-      ]
-    },
-    {
-      "name": "3 - Clubes",
-      "item": [
-        {
-          "name": "Crear club",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    pm.collectionVariables.set('clubId', pm.response.json().id);",
-                  "}"
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
                 ]
               }
             }
-          ],
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 · Catalogo de deportes",
+      "description": "Solo lectura: lo que el sistema sabe puntuar. No se agregan deportes desde la API.",
+      "item": [
+        {
+          "name": "Listar deportes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sports"
+              ]
+            },
+            "description": "Cada deporte trae sus metricas: que se puede registrar en un partido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer un deporte",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sports/football",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sports",
+                "football"
+              ]
+            },
+            "description": "Codigos: football, futsal, volleyball, basketball, wally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 · Reglamentos",
+      "description": "Como se puntua, cuantos periodos hay, que desempata y que metricas se registran.\n\nUn reglamento en uso NO se puede reescribir: los resultados ya cargados\ncambiarian sin que nadie toque un partido. Para variar las reglas hay que\ncrear uno nuevo.",
+      "item": [
+        {
+          "name": "Listar reglamentos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear reglamento (futbol)",
           "request": {
             "method": "POST",
             "header": [
@@ -322,13 +415,190 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets"
+              ]
+            },
+            "description": "`points` con win/draw/loss para deportes de marcador corrido.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Deportivo Central\",\n  \"shortName\": \"DCE\",\n  \"logoUrl\": null\n}"
+              "raw": "{\n  \"sportCode\": \"football\",\n  \"name\": \"Futbol 11 - reglamento de liga\",\n  \"config\": {\n    \"periods\": {\n      \"count\": 2,\n      \"label\": \"tiempo\",\n      \"minutes\": 45\n    },\n    \"points\": {\n      \"win\": 3,\n      \"draw\": 1,\n      \"loss\": 0\n    },\n    \"tiebreakers\": [\n      \"score_difference\",\n      \"score_for\",\n      \"head_to_head\"\n    ],\n    \"walkover\": {\n      \"winnerScore\": 3,\n      \"loserScore\": 0\n    },\n    \"metrics\": [\n      \"goal\",\n      \"own_goal\",\n      \"assist\",\n      \"yellow_card\",\n      \"red_card\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"rulesetId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear reglamento (voleibol)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets"
+              ]
             },
+            "description": "El voleibol no puntua igual: no hay empate y el resultado en sets decide cuantos puntos se llevan los dos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sportCode\": \"volleyball\",\n  \"name\": \"Voleibol - liga de clubes\",\n  \"config\": {\n    \"periods\": {\n      \"count\": 5,\n      \"label\": \"set\",\n      \"minutes\": null\n    },\n    \"points\": {\n      \"win_3_0\": 3,\n      \"win_3_1\": 3,\n      \"win_3_2\": 2,\n      \"loss_2_3\": 1,\n      \"loss_1_3\": 0,\n      \"loss_0_3\": 0\n    },\n    \"tiebreakers\": [\n      \"score_difference\",\n      \"score_for\"\n    ],\n    \"walkover\": null,\n    \"metrics\": [\n      \"point\",\n      \"ace\",\n      \"block\",\n      \"error\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer reglamento",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets",
+                "{{rulesetId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar reglamento",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets",
+                "{{rulesetId}}"
+              ]
+            },
+            "description": "Responde 409 si ya se jugo algo bajo este reglamento.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sportCode\": \"football\",\n  \"name\": \"Futbol 11 - reglamento de liga (v2)\",\n  \"config\": {\n    \"periods\": {\n      \"count\": 2,\n      \"label\": \"tiempo\",\n      \"minutes\": 45\n    },\n    \"points\": {\n      \"win\": 3,\n      \"draw\": 1,\n      \"loss\": 0\n    },\n    \"tiebreakers\": [\n      \"score_difference\",\n      \"score_for\"\n    ],\n    \"walkover\": {\n      \"winnerScore\": 3,\n      \"loserScore\": 0\n    },\n    \"metrics\": [\n      \"goal\",\n      \"own_goal\",\n      \"assist\",\n      \"yellow_card\",\n      \"red_card\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar reglamento",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rulesets",
+                "{{rulesetId}}"
+              ]
+            },
+            "description": "409 si alguna competencia lo usa."
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 · Clubes",
+      "description": "El padron de instituciones. Un club puede tener equipos en varias categorias.",
+      "item": [
+        {
+          "name": "Listar clubes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/clubs",
               "host": [
@@ -338,43 +608,78 @@
                 "clubs"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Listar clubes",
+          "name": "Crear club",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/clubs?search=",
+              "raw": "{{baseUrl}}/clubs",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "clubs"
-              ],
-              "query": [
-                {
-                  "key": "search",
-                  "value": ""
-                }
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Club Deportivo Illimani\",\n  \"shortName\": \"Illimani\",\n  \"logoUrl\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"clubId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Leer un club",
+          "name": "Leer club",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
@@ -400,13 +705,9 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Deportivo Central\",\n  \"shortName\": \"DCE\",\n  \"logoUrl\": null,\n  \"isActive\": true\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/clubs/{{clubId}}",
               "host": [
@@ -416,6 +717,15 @@
                 "clubs",
                 "{{clubId}}"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Club Deportivo Illimani\",\n  \"shortName\": \"Illimani\",\n  \"logoUrl\": null,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
@@ -426,7 +736,7 @@
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
@@ -438,67 +748,28 @@
                 "clubs",
                 "{{clubId}}"
               ]
-            }
+            },
+            "description": "409 si tiene equipos inscriptos."
           }
         }
       ]
     },
     {
-      "name": "4 - Deportistas",
+      "name": "06 · Deportistas",
+      "description": "El padron de personas, independiente de los equipos: alguien puede jugar en\nvarias categorias y sigue siendo una sola persona.\n\nLa foto se manda como data URL al crear o editar. En el campo `photoUrl` de\nuna edicion, la cadena vacia significa \"quitar la foto\" y la ausencia del\ncampo significa \"dejarla como esta\".",
       "item": [
         {
-          "name": "Registrar deportista",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "if (body.id) { pm.collectionVariables.set('athleteId', body.id); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Lucia\",\n  \"lastName\": \"Fernandez\",\n  \"documentId\": \"7654321\",\n  \"birthDate\": \"2012-05-14\",\n  \"gender\": \"F\",\n  \"guardianName\": \"Marta Fernandez\",\n  \"guardianPhone\": \"70011223\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/athletes",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "athletes"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Buscar deportistas",
+          "name": "Listar deportistas",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/athletes?search=",
+              "raw": "{{baseUrl}}/athletes?search=quispe&take=50&skip=0",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -508,20 +779,95 @@
               "query": [
                 {
                   "key": "search",
-                  "value": ""
+                  "value": "quispe",
+                  "description": "Nombre, apellido o documento",
+                  "disabled": true
+                },
+                {
+                  "key": "take",
+                  "value": "50",
+                  "disabled": true
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true
                 }
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Leer un deportista",
+          "name": "Crear deportista",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/athletes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "athletes"
+              ]
+            },
+            "description": "Si el documento ya existe en esta organizacion devuelve a la persona existente con `alreadyRegistered: true`, en vez de crear una segunda.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Rodrigo\",\n  \"lastName\": \"Apaza Callisaya\",\n  \"documentId\": \"9384712 LP\",\n  \"birthDate\": \"2009-04-18\",\n  \"gender\": \"M\",\n  \"guardianName\": \"Marta Callisaya\",\n  \"guardianPhone\": \"71234567\",\n  \"photoUrl\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"athleteId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer deportista",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
@@ -537,7 +883,7 @@
           }
         },
         {
-          "name": "Corregir deportista",
+          "name": "Editar deportista",
           "request": {
             "method": "PUT",
             "header": [
@@ -547,13 +893,9 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Lucia\",\n  \"lastName\": \"Fernandez Rojas\",\n  \"documentId\": \"7654321\",\n  \"birthDate\": \"2012-05-14\",\n  \"gender\": \"F\",\n  \"guardianName\": \"Marta Fernandez\",\n  \"guardianPhone\": \"70011223\",\n  \"isActive\": true\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/athletes/{{athleteId}}",
               "host": [
@@ -563,6 +905,15 @@
                 "athletes",
                 "{{athleteId}}"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Rodrigo\",\n  \"lastName\": \"Apaza Callisaya\",\n  \"documentId\": \"9384712 LP\",\n  \"birthDate\": \"2009-04-18\",\n  \"gender\": \"M\",\n  \"guardianName\": \"Marta Callisaya\",\n  \"guardianPhone\": \"71234567\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
@@ -573,7 +924,7 @@
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
@@ -585,128 +936,41 @@
                 "athletes",
                 "{{athleteId}}"
               ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "5 - Reglamento",
-      "item": [
-        {
-          "name": "Listar deportes",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Catalogo compartido, sembrado por migracion. Solo lectura: cada deporte trae sus metricas, que son las que un reglamento puede elegir.",
-            "url": {
-              "raw": "{{baseUrl}}/sports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "sports"
-              ]
-            }
+            },
+            "description": "409 si esta en alguna nomina."
           }
         },
         {
-          "name": "Leer un deporte",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Codigos disponibles: football, futsal, basketball, volleyball, wally.",
-            "url": {
-              "raw": "{{baseUrl}}/sports/football",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "sports",
-                "football"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Crear reglamento (futbol)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    pm.collectionVariables.set('rulesetId', pm.response.json().id);",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "Importar lote de fotos (zip)",
           "request": {
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Las metricas que deciden el marcador (goal, own_goal) no se pueden omitir. Los desempates disponibles son head_to_head, score_difference, score_for, score_against y wins; el orden importa.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sportCode\": \"football\",\n  \"name\": \"Liga mayor 2026\",\n  \"config\": {\n    \"periods\": { \"count\": 2, \"label\": \"tiempo\", \"minutes\": 45 },\n    \"points\": { \"win\": 3, \"draw\": 1, \"loss\": 0 },\n    \"tiebreakers\": [\"score_difference\", \"score_for\", \"head_to_head\"],\n    \"walkover\": { \"winnerScore\": 3, \"loserScore\": 0 },\n    \"metrics\": [\"goal\", \"own_goal\", \"assist\", \"yellow_card\", \"red_card\"]\n  }\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/rulesets",
+              "raw": "{{baseUrl}}/athletes/photos/imports",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "rulesets"
+                "athletes",
+                "photos",
+                "imports"
               ]
-            }
-          }
-        },
-        {
-          "name": "Crear reglamento (voleibol)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "En un deporte por sets los resultados se cotizan por marcador de sets, no por victoria y empate. Con 5 sets se gana en 3, y hay que darle valor a los seis resultados posibles. El numero de sets tiene que ser impar.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sportCode\": \"volleyball\",\n  \"name\": \"Voley femenino 2026\",\n  \"config\": {\n    \"periods\": { \"count\": 5, \"label\": \"set\" },\n    \"points\": {\n      \"win_3_0\": 3,\n      \"win_3_1\": 3,\n      \"win_3_2\": 2,\n      \"loss_2_3\": 1,\n      \"loss_1_3\": 0,\n      \"loss_0_3\": 0\n    },\n    \"tiebreakers\": [\"wins\", \"score_difference\"],\n    \"walkover\": { \"winnerScore\": 3, \"loserScore\": 0 }\n  }\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/rulesets",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "rulesets"
+            "description": "Un .zip donde cada archivo se llama como el documento de identidad de la persona (9384712.jpg).\n\nSe procesa en segundo plano: la respuesta es el identificador del lote, no el resultado.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Archivo .zip con las fotografias"
+                }
               ]
             }
           },
@@ -716,8 +980,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    pm.collectionVariables.set('spareRulesetId', pm.response.json().id);",
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"photoImportId\", body.id);",
                   "}"
                 ]
               }
@@ -725,149 +993,69 @@
           ]
         },
         {
-          "name": "Listar reglamentos",
+          "name": "Listar importaciones de fotos",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/rulesets?sport=&search=",
+              "raw": "{{baseUrl}}/athletes/photos/imports",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "rulesets"
-              ],
-              "query": [
-                {
-                  "key": "sport",
-                  "value": ""
-                },
-                {
-                  "key": "search",
-                  "value": ""
-                }
+                "athletes",
+                "photos",
+                "imports"
               ]
             }
           }
         },
         {
-          "name": "Leer un reglamento",
+          "name": "Ver una importacion",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
+              "raw": "{{baseUrl}}/athletes/photos/imports/{{photoImportId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "rulesets",
-                "{{rulesetId}}"
+                "athletes",
+                "photos",
+                "imports",
+                "{{photoImportId}}"
               ]
-            }
-          }
-        },
-        {
-          "name": "Corregir reglamento",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Si el reglamento ya esta en uso por una competencia, solo se puede renombrar: reescribir las reglas devuelve 409. El deporte nunca cambia.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sportCode\": \"football\",\n  \"name\": \"Liga mayor 2026 - Apertura\",\n  \"config\": {\n    \"periods\": { \"count\": 2, \"label\": \"tiempo\", \"minutes\": 45 },\n    \"points\": { \"win\": 3, \"draw\": 1, \"loss\": 0 },\n    \"tiebreakers\": [\"score_difference\", \"score_for\", \"head_to_head\"],\n    \"walkover\": { \"winnerScore\": 3, \"loserScore\": 0 },\n    \"metrics\": [\"goal\", \"own_goal\", \"assist\", \"yellow_card\", \"red_card\"]\n  }\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/rulesets/{{rulesetId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "rulesets",
-                "{{rulesetId}}"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Eliminar reglamento (el de voleibol)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Apunta al reglamento de voleibol, que ninguna competencia usa. Devuelve 409 si alguna competencia o categoria lo usa: probarlo con {{rulesetId}} despues de crear la competencia para ver ese caso.",
-            "url": {
-              "raw": "{{baseUrl}}/rulesets/{{spareRulesetId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "rulesets",
-                "{{spareRulesetId}}"
-              ]
-            }
+            "description": "Trae a quienes no pudo emparejar, por nombre de archivo y motivo."
           }
         }
       ]
     },
     {
-      "name": "6 - Competencias",
+      "name": "07 · Competencias",
+      "description": "El slug es la direccion publica: /public/{organizacion}/{competencia}.\nMinusculas, numeros y guiones simples, entre 3 y 63 caracteres, unico dentro\nde la organizacion.\n\nFormatos: league (todos contra todos), knockout (eliminacion) y groups (zonas\ny despues llaves). Con groups hay que asignarle su zona a cada equipo antes\nde poder sortear.",
       "item": [
         {
-          "name": "Crear competencia",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    pm.collectionVariables.set('competitionId', pm.response.json().id);",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "Listar competencias",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "El deporte no se manda: sale del reglamento. Formatos: league, knockout, groups. Nivel de captura: basic (solo el marcador) o detailed (cada evento atribuido a un jugador). Nace en borrador y no publica.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rulesetId\": \"{{rulesetId}}\",\n  \"name\": \"Clausura 2026\",\n  \"slug\": \"clausura-2026\",\n  \"season\": \"2026\",\n  \"format\": \"league\",\n  \"captureLevel\": \"detailed\",\n  \"startsOn\": \"2026-09-01\",\n  \"endsOn\": \"2026-12-15\",\n  \"settings\": {\n    \"public\": {\n      \"showStandings\": true,\n      \"showLeaders\": true,\n      \"showRosters\": false\n    }\n  }\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/competitions",
               "host": [
@@ -877,52 +1065,79 @@
                 "competitions"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Listar competencias",
+          "name": "Crear competencia",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "status admite draft, scheduled, in_progress, finished o cancelled.",
             "url": {
-              "raw": "{{baseUrl}}/competitions?status=&sport=&search=",
+              "raw": "{{baseUrl}}/competitions",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "competitions"
-              ],
-              "query": [
-                {
-                  "key": "status",
-                  "value": ""
-                },
-                {
-                  "key": "sport",
-                  "value": ""
-                },
-                {
-                  "key": "search",
-                  "value": ""
-                }
               ]
+            },
+            "description": "`captureLevel`: basic registra solo el marcador; detailed ademas quien hizo cada gol y cada tarjeta, que es lo que habilita la tabla de goleadores.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesetId\": \"{{rulesetId}}\",\n  \"name\": \"Copa Apertura 2026\",\n  \"slug\": \"copa-apertura-2026\",\n  \"season\": \"2026\",\n  \"format\": \"league\",\n  \"captureLevel\": \"detailed\",\n  \"startsOn\": \"2026-03-07\",\n  \"endsOn\": \"2026-06-27\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"competitionId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Leer una competencia",
+          "name": "Leer competencia",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
@@ -938,7 +1153,7 @@
           }
         },
         {
-          "name": "Corregir competencia",
+          "name": "Editar competencia",
           "request": {
             "method": "PUT",
             "header": [
@@ -948,14 +1163,159 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Fuera de borrador, el reglamento y el nivel de captura quedan fijos: cambiarlos devuelve 409. Nombre, temporada, fechas y ajustes se corrigen siempre.",
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"rulesetId\": \"{{rulesetId}}\",\n  \"name\": \"Clausura 2026 - Primera\",\n  \"slug\": \"clausura-2026\",\n  \"season\": \"2026\",\n  \"format\": \"league\",\n  \"captureLevel\": \"detailed\",\n  \"startsOn\": \"2026-09-01\",\n  \"endsOn\": \"2026-12-20\",\n  \"settings\": {\n    \"public\": {\n      \"showStandings\": true,\n      \"showLeaders\": true,\n      \"showRosters\": false\n    }\n  }\n}"
+              "raw": "{\n  \"rulesetId\": \"{{rulesetId}}\",\n  \"name\": \"Copa Apertura 2026\",\n  \"slug\": \"copa-apertura-2026\",\n  \"season\": \"2026\",\n  \"format\": \"league\",\n  \"captureLevel\": \"detailed\",\n  \"startsOn\": \"2026-03-07\",\n  \"endsOn\": \"2026-06-27\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar estado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "status"
+              ]
             },
+            "description": "draft -> scheduled -> in_progress -> finished. Tambien cancelled.\n\nEl calendario solo se puede sortear en draft o scheduled.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"scheduled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publicar / despublicar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/publication",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "publication"
+              ]
+            },
+            "description": "Publicar la hace visible en el portal publico. Necesita estar al menos en scheduled.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isPublic\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partidos de la competencia",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "matches"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar competencia",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/competitions/{{competitionId}}",
               "host": [
@@ -971,85 +1331,9 @@
       ]
     },
     {
-      "name": "7 - Categorias",
+      "name": "08 · Categorias",
+      "description": "Las divisiones de una competencia. El rango de fechas de nacimiento define quien entra.",
       "item": [
-        {
-          "name": "Crear categoria",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    pm.collectionVariables.set('categoryId', pm.response.json().id);",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "gender admite F, M o null (categoria abierta). rulesetId null hace que siga al reglamento de la competencia; si se le pone uno propio, tiene que ser del mismo deporte. Las fechas van de la mas vieja admitida a la mas joven.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rulesetId\": null,\n  \"name\": \"Sub-15 masculino\",\n  \"gender\": \"M\",\n  \"birthDateFrom\": \"2012-01-01\",\n  \"birthDateTo\": \"2013-12-31\",\n  \"maxRosterSize\": 18,\n  \"displayOrder\": 1\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "categories"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Crear categoria abierta",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Sin restriccion de sexo ni de edad, y sin tope de plantilla.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rulesetId\": null,\n  \"name\": \"Mixta libre\",\n  \"gender\": null,\n  \"birthDateFrom\": null,\n  \"birthDateTo\": null,\n  \"maxRosterSize\": null,\n  \"displayOrder\": 2\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "categories"
-              ]
-            }
-          }
-        },
         {
           "name": "Listar categorias",
           "request": {
@@ -1057,10 +1341,9 @@
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Cada una trae effectiveRulesetId: el reglamento propio si lo tiene, si no el de la competencia.",
             "url": {
               "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
               "host": [
@@ -1072,16 +1355,81 @@
                 "categories"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Leer una categoria",
+          "name": "Crear categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "categories"
+              ]
+            },
+            "description": "`birthDateFrom` es el jugador mas grande que admite y `birthDateTo` el mas chico. `rulesetId` es opcional y, si va, tiene que ser del MISMO deporte que la competencia.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sub-17 Masculino\",\n  \"gender\": \"M\",\n  \"birthDateFrom\": \"2009-01-01\",\n  \"birthDateTo\": \"2011-12-31\",\n  \"maxRosterSize\": 22,\n  \"displayOrder\": 1,\n  \"rulesetId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"categoryId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer categoria",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
             "url": {
@@ -1099,7 +1447,7 @@
           }
         },
         {
-          "name": "Corregir categoria",
+          "name": "Editar categoria",
           "request": {
             "method": "PUT",
             "header": [
@@ -1109,14 +1457,9 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Fuera de borrador solo se puede cambiar el nombre y el orden: tocar sexo, fechas, tope de plantilla o reglamento devuelve 409, porque las plantillas se aceptaron contra esas reglas.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rulesetId\": null,\n  \"name\": \"Sub-15 varones\",\n  \"gender\": \"M\",\n  \"birthDateFrom\": \"2012-01-01\",\n  \"birthDateTo\": \"2013-12-31\",\n  \"maxRosterSize\": 18,\n  \"displayOrder\": 1\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories/{{categoryId}}",
               "host": [
@@ -1128,6 +1471,15 @@
                 "categories",
                 "{{categoryId}}"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sub-17 Masculino\",\n  \"gender\": \"M\",\n  \"birthDateFrom\": \"2009-01-01\",\n  \"birthDateTo\": \"2011-12-31\",\n  \"maxRosterSize\": 22,\n  \"displayOrder\": 1,\n  \"rulesetId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
@@ -1138,10 +1490,9 @@
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Devuelve 409 si ya tiene equipos o partidos.",
             "url": {
               "raw": "{{baseUrl}}/competitions/{{competitionId}}/categories/{{categoryId}}",
               "host": [
@@ -1159,11 +1510,121 @@
       ]
     },
     {
-      "name": "8 - Ciclo de vida",
-      "description": "Las transiciones, en el orden en que ocurren. Anunciar exige que la competencia ya tenga al menos una categoria, por eso esta carpeta va despues de la 7.\n\nEn una corrida completa las dos ultimas fallan a proposito: una competencia finalizada no se puede cancelar (solo reabrir), y solo se retira una que este en borrador o ya cancelada. Son caminos alternativos, no parte de la secuencia.",
+      "name": "09 · Equipos",
+      "description": "Un club dentro de una categoria. `groupLabel` es la zona, y es obligatoria para el formato de grupos.",
       "item": [
         {
-          "name": "Anunciar (a programada)",
+          "name": "Listar equipos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/teams",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "teams"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inscribir equipo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/teams",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "teams"
+              ]
+            },
+            "description": "Sin `name` toma el del club. `groupLabel` solo hace falta en formato groups.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clubId\": \"{{clubId}}\",\n  \"name\": \"Illimani Sub-17\",\n  \"groupLabel\": \"A\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"teamId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer equipo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar equipo",
           "request": {
             "method": "PUT",
             "header": [
@@ -1173,209 +1634,2382 @@
               },
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Requiere al menos una categoria: si no hay ninguna devuelve 409. Crear la categoria antes de ejecutar esto.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"scheduled\"\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
+              "raw": "{{baseUrl}}/teams/{{teamId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "competitions",
-                "{{competitionId}}",
-                "status"
+                "teams",
+                "{{teamId}}"
               ]
-            }
-          }
-        },
-        {
-          "name": "Arrancar (a en curso)",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"in_progress\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "status"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Publicar",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+              "raw": "{\n  \"name\": \"Illimani Sub-17\",\n  \"groupLabel\": \"A\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
               }
-            ],
-            "description": "Una competencia en borrador no se puede publicar: hay que anunciarla primero. Despublicar (isPublic false) nunca se rechaza.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"isPublic\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/publication",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "publication"
-              ]
             }
           }
         },
         {
-          "name": "Despublicar",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"isPublic\": false\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/publication",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "publication"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Cerrar (a finalizada)",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Devuelve 409 si algun partido sigue en juego. Una competencia finalizada se puede reabrir volviendo a in_progress.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"finished\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "status"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Cancelar",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
-              }
-            ],
-            "description": "Exige rol admin, a diferencia del resto de las transiciones que alcanza con operator. Cancelada es un estado terminal: no se sale de ahi.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"cancelled\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "competitions",
-                "{{competitionId}}",
-                "status"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Retirar competencia",
+          "name": "Eliminar equipo",
           "request": {
             "method": "DELETE",
             "header": [
               {
                 "key": "X-Organization-Id",
-                "value": "{{organizationId}}"
+                "value": "{{orgId}}"
               }
             ],
-            "description": "Solo en borrador o ya cancelada. Una competencia anunciada, en curso o finalizada se cancela, no se retira.",
             "url": {
-              "raw": "{{baseUrl}}/competitions/{{competitionId}}",
+              "raw": "{{baseUrl}}/teams/{{teamId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "competitions",
-                "{{competitionId}}"
+                "teams",
+                "{{teamId}}"
+              ]
+            },
+            "description": "409 si ya jugo."
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 · Nomina",
+      "description": "Quienes juegan por un equipo. Hay dos caminos: uno por uno, o con la planilla\nde Excel que la propia API entrega.\n\nEl flujo de la planilla es: descargar -> completar -> previsualizar -> aplicar.\nLa previsualizacion no escribe nada: dice fila por fila que va a pasar.",
+      "item": [
+        {
+          "name": "Listar nomina",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/roster?includeWithdrawn=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}",
+                "roster"
+              ],
+              "query": [
+                {
+                  "key": "includeWithdrawn",
+                  "value": "true",
+                  "description": "Incluir a los que se retiraron",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inscribir jugador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/roster",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}",
+                "roster"
+              ]
+            },
+            "description": "Valida la edad contra el rango de la categoria y el dorsal contra los ya usados.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"athleteId\": \"{{athleteId}}\",\n  \"jerseyNumber\": 10,\n  \"position\": \"volante\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"rosterEntryId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer inscripcion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roster/{{rosterEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roster",
+                "{{rosterEntryId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Corregir dorsal o posicion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roster/{{rosterEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roster",
+                "{{rosterEntryId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jerseyNumber\": 7,\n  \"position\": \"delantero\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Retirar jugador",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roster/{{rosterEntryId}}/withdrawal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roster",
+                "{{rosterEntryId}}",
+                "withdrawal"
+              ]
+            },
+            "description": "Conserva los partidos que jugo y deja de darle nuevos. `{\"withdrawn\": false}` lo reincorpora.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withdrawn\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Anular inscripcion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roster/{{rosterEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roster",
+                "{{rosterEntryId}}"
+              ]
+            },
+            "description": "Distinto de retirar: esto es para una inscripcion cargada por error. 409 si ya jugo."
+          }
+        },
+        {
+          "name": "Descargar planilla de Excel",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/roster/import/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}",
+                "roster",
+                "import",
+                "template"
+              ]
+            },
+            "description": "La planilla viene con las reglas de ESTA categoria adentro: el rango de fechas, el genero y los dorsales ya usados.\n\nDevuelve un .xlsx; en Postman conviene usar \"Send and Download\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Previsualizar la planilla",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/roster/import/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}",
+                "roster",
+                "import",
+                "preview"
+              ]
+            },
+            "description": "No escribe nada. Devuelve fila por fila si se crea, se reutiliza o se rechaza, y por que.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "La planilla completada (.xlsx)"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aplicar la planilla",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/roster/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}",
+                "roster",
+                "import"
+              ]
+            },
+            "description": "Aplica lo que la previsualizacion mostro. Las filas rechazadas se saltean; las demas entran.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "La planilla completada (.xlsx)"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11 · Sedes y espacios",
+      "description": "Donde se juega. Una sede tiene espacios (canchas), y los partidos se asignan a un espacio.",
+      "item": [
+        {
+          "name": "Listar sedes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear sede",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Complejo Municipal Miraflores\",\n  \"address\": \"Av. Busch 1200, La Paz\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"venueId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer sede",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/{{venueId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "{{venueId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar sede",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/{{venueId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "{{venueId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Complejo Municipal Miraflores\",\n  \"address\": \"Av. Busch 1200, La Paz\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar sede",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/{{venueId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "{{venueId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar espacios de la sede",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/{{venueId}}/spaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "{{venueId}}",
+                "spaces"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear espacio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/{{venueId}}/spaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "{{venueId}}",
+                "spaces"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cancha 1\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"spaceId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar todos los espacios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/spaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "spaces"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer espacio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/spaces/{{spaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "spaces",
+                "{{spaceId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar espacio",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/spaces/{{spaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "spaces",
+                "{{spaceId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cancha 1\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar espacio",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/spaces/{{spaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "spaces",
+                "{{spaceId}}"
               ]
             }
           }
         }
       ]
+    },
+    {
+      "name": "12 · Sorteo y calendario",
+      "description": "Dos operaciones distintas y en este orden: primero el sorteo arma los cruces,\ndespues el programador les pone fecha y cancha.\n\nEstan separadas a proposito: si fueran una sola, no se podria resortear sin\nvolver a mover todo lo ya acordado con las sedes.",
+      "item": [
+        {
+          "name": "Sortear fixture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/draw",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "draw"
+              ]
+            },
+            "description": "`legs`: 1 o 2 (ida y vuelta). Un knockout solo acepta 1.\n\nResortear DA DE BAJA los partidos anteriores; `replaced` dice cuantos.\nSe rechaza con 409 si ya hay resultados cargados, o si es formato groups\ny ningun equipo tiene zona.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legs\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sortear la siguiente ronda",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/draw/next-round",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "draw",
+                "next-round"
+              ]
+            },
+            "description": "Solo en knockout. Arma la ronda siguiente con los ganadores de la anterior. Si la ultima era la final devuelve el campeon y no crea nada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Programar el calendario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitions/{{competitionId}}/schedule",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitions",
+                "{{competitionId}}",
+                "schedule"
+              ]
+            },
+            "description": "Reparte los partidos sin fecha entre los espacios y horarios configurados. `unplaced` son los que no entraron.\n\n`from` es opcional: desde que dia empezar a colocar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partidos de la categoria",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/matches?status=scheduled&round=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "scheduled",
+                  "disabled": true
+                },
+                {
+                  "key": "round",
+                  "value": "1",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (Array.isArray(body) && body.length) pm.collectionVariables.set(\"matchId\", body[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13 · Partidos",
+      "description": "Programar a mano, cargar el resultado, dar por perdido o aplazar.",
+      "item": [
+        {
+          "name": "Programar partido a mano",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "matches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"homeTeamId\": \"{{teamId}}\",\n  \"awayTeamId\": \"{{awayTeamId}}\",\n  \"venueSpaceId\": \"{{spaceId}}\",\n  \"scheduledAt\": \"2026-03-14T14:30:00-04:00\",\n  \"roundNumber\": 1,\n  \"phase\": null,\n  \"notes\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"matchId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer partido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reprogramar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}"
+              ]
+            },
+            "description": "Cambia fecha, cancha o jornada. No toca el resultado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"venueSpaceId\": \"{{spaceId}}\",\n  \"scheduledAt\": \"2026-03-15T10:00:00-04:00\",\n  \"roundNumber\": 1,\n  \"notes\": \"Reprogramado por lluvia.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cargar resultado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "result"
+              ]
+            },
+            "description": "Por periodo: `p` es el numero de periodo, `h` el local y `a` el visitante. El total lo consolida la API y lo devuelve.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"periodScores\": [\n    {\n      \"p\": 1,\n      \"h\": 1,\n      \"a\": 0\n    },\n    {\n      \"p\": 2,\n      \"h\": 2,\n      \"a\": 1\n    }\n  ],\n  \"notes\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dar por perdido (walkover)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/walkover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "walkover"
+              ]
+            },
+            "description": "El marcador sale del reglamento, no de aca. Si el reglamento no define `walkover`, se rechaza.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"winnerTeamId\": \"{{teamId}}\",\n  \"notes\": \"El rival no presento lista de buena fe.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar estado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "status"
+              ]
+            },
+            "description": "scheduled, in_progress, finished, postponed, cancelled.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"postponed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar partido",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}"
+              ]
+            },
+            "description": "409 si tiene resultado cargado."
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 · Eventos del partido",
+      "description": "Quien hizo cada gol y cada tarjeta. Es lo que alimenta la tabla de goleadores.\n\nSolo tiene sentido si la competencia esta en captureLevel \"detailed\".\nEl `metricId` sale del reglamento del deporte (ver \"Listar deportes\").",
+      "item": [
+        {
+          "name": "Listar eventos del partido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "events"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar evento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "events"
+              ]
+            },
+            "description": "La inscripcion tiene que pertenecer a uno de los dos equipos del partido, y la metrica al reglamento vigente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rosterEntryId\": \"{{rosterEntryId}}\",\n  \"metricId\": \"{{metricId}}\",\n  \"periodNumber\": 1,\n  \"minute\": 23,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"eventId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer evento",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "{{eventId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Corregir evento",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "{{eventId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rosterEntryId\": \"{{rosterEntryId}}\",\n  \"metricId\": \"{{metricId}}\",\n  \"periodNumber\": 2,\n  \"minute\": 67,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar evento",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "{{eventId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 · Tablas y lideres",
+      "description": "Se derivan en cada lectura. No hay tabla almacenada que pueda quedar vieja.",
+      "item": [
+        {
+          "name": "Tabla de posiciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/standings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "standings"
+              ]
+            },
+            "description": "Agrupada por zona cuando la categoria tiene grupos. Los desempates son los del reglamento y vienen nombrados en la respuesta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lideres",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}/leaders?top=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}",
+                "leaders"
+              ],
+              "query": [
+                {
+                  "key": "top",
+                  "value": "10",
+                  "description": "Entre 1 y 100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Un tablero por metrica del deporte. `affectsScore` distingue las de puntaje de las disciplinarias."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "16 · Documentos · Diseno",
+      "description": "Una plantilla es un fondo (el arte) y campos posicionados encima.\n\nTodas las medidas van entre 0 y 1, relativas a la cara: asi el mismo diseno\nimprime bien sobre un arte de 900 pixeles y sobre uno de 3000.\n\nCada vez que se guarda un diseno se archiva la version anterior, para que un\ndocumento emitido hace un ano se pueda reimprimir tal cual salio.",
+      "item": [
+        {
+          "name": "Catalogo de diseno",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/design?kind=credential",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "design"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "credential",
+                  "description": "credential o certificate",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Que campos, tipografias, tamanos de papel y alineaciones se pueden usar.\n\nCon `?kind=` filtra los campos que ESE tipo de documento puede imprimir: un certificado no lleva la fotografia del deportista."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subir el arte",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates/backgrounds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "backgrounds"
+              ]
+            },
+            "description": "Devuelve la clave del objeto y la proporcion de la imagen, que es la que el editor usa para el lienzo.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "La imagen del arte (png/jpg)"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.backgroundKey !== undefined && body.backgroundKey !== null) pm.collectionVariables.set(\"backgroundKey\", body.backgroundKey);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar plantillas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates?kind=credential",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "credential",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear plantilla",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates"
+              ]
+            },
+            "description": "Tamanos: credential, credential_portrait, a4, a4_landscape, a5, letter.\n\nUn campo de texto necesita `size`; uno de imagen necesita `w` y `h`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"credential\",\n  \"name\": \"Credencial Copa Apertura 2026\",\n  \"pageSize\": \"credential\",\n  \"isDefault\": true,\n  \"layout\": {\n    \"front\": {\n      \"backgroundKey\": \"{{backgroundKey}}\",\n      \"aspectRatio\": 1.5875,\n      \"fields\": [\n        {\n          \"source\": \"athlete.photo\",\n          \"x\": 0.055,\n          \"y\": 0.28,\n          \"w\": 0.235,\n          \"h\": 0.55\n        },\n        {\n          \"source\": \"athlete.full_name\",\n          \"x\": 0.33,\n          \"y\": 0.3,\n          \"w\": 0.62,\n          \"size\": 0.085,\n          \"font\": \"sans\",\n          \"bold\": true,\n          \"fit\": \"shrink\",\n          \"minSize\": 0.05\n        },\n        {\n          \"source\": \"athlete.document\",\n          \"x\": 0.33,\n          \"y\": 0.44,\n          \"w\": 0.4,\n          \"size\": 0.055,\n          \"color\": \"#333333\"\n        },\n        {\n          \"source\": \"team.name\",\n          \"x\": 0.33,\n          \"y\": 0.55,\n          \"w\": 0.45,\n          \"size\": 0.055\n        },\n        {\n          \"source\": \"roster.jersey_number\",\n          \"x\": 0.86,\n          \"y\": 0.3,\n          \"w\": 0.1,\n          \"size\": 0.13,\n          \"align\": \"right\",\n          \"bold\": true\n        },\n        {\n          \"source\": \"document.qr\",\n          \"x\": 0.79,\n          \"y\": 0.55,\n          \"w\": 0.16,\n          \"h\": 0.26\n        },\n        {\n          \"source\": \"text\",\n          \"x\": 0.055,\n          \"y\": 0.87,\n          \"w\": 0.9,\n          \"size\": 0.042,\n          \"color\": \"#666666\",\n          \"text\": \"Valida solo con documento de identidad\"\n        }\n      ]\n    },\n    \"back\": null\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"templateId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer plantilla",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates/{{templateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}"
+              ]
+            },
+            "description": "Trae el diseno y, en `backgrounds`, enlaces temporales al arte de cada cara."
+          }
+        },
+        {
+          "name": "Editar plantilla",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates/{{templateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}"
+              ]
+            },
+            "description": "Archiva la version anterior y devuelve el numero de la nueva.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Credencial Copa Apertura 2026\",\n  \"pageSize\": \"credential\",\n  \"isDefault\": true,\n  \"layout\": {\n    \"front\": {\n      \"backgroundKey\": \"{{backgroundKey}}\",\n      \"aspectRatio\": 1.5875,\n      \"fields\": [\n        {\n          \"source\": \"athlete.photo\",\n          \"x\": 0.07,\n          \"y\": 0.3,\n          \"w\": 0.25,\n          \"h\": 0.5\n        },\n        {\n          \"source\": \"athlete.full_name\",\n          \"x\": 0.36,\n          \"y\": 0.3,\n          \"w\": 0.6,\n          \"size\": 0.085,\n          \"font\": \"sans\",\n          \"bold\": true,\n          \"fit\": \"shrink\",\n          \"minSize\": 0.05\n        }\n      ]\n    },\n    \"back\": null\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Leer una version archivada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates/{{templateId}}/versions/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Como se veia el diseno en esa version. Es lo que permite reimprimir un documento viejo igual a como salio."
+          }
+        },
+        {
+          "name": "Retirar plantilla",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/templates/{{templateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 · Documentos · Emision",
+      "description": "Un lote se procesa en segundo plano: el POST contesta \"queued\" y hay que\nvolver a preguntar por el detalle.\n\nEstados: queued, running, finished, failed. Terminado NO quiere decir que\nsalieron todos: `skipped` cuenta a los que paso por alto y el detalle los\nnombra uno por uno con el motivo.",
+      "item": [
+        {
+          "name": "Solicitar lote",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "batches"
+              ]
+            },
+            "description": "Sin `categoryId` toma toda la competencia; sin `teamId`, toda la categoria.\n\n`certificateType` solo va en certificados; `validFrom`/`validTo` solo en credenciales.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"credential\",\n  \"templateId\": \"{{templateId}}\",\n  \"competitionId\": \"{{competitionId}}\",\n  \"categoryId\": \"{{categoryId}}\",\n  \"teamId\": null,\n  \"certificateType\": null,\n  \"validFrom\": \"2026-03-01\",\n  \"validTo\": \"2026-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (body.id !== undefined && body.id !== null) pm.collectionVariables.set(\"batchId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar lotes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/batches?take=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "batches"
+              ],
+              "query": [
+                {
+                  "key": "take",
+                  "value": "20",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver un lote",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/batches/{{batchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "batches",
+                "{{batchId}}"
+              ]
+            },
+            "description": "Aca vive `sheetUrl` (la hoja lista para imprimir) y `problems` (a quienes paso por alto y por que). Ninguno de los dos esta en el listado.\n\nMotivos: no_photo, already_issued, could_not_print."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar documentos emitidos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/issued?batchId={{batchId}}&competitionId={{competitionId}}&athleteId={{athleteId}}&take=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "issued"
+              ],
+              "query": [
+                {
+                  "key": "batchId",
+                  "value": "{{batchId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "competitionId",
+                  "value": "{{competitionId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "athleteId",
+                  "value": "{{athleteId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "take",
+                  "value": "100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Cada uno trae `pdfUrl`, un enlace temporal a su propio archivo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                  "pm.test(\"respuesta correcta\", () => pm.expect(ok).to.be.true);",
+                  "if (ok) {",
+                  "  let body = {};",
+                  "  try { body = pm.response.json(); } catch (e) { body = {}; }",
+                  "  if (Array.isArray(body) && body.length) { pm.collectionVariables.set(\"documentId\", body[0].id); pm.collectionVariables.set(\"serial\", body[0].serialNumber); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revocar documento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/issued/{{documentId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "issued",
+                "{{documentId}}",
+                "revoke"
+              ]
+            },
+            "description": "La verificacion publica pasa a decir que no es valido. No borra nada: queda el motivo y la fecha.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"La jugadora reporto el extravio de la credencial.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "18 · Portal publico",
+      "description": "Sin credenciales y sin cabecera de organizacion: es lo que ve cualquiera.\n\nLo atiende un usuario de base de datos de SOLO LECTURA, impuesto por el motor.\nUna competencia aparece unicamente si su organizacion la publico, y que\nsecciones se muestran lo decide cada competencia.",
+      "item": [
+        {
+          "name": "Directorio de competencias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/competitions?sport=football&season=2026&search=apertura&skip=0&take=24",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "competitions"
+              ],
+              "query": [
+                {
+                  "key": "sport",
+                  "value": "football",
+                  "disabled": true
+                },
+                {
+                  "key": "season",
+                  "value": "2026",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "apertura",
+                  "disabled": true
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true
+                },
+                {
+                  "key": "take",
+                  "value": "24",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "La unica lectura que cruza organizaciones. Devuelve `total` para paginar.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Una competencia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/{{orgSlug}}/{{compSlug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "{{orgSlug}}",
+                "{{compSlug}}"
+              ]
+            },
+            "description": "La competencia, sus categorias y `shows`, que dice que secciones publico.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tabla de posiciones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/{{orgSlug}}/{{compSlug}}/standings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "{{orgSlug}}",
+                "{{compSlug}}",
+                "standings"
+              ]
+            },
+            "description": "404 si la competencia eligio no publicarla. Es el mismo 404 que si no existiera: \"existe pero no la ves\" ya seria informacion.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Lideres",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/{{orgSlug}}/{{compSlug}}/leaders?top=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "{{orgSlug}}",
+                "{{compSlug}}",
+                "leaders"
+              ],
+              "query": [
+                {
+                  "key": "top",
+                  "value": "10",
+                  "disabled": true
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Calendario y resultados",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/{{orgSlug}}/{{compSlug}}/matches?categoryId={{categoryId}}&status=finished&round=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "{{orgSlug}}",
+                "{{compSlug}}",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "finished",
+                  "disabled": true
+                },
+                {
+                  "key": "round",
+                  "value": "1",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "No esta detras de ninguna configuracion: publicar una competencia es, sobre todo, publicar esto.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Nomina de un equipo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/{{orgSlug}}/{{compSlug}}/teams/{{teamId}}/roster",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "{{orgSlug}}",
+                "{{compSlug}}",
+                "teams",
+                "{{teamId}}",
+                "roster"
+              ]
+            },
+            "description": "Solo si la competencia publico las nominas. Nunca trae documento de identidad ni fecha de nacimiento.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Verificar una credencial",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/verify/{{orgSlug}}/{{serial}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "verify",
+                "{{orgSlug}}",
+                "{{serial}}"
+              ]
+            },
+            "description": "Lo que abre el QR impreso. Dice si sigue vigente, sin exponer datos personales.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"respuesta correcta\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5293",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orgId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orgSlug",
+      "value": "altiplano",
+      "type": "string"
+    },
+    {
+      "key": "compSlug",
+      "value": "copa-apertura-2026",
+      "type": "string"
+    },
+    {
+      "key": "rulesetId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clubId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "athleteId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "photoImportId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "competitionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teamId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "awayTeamId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rosterEntryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "venueId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "spaceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "matchId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "metricId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "eventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "backgroundKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "batchId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serial",
+      "value": "",
+      "type": "string"
     }
   ]
 }

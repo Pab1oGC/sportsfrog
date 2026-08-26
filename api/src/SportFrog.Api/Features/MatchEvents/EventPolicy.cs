@@ -99,7 +99,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
             // off, or was awarded without being played.
             return Results.Problem(
                 detail: "Nothing can be recorded for a match that is " +
-                        $"{Infrastructure.Validation.WireEnum.Label(context.Match.Status)}. " +
+                        $"{WireEnum.Label(context.Match.Status)}. " +
                         "Start it first.",
                 statusCode: StatusCodes.Status409Conflict);
         }
@@ -239,7 +239,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         {
             violations.Add(new EventViolation(
                 "PeriodNumber",
-                $"This match is played in {Matches.PeriodLabel.Count(configured, context.Rules.Periods.Label)}, " +
+                $"This match is played in {PeriodLabel.Count(configured, context.Rules.Periods.Label)}, " +
                 $"so there is no number {period}."));
         }
     }
