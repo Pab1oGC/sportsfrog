@@ -49,6 +49,8 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(x => x.WalkoverTeamId).HasColumnName("walkover_team_id");
         builder.Property(x => x.HomeTotal).HasColumnName("home_total");
         builder.Property(x => x.AwayTotal).HasColumnName("away_total");
+        builder.Property(x => x.PenaltyHomeScore).HasColumnName("penalty_home_score");
+        builder.Property(x => x.PenaltyAwayScore).HasColumnName("penalty_away_score");
         builder.Property(x => x.RecordedBy).HasColumnName("recorded_by");
         builder.Property(x => x.RecordedAt).HasColumnName("recorded_at");
         builder.Property(x => x.ModifiedBy).HasColumnName("modified_by");

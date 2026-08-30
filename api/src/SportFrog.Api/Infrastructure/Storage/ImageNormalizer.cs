@@ -61,6 +61,17 @@ public static class ImageNormalizer
     private const string StoredExtension = "jpg";
 
     /// <summary>
+    /// A crest is not a photograph — it is usually artwork cut out on a
+    /// see-through background, and that background is the point: it is what
+    /// lets a club's badge sit on a colored card or a dark page without
+    /// dragging a white square along with it. WebP is what carries that and
+    /// still compresses like a photo format rather than like PNG.
+    /// </summary>
+    private const string TransparentContentType = "image/webp";
+
+    private const string TransparentExtension = "webp";
+
+    /// <summary>
     /// Normalizes an uploaded image, or answers null if it is not one.
     /// </summary>
     /// <param name="maximumEdge">
@@ -69,7 +80,17 @@ public static class ImageNormalizer
     /// the decoding, the straightening and the stripping of the camera's
     /// metadata identical for both.
     /// </param>
-    public static NormalizedImage? Normalize(byte[] source, int maximumEdge = MaximumEdge)
+    /// <param name="preserveTransparency">
+    /// True for artwork — a crest, a logo — that is allowed to have nothing
+    /// behind it. Stored as WebP instead of JPEG, and cleared to transparent
+    /// instead of white before the source is drawn onto it, so whatever was
+    /// see-through in the upload stays see-through. False remains the
+    /// default because it is wrong for a photograph: a face has no
+    /// "outside" that should show through, and JPEG is what a printer, a PDF
+    /// reader and every other consumer of this method already expects.
+    /// </param>
+    public static NormalizedImage? Normalize(
+        byte[] source, int maximumEdge = MaximumEdge, bool preserveTransparency = false)
     {
         using var data = SKData.CreateCopy(source);
 
@@ -100,14 +121,17 @@ public static class ImageNormalizer
         var width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
         var height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
 
-        // Opaque, cleared to white: JPEG cannot carry transparency, and
-        // whatever was see-through in a PNG would otherwise come out black.
-        using var canvasBitmap = new SKBitmap(
-            new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque));
+        // Opaque and cleared to white for a photograph: JPEG cannot carry
+        // transparency, and whatever was see-through in the source would
+        // otherwise come out black. Left transparent for artwork, which is
+        // the entire reason preserveTransparency was asked for.
+        using var canvasBitmap = new SKBitmap(new SKImageInfo(
+            width, height, SKColorType.Rgba8888,
+            preserveTransparency ? SKAlphaType.Premul : SKAlphaType.Opaque));
 
         using (var canvas = new SKCanvas(canvasBitmap))
         {
-            canvas.Clear(SKColors.White);
+            canvas.Clear(preserveTransparency ? SKColors.Transparent : SKColors.White);
 
             // Rotate first, then scale into place: the matrix maps the
             // decoded pixels onto an upright image of the target size in one
@@ -122,12 +146,17 @@ public static class ImageNormalizer
         }
 
         using var image = SKImage.FromBitmap(canvasBitmap);
-        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, Quality);
+        using var encoded = image.Encode(
+            preserveTransparency ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg, Quality);
 
         return encoded is null
             ? null
             : new NormalizedImage(
-                encoded.ToArray(), StoredContentType, StoredExtension, width, height);
+                encoded.ToArray(),
+                preserveTransparency ? TransparentContentType : StoredContentType,
+                preserveTransparency ? TransparentExtension : StoredExtension,
+                width,
+                height);
     }
 
     /// <summary>Mitchell, which is the usual choice for shrinking photographs.</summary>

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Public;
@@ -29,6 +30,9 @@ public static class ReadPublicCompetition
     /// </param>
     public sealed record Response(
         string OrganizationName,
+
+        /// <summary>The organization's own mark, wherever it runs competitions.</summary>
+        string? OrganizationLogoUrl,
         string Name,
         string Season,
         string SportCode,
@@ -38,7 +42,8 @@ public static class ReadPublicCompetition
         DateOnly? StartsOn,
         DateOnly? EndsOn,
         Sections Shows,
-        IReadOnlyList<CategorySummary> Categories);
+        IReadOnlyList<CategorySummary> Categories,
+        Portal Portal);
 
     public sealed record Sections(bool Standings, bool Leaders, bool Rosters);
 
@@ -47,6 +52,24 @@ public static class ReadPublicCompetition
         string Name,
         string? Gender,
         int TeamCount);
+
+    /// <summary>
+    /// However this competition dressed up its own page, on top of the plain
+    /// one every competition gets. Every field is absent unless somebody set
+    /// it, which is what keeps a page that never opened these settings
+    /// looking exactly as it always did.
+    /// </summary>
+    public sealed record Portal(
+        string? BannerUrl,
+        string? AccentColor,
+        string? Description,
+        string? Instagram,
+        string? Facebook,
+        string? WhatsApp,
+        string? Website,
+        IReadOnlyList<SponsorSummary> Sponsors);
+
+    public sealed record SponsorSummary(string? Name, string? Url, string LogoUrl);
 
     public static IEndpointRouteBuilder MapReadPublicCompetition(
         this IEndpointRouteBuilder routes)
@@ -63,6 +86,7 @@ public static class ReadPublicCompetition
         string organizationSlug,
         string competitionSlug,
         PublicCompetitionReader reader,
+        ObjectStore store,
         CancellationToken cancellationToken)
     {
         var page = await reader.ReadAsync(
@@ -84,9 +108,9 @@ public static class ReadPublicCompetition
                         candidate.StartsOn,
                         candidate.EndsOn,
                         candidate.Settings,
-                        OrganizationName = database.Organizations
+                        Organization = database.Organizations
                             .Where(org => org.Id == resolved.OrganizationId)
-                            .Select(org => org.Name)
+                            .Select(org => new { org.Name, org.LogoUrl })
                             .First(),
                     })
 
@@ -112,8 +136,29 @@ public static class ReadPublicCompetition
 
                 var shows = competition.Settings.Public;
 
+                var organizationLogoUrl = string.IsNullOrEmpty(competition.Organization.LogoUrl)
+                    ? null
+                    : await store.ReadLinkAsync(
+                        resolved.OrganizationId, competition.Organization.LogoUrl, cancellationToken);
+
+                var bannerUrl = string.IsNullOrEmpty(shows?.BannerKey)
+                    ? null
+                    : await store.ReadLinkAsync(resolved.OrganizationId, shows.BannerKey, cancellationToken);
+
+                var sponsors = new List<SponsorSummary>();
+
+                foreach (var sponsor in shows?.Sponsors ?? [])
+                {
+                    if (await store.ReadLinkAsync(resolved.OrganizationId, sponsor.LogoKey, cancellationToken)
+                        is { } logoUrl)
+                    {
+                        sponsors.Add(new SponsorSummary(sponsor.Name, sponsor.Url, logoUrl));
+                    }
+                }
+
                 return new Response(
-                    competition.OrganizationName,
+                    competition.Organization.Name,
+                    organizationLogoUrl,
                     competition.Name,
                     competition.Season,
                     competition.SportCode,
@@ -131,7 +176,16 @@ public static class ReadPublicCompetition
                         shows?.ShowStandings ?? true,
                         shows?.ShowLeaders ?? true,
                         shows?.ShowRosters ?? false),
-                    categories);
+                    categories,
+                    new Portal(
+                        bannerUrl,
+                        shows?.AccentColor,
+                        shows?.Description,
+                        shows?.Instagram,
+                        shows?.Facebook,
+                        shows?.WhatsApp,
+                        shows?.Website,
+                        sponsors));
             },
             cancellationToken);
 

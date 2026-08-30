@@ -45,11 +45,11 @@ public static class RegisterOrganization
         {
             RuleFor(request => request.Name)
                 .NotEmpty()
-                .WithMessage("The organization name is required.");
+                .WithMessage("El nombre de la organización es obligatorio.");
 
             RuleFor(request => request.OwnerFullName)
                 .NotEmpty()
-                .WithMessage("The owner's name is required.");
+                .WithMessage("El nombre del responsable es obligatorio.");
 
             // Checked against the normalized form, since that is what gets
             // stored: an address typed in capitals is accepted and lowercased,
@@ -60,13 +60,13 @@ public static class RegisterOrganization
 
             RuleFor(request => request.OwnerEmail)
                 .Must(email => Email.TryParse(email?.Trim(), out _))
-                .WithMessage("The email address is not well formed.");
+                .WithMessage("El correo electrónico no tiene un formato válido.");
 
             RuleFor(request => request.OwnerPassword)
                 .Must(password => Password.TryParse(password, out _))
                 .WithMessage(
-                    $"The password must be at least {Password.MinimumLength} characters and " +
-                    "include an uppercase letter, a lowercase letter, a digit and a special character.");
+                    $"La contraseña debe tener al menos {Password.MinimumLength} caracteres e " +
+                    "incluir una mayúscula, una minúscula, un número y un carácter especial.");
         }
     }
 
@@ -100,7 +100,7 @@ public static class RegisterOrganization
                 .AnyAsync(existing => existing.Slug == slug, cancellationToken))
         {
             return Results.Problem(
-                detail: "That address is already taken by another organization.",
+                detail: "Esa dirección ya está tomada por otra organización.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -108,7 +108,7 @@ public static class RegisterOrganization
                 .AnyAsync(existing => existing.Email == request.OwnerEmail, cancellationToken))
         {
             return Results.Problem(
-                detail: "An account already exists for that email address.",
+                detail: "Ya existe una cuenta con ese correo electrónico.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -142,7 +142,7 @@ public static class RegisterOrganization
             // database as a conflict, and hide a real fault behind a plausible
             // answer.
             return Results.Problem(
-                detail: "That address or email address was taken while registering.",
+                detail: "Esa dirección o correo electrónico se tomó mientras se registraba.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

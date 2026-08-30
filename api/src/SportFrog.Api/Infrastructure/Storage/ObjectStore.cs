@@ -116,7 +116,7 @@ public sealed class ObjectStore(
             return null;
         }
 
-        return await client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
+        var signed = await client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
         {
             BucketName = _options.Bucket,
             Key = key,
@@ -130,6 +130,33 @@ public sealed class ObjectStore(
             // nothing in any log to explain why.
             Protocol = _scheme,
         });
+
+        return _options.PublicUrl is { Length: > 0 } publicUrl ? Rehost(signed, publicUrl) : signed;
+    }
+
+    /// <summary>
+    /// Swaps the scheme and host of an already-signed link for the address a
+    /// browser can actually reach, leaving the path and the query — where
+    /// the signature lives — untouched.
+    /// </summary>
+    /// <remarks>
+    /// Safe to do after the fact because SigV4's canonical request has no
+    /// scheme in it: what is signed is the method, the path, the query and
+    /// the signed headers (here, just "host"). MinIO validates the same
+    /// three once the request arrives — it never sees or cares what this
+    /// process called it by.
+    /// </remarks>
+    private static string Rehost(string signedUrl, string publicUrl)
+    {
+        var signed = new Uri(signedUrl);
+        var target = new Uri(publicUrl);
+
+        return new UriBuilder(signed)
+        {
+            Scheme = target.Scheme,
+            Host = target.Host,
+            Port = target.Port,
+        }.Uri.ToString();
     }
 
     /// <summary>

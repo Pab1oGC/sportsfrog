@@ -45,9 +45,9 @@ public static class DeleteCategory
         if (await usage.IsInUseAsync(id, cancellationToken))
         {
             return Results.Problem(
-                detail: "Teams or matches have been entered into this category, so it cannot be " +
-                        "removed. Withdraw the competition instead if the whole event is being " +
-                        "discarded.",
+                detail: "Se cargaron equipos o partidos en esta categoría, así que no se puede " +
+                        "eliminar. Cancelá la competencia en su lugar si se está descartando " +
+                        "todo el evento.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -65,8 +65,8 @@ public static class DeleteCategory
             // check covers matches, which the database would have cascaded
             // away without complaint; this covers teams, which it refuses.
             return Results.Problem(
-                detail: "Teams or matches have been entered into this category, so it cannot be " +
-                        "removed.",
+                detail: "Se cargaron equipos o partidos en esta categoría, así que no se puede " +
+                        "eliminar.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

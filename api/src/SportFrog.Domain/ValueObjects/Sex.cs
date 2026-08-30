@@ -46,5 +46,5 @@ public static class Sex
         Normalize(value) is Female or Male;
 
     public static string Requirement =>
-        $"Must be {Female} or {Male}, or left unset.";
+        $"Debe ser {Female} o {Male}, o dejarse sin definir.";
 }

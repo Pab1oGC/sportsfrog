@@ -43,6 +43,6 @@ public static partial class Slug
     /// The refusal, worded once so both slugs are rejected the same way.
     /// </summary>
     public static string Requirement =>
-        $"The address must be between {MinimumLength} and {MaximumLength} characters, and may " +
-        "contain only lowercase letters, digits and single hyphens between them.";
+        $"La dirección debe tener entre {MinimumLength} y {MaximumLength} caracteres, y solo " +
+        "puede contener minúsculas, números y guiones simples entre ellos.";
 }

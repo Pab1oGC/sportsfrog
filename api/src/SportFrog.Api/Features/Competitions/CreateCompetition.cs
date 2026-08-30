@@ -3,6 +3,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
@@ -32,6 +33,7 @@ public static class CreateCompetition
         CompetitionContract contract,
         SportFrogDbContext database,
         OrganizationContext organization,
+        PortalPicture pictures,
         CancellationToken cancellationToken)
     {
         // Loaded rather than merely checked for existence: its sport is what
@@ -60,8 +62,24 @@ public static class CreateCompetition
                 competition => competition.Slug == slug, cancellationToken))
         {
             return Results.Problem(
-                detail: "A competition already uses that address.",
+                detail: "Ya hay una competencia usando esa dirección.",
                 statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var settings = contract.Settings;
+
+        if (settings?.Public is { } requestedPublic)
+        {
+            if (await CompetitionPortalPictures.ResolveAsync(requestedPublic, pictures, cancellationToken)
+                is not { } resolvedPublic)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["Settings.Public"] = ["Alguna imagen del portal público no se pudo leer."],
+                });
+            }
+
+            settings = settings with { Public = resolvedPublic };
         }
 
         var competition = new Competition
@@ -87,7 +105,7 @@ public static class CreateCompetition
             StartsOn = contract.StartsOn,
             EndsOn = contract.EndsOn,
             IsPublic = false,
-            Settings = contract.Settings ?? new CompetitionSettings(),
+            Settings = settings ?? new CompetitionSettings(),
         };
 
         database.Competitions.Add(competition);
@@ -103,7 +121,7 @@ public static class CreateCompetition
             // Two requests claiming the same address at once. The check above
             // answers the ordinary case; only the index sees this one.
             return Results.Problem(
-                detail: "A competition already uses that address.",
+                detail: "Ya hay una competencia usando esa dirección.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

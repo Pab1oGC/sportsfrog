@@ -52,6 +52,16 @@ ENTRYPOINT ["dotnet", "ef", "database", "update", "--project", "src/SportFrog.Ap
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+# SkiaSharp's native library (ImageNormalizer: every photo, crest and piece
+# of credential artwork goes through it) dynamically loads libfontconfig at
+# runtime and isn't self-contained — the aspnet base image doesn't carry it,
+# and without this the first upload of any kind fails with
+# DllNotFoundException, not at build time. Installed as root, before
+# dropping to the unprivileged user below.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libfontconfig1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Unprivileged user, provided by the base image.
 USER $APP_UID
 

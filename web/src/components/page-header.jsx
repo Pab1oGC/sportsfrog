@@ -20,14 +20,14 @@ import { Iconify } from 'src/components/iconify';
  *     <Button>...</Button>
  *   </Box>
  */
-export function PageHeader({ title, action, actionLabel, actionIcon, onAction, children }) {
+export function PageHeader({ title, action, actionLabel, actionIcon, actionDisabled, onAction, children }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
       <Typography variant="h4" fontWeight={700}>{title}</Typography>
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
         {children}
-        {action && (
-          <Button variant="contained" startIcon={<Iconify icon={actionIcon || 'eva:plus-fill'} />} onClick={onAction || action}>
+        {(actionLabel || action) && (
+          <Button variant="contained" disabled={actionDisabled} startIcon={<Iconify icon={actionIcon || 'eva:plus-fill'} />} onClick={onAction || action}>
             {actionLabel}
           </Button>
         )}

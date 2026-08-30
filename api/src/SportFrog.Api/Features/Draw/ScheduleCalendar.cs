@@ -42,7 +42,7 @@ public static class ScheduleCalendar
             RuleFor(request => request.From)
                 .GreaterThan(new DateOnly(2000, 1, 1))
                 .When(request => request.From.HasValue)
-                .WithMessage("That start date is not a plausible one.");
+                .WithMessage("Esa fecha de inicio no es una fecha posible.");
     }
 
     public static IEndpointRouteBuilder MapScheduleCalendar(this IEndpointRouteBuilder routes)
@@ -73,15 +73,16 @@ public static class ScheduleCalendar
         if (competition.Settings.Schedule is not { Spaces.Count: > 0 } schedule)
         {
             return Results.Problem(
-                detail: "This competition has no scheduling windows. Set which spaces it can use, " +
-                        "on which days and between which hours, before placing its fixtures.",
+                detail: "Esta competencia no tiene ventanas de horario. Definí qué espacios " +
+                        "puede usar, en qué días y entre qué horas, antes de colocar sus " +
+                        "partidos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
         if (schedule.SlotMinutes <= 0)
         {
             return Results.Problem(
-                detail: "The scheduling windows do not say how long a fixture occupies a space.",
+                detail: "Las ventanas de horario no dicen cuánto ocupa un partido en un espacio.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

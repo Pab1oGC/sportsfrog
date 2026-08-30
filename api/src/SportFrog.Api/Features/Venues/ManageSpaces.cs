@@ -36,7 +36,7 @@ public static class ManageSpaces
         public Validator()
         {
             RuleFor(request => request.Name)
-                .NotEmpty().WithMessage("The space name is required.")
+                .NotEmpty().WithMessage("El nombre del espacio es obligatorio.")
                 .MaximumLength(120);
         }
     }
@@ -97,7 +97,7 @@ public static class ManageSpaces
                 space => space.VenueId == venueId && space.Name == name, cancellationToken))
         {
             return Results.Problem(
-                detail: "This venue already has a space with that name.",
+                detail: "Esta sede ya tiene un espacio con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -121,7 +121,7 @@ public static class ManageSpaces
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "This venue already has a space with that name.",
+                detail: "Esta sede ya tiene un espacio con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -192,7 +192,7 @@ public static class ManageSpaces
                 cancellationToken))
         {
             return Results.Problem(
-                detail: "This venue already has a space with that name.",
+                detail: "Esta sede ya tiene un espacio con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -208,7 +208,7 @@ public static class ManageSpaces
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "This venue already has a space with that name.",
+                detail: "Esta sede ya tiene un espacio con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -236,10 +236,10 @@ public static class ManageSpaces
             // every fixture placed on it. This check is the only thing
             // standing between a delete and a calendar with no locations.
             return Results.Problem(
-                detail: "This space is in use — a fixture is placed on it, or a competition " +
-                        "schedules against it — so it cannot be removed. Deactivate it instead: " +
-                        "it stops being offered for new fixtures and everything that already " +
-                        "points at it keeps doing so.",
+                detail: "Este espacio está en uso — hay un partido colocado en él, o una " +
+                        "competencia programa contra él — así que no se puede eliminar. " +
+                        "Desactivalo en su lugar: deja de ofrecerse para partidos nuevos y todo " +
+                        "lo que ya apunta a él sigue apuntando.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

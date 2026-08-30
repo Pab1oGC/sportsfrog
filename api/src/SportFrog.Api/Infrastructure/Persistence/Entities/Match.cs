@@ -85,6 +85,20 @@ public sealed class Match
     public int? AwayTotal { get; set; }
 
     /// <summary>
+    /// The shootout that broke a level knockout match, once it needed one.
+    /// </summary>
+    /// <remarks>
+    /// Beside the match score rather than inside it: the 90 minutes stayed a
+    /// draw, and a table that reads goals scored must not learn to read a
+    /// shootout as more of them. Null for every match that never needed one —
+    /// which is most of them, since a league match is allowed to end level
+    /// and only a knockout tie has to produce somebody.
+    /// </remarks>
+    public short? PenaltyHomeScore { get; set; }
+
+    public short? PenaltyAwayScore { get; set; }
+
+    /// <summary>
     /// Who first recorded the result, and when.
     /// </summary>
     /// <remarks>

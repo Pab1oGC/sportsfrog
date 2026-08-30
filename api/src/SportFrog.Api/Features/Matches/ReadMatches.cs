@@ -31,6 +31,19 @@ public static class ReadMatches
         IReadOnlyList<PeriodScore>? PeriodScores,
         int? HomeTotal,
         int? AwayTotal,
+
+        /// <summary>The shootout that broke a level knockout match, once it needed one.</summary>
+        short? PenaltyHomeScore,
+        short? PenaltyAwayScore,
+
+        /// <summary>
+        /// The score read from events recorded so far, while the match is
+        /// still being played. Set only when <see cref="Status"/> is
+        /// <see cref="MatchState.InProgress"/> — null before kickoff, and
+        /// null again once <see cref="HomeTotal"/> is the real thing.
+        /// </summary>
+        int? LiveHomeTotal,
+        int? LiveAwayTotal,
         string? Notes);
 
     public static IEndpointRouteBuilder MapReadMatches(this IEndpointRouteBuilder routes)
@@ -81,12 +94,14 @@ public static class ReadMatches
             return refusal;
         }
 
-        return Results.Ok(await Ordered(database.Matches
+        var matches = await Ordered(database.Matches
                 .Where(match => match.CompetitionId == competitionId)
                 .Where(match => categoryId == null || match.CategoryId == categoryId)
                 .Where(match => round == null || match.RoundNumber == round)
                 .Where(match => state == null || match.Status == state))
-            .ToListAsync(cancellationToken));
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(await WithLiveScoresAsync(database, matches, cancellationToken));
     }
 
     private static async Task<IResult> ListForCategoryAsync(
@@ -107,11 +122,13 @@ public static class ReadMatches
             return refusal;
         }
 
-        return Results.Ok(await Ordered(database.Matches
+        var matches = await Ordered(database.Matches
                 .Where(match => match.CategoryId == categoryId)
                 .Where(match => round == null || match.RoundNumber == round)
                 .Where(match => state == null || match.Status == state))
-            .ToListAsync(cancellationToken));
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(await WithLiveScoresAsync(database, matches, cancellationToken));
     }
 
     private static async Task<IResult> ReadAsync(
@@ -122,7 +139,74 @@ public static class ReadMatches
         var match = await Project(database.Matches.Where(candidate => candidate.Id == id))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return match is null ? Results.NotFound() : Results.Ok(match);
+        if (match is null)
+        {
+            return Results.NotFound();
+        }
+
+        var withLiveScore = await WithLiveScoresAsync(database, [match], cancellationToken);
+
+        return Results.Ok(withLiveScore[0]);
+    }
+
+    /// <summary>
+    /// Fills in <see cref="Summary.LiveHomeTotal"/> and
+    /// <see cref="Summary.LiveAwayTotal"/> for whichever of these matches are
+    /// in progress.
+    /// </summary>
+    /// <remarks>
+    /// A second query rather than a correlated subquery in <see cref="Project"/>:
+    /// the tally itself — an own goal scored against its own side, a
+    /// three-pointer worth three — is domain logic that belongs in
+    /// <see cref="LiveScore"/> and is tested there, not re-derived as SQL that
+    /// nothing exercises directly. The extra round trip costs nothing a
+    /// calendar page notices; the list of matches on it is never large.
+    /// </remarks>
+    private static async Task<List<Summary>> WithLiveScoresAsync(
+        SportFrogDbContext database,
+        List<Summary> matches,
+        CancellationToken cancellationToken)
+    {
+        var liveIds = matches
+            .Where(match => match.Status == MatchState.InProgress)
+            .Select(match => match.Id)
+            .ToList();
+
+        if (liveIds.Count == 0)
+        {
+            return matches;
+        }
+
+        var events = await database.PlayerEvents
+            .AsNoTracking()
+            .Where(recorded => liveIds.Contains(recorded.MatchId) && recorded.Metric!.AffectsScore)
+            .Select(recorded => new
+            {
+                recorded.MatchId,
+                TeamId = recorded.RosterEntry!.TeamId,
+                recorded.Metric!.ScorePoints,
+                recorded.Metric.CountsForOpponent,
+                recorded.Quantity,
+            })
+            .ToListAsync(cancellationToken);
+
+        var byMatch = events.ToLookup(recorded => recorded.MatchId);
+
+        return [.. matches.Select(match =>
+        {
+            if (match.Status != MatchState.InProgress)
+            {
+                return match;
+            }
+
+            var totals = LiveScore.Compute(
+                byMatch[match.Id].Select(recorded => new ScoringEvent(
+                    recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
+                match.HomeTeamId,
+                match.AwayTeamId);
+
+            return match with { LiveHomeTotal = totals.Home, LiveAwayTotal = totals.Away };
+        })];
     }
 
     /// <summary>
@@ -163,13 +247,22 @@ public static class ReadMatches
     /// A fixture with no date is drawn but not placed, and it belongs at the
     /// end of a calendar rather than at the beginning — which is where a plain
     /// ascending sort would put it, nulls first being the default for
-    /// descending order and a trap either way. The round is the tie-break,
-    /// since an undated draw is still ordered by round.
+    /// descending order and a trap either way.
+    ///
+    /// Among undated fixtures the round is the tie-break, but round numbers
+    /// are only comparable within one stage: a category promoted out of a
+    /// group stage restarts its bracket at round one, same as the group
+    /// stage itself did, so "round one" alone cannot tell a group's first
+    /// jornada from the knockout's first round. Phase is what can — it is
+    /// null for every group match and set for every knockout one — so it is
+    /// asked first, and round number only decides an order within whichever
+    /// of the two a fixture belongs to.
     /// </remarks>
     private static IQueryable<Summary> Ordered(IQueryable<Match> matches) =>
         Project(matches
             .OrderBy(match => match.ScheduledAt == null)
             .ThenBy(match => match.ScheduledAt)
+            .ThenBy(match => match.Phase != null)
             .ThenBy(match => match.RoundNumber));
 
     /// <summary>
@@ -202,5 +295,9 @@ public static class ReadMatches
             match.PeriodScores,
             match.HomeTotal,
             match.AwayTotal,
+            match.PenaltyHomeScore,
+            match.PenaltyAwayScore,
+            null,
+            null,
             match.Notes));
 }

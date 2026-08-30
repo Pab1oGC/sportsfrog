@@ -23,6 +23,8 @@ internal sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(x => x.BirthDateTo).HasColumnName("birth_date_to");
         builder.Property(x => x.MaxRosterSize).HasColumnName("max_roster_size");
         builder.Property(x => x.DisplayOrder).HasColumnName("display_order");
+        builder.Property(x => x.QualifiersPerGroup).HasColumnName("qualifiers_per_group");
+        builder.Property(x => x.KnockoutEntrants).HasColumnName("knockout_entrants");
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")

@@ -52,7 +52,7 @@ public static class RequireRoleExtensions
                     // Nothing about which role would have been enough: that
                     // would describe the shape of the permission system to
                     // someone probing it.
-                    detail: "This operation is not allowed.",
+                    detail: "Esta operación no está permitida.",
                     statusCode: StatusCodes.Status403Forbidden);
         });
 

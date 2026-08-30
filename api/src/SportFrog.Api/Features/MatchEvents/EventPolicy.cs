@@ -88,8 +88,9 @@ internal sealed class EventPolicy(SportFrogDbContext database)
             // whichever matches somebody happened to detail, and present it as
             // the season's.
             return Results.Problem(
-                detail: "This competition records only the score. Events belong to a competition " +
-                        "capturing detail, and its capture level is fixed once it leaves draft.",
+                detail: "Esta competencia solo registra el marcador. Los eventos pertenecen a " +
+                        "una competencia que captura detalle, y su nivel de captura queda fijo " +
+                        "una vez que sale de borrador.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -98,9 +99,9 @@ internal sealed class EventPolicy(SportFrogDbContext database)
             // Nothing happened in a match that has not started, was called
             // off, or was awarded without being played.
             return Results.Problem(
-                detail: "Nothing can be recorded for a match that is " +
+                detail: "No se puede registrar nada para un partido que está " +
                         $"{WireEnum.Label(context.Match.Status)}. " +
-                        "Start it first.",
+                        "Iniciálo primero.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -142,7 +143,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
 
         if (metric is null)
         {
-            violations.Add(new EventViolation("MetricId", "There is no such event in the catalog."));
+            violations.Add(new EventViolation("MetricId", "Ese evento no existe en el catálogo."));
             return;
         }
 
@@ -150,7 +151,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         {
             violations.Add(new EventViolation(
                 "MetricId",
-                $"\"{metric.Label}\" belongs to {metric.SportCode}, and this match is " +
+                $"\"{metric.Label}\" es de {metric.SportCode}, y este partido es de " +
                 $"{context.SportCode}."));
             return;
         }
@@ -162,7 +163,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         {
             violations.Add(new EventViolation(
                 "MetricId",
-                $"These rules do not record \"{metric.Label}\". They record: " +
+                $"Este reglamento no registra \"{metric.Label}\". Registra: " +
                 $"{string.Join(", ", enabled)}."));
         }
     }
@@ -191,7 +192,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         if (entry is null)
         {
             violations.Add(new EventViolation(
-                "RosterEntryId", "No registration of this organization has that identifier."));
+                "RosterEntryId", "Ninguna inscripción de esta organización tiene ese identificador."));
             return;
         }
 
@@ -199,8 +200,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         {
             violations.Add(new EventViolation(
                 "RosterEntryId",
-                $"{entry.Player} is registered for {entry.TeamName}, which is not playing this " +
-                "match."));
+                $"{entry.Player} está inscripto en {entry.TeamName}, que no juega este partido."));
             return;
         }
 
@@ -214,7 +214,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         {
             violations.Add(new EventViolation(
                 "RosterEntryId",
-                $"{entry.Player} had already left {entry.TeamName} when this match was played."));
+                $"{entry.Player} ya había dejado {entry.TeamName} cuando se jugó este partido."));
         }
     }
 
@@ -239,8 +239,8 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         {
             violations.Add(new EventViolation(
                 "PeriodNumber",
-                $"This match is played in {PeriodLabel.Count(configured, context.Rules.Periods.Label)}, " +
-                $"so there is no number {period}."));
+                $"Este partido se juega en {PeriodLabel.Count(configured, context.Rules.Periods.Label)}, " +
+                $"así que no existe el número {period}."));
         }
     }
 }

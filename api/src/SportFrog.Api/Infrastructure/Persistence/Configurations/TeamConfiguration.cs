@@ -19,6 +19,7 @@ internal sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(x => x.CategoryId).HasColumnName("category_id");
         builder.Property(x => x.Name).HasColumnName("name").IsRequired();
         builder.Property(x => x.GroupLabel).HasColumnName("group_label");
+        builder.Property(x => x.Seed).HasColumnName("seed");
         builder.Property(x => x.IsActive).HasColumnName("is_active");
         builder.Property(x => x.DeletedAt).HasColumnName("deleted_at");
 

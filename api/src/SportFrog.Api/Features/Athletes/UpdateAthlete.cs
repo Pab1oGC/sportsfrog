@@ -45,21 +45,21 @@ public static class UpdateAthlete
         public Validator()
         {
             RuleFor(request => request.FirstName)
-                .NotEmpty().WithMessage("The first name is required.")
+                .NotEmpty().WithMessage("El nombre es obligatorio.")
                 .MaximumLength(80);
 
             RuleFor(request => request.LastName)
-                .NotEmpty().WithMessage("The last name is required.")
+                .NotEmpty().WithMessage("El apellido es obligatorio.")
                 .MaximumLength(80);
 
             RuleFor(request => request.DocumentId)
-                .NotEmpty().WithMessage("The identity document is required.")
+                .NotEmpty().WithMessage("El documento de identidad es obligatorio.")
                 .MaximumLength(40);
 
             RuleFor(request => request.BirthDate)
                 .Must(date => date > EarliestPlausibleBirth
                     && date < DateOnly.FromDateTime(DateTime.UtcNow))
-                .WithMessage("The date of birth is not a plausible date.");
+                .WithMessage("La fecha de nacimiento no es una fecha posible.");
 
             // Checked because a category admits one of these and a roster is
             // accepted by comparing the two. Free text here would let an
@@ -112,7 +112,7 @@ public static class UpdateAthlete
                 other => other.Id != id && other.DocumentId == document, cancellationToken))
         {
             return Results.Problem(
-                detail: "Another registered person already has that identity document.",
+                detail: "Otra persona registrada ya tiene ese documento de identidad.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

@@ -41,49 +41,49 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
     public RulesetShapeValidator()
     {
         RuleFor(configuration => configuration.Periods)
-            .NotNull().WithMessage("The periods rule is required.");
+            .NotNull().WithMessage("La regla de períodos es obligatoria.");
 
         When(configuration => configuration.Periods is not null, () =>
         {
             RuleFor(configuration => configuration.Periods.Count)
                 .InclusiveBetween((short)1, MaximumPeriods)
-                .WithMessage($"A match is played in between 1 and {MaximumPeriods} periods.");
+                .WithMessage($"Un partido se juega en entre 1 y {MaximumPeriods} períodos.");
 
             RuleFor(configuration => configuration.Periods.Label)
-                .NotEmpty().WithMessage("A period needs a name: half, quarter, set.")
+                .NotEmpty().WithMessage("Un período necesita un nombre: tiempo, cuarto, set.")
                 .MaximumLength(30);
 
             RuleFor(configuration => configuration.Periods.Minutes)
                 .InclusiveBetween((short)1, MaximumMinutes)
                 .When(configuration => configuration.Periods.Minutes.HasValue)
-                .WithMessage($"A period lasts between 1 and {MaximumMinutes} minutes, or is left " +
-                             "unset where it ends on a score instead.");
+                .WithMessage($"Un período dura entre 1 y {MaximumMinutes} minutos, o se deja sin " +
+                             "definir donde termina por marcador en lugar de por reloj.");
         });
 
         RuleFor(configuration => configuration.Points)
-            .NotNull().WithMessage("The points rule is required.")
+            .NotNull().WithMessage("La regla de puntos es obligatoria.")
             .Must(points => points.Count > 0)
                 .When(configuration => configuration.Points is not null)
-                .WithMessage("A ruleset has to say what a result is worth.")
+                .WithMessage("Un reglamento tiene que decir cuánto vale un resultado.")
             .Must(points => points.Values.All(value => value is >= 0 and <= MaximumPointValue))
                 .When(configuration => configuration.Points is not null)
-                .WithMessage($"Each outcome is worth between 0 and {MaximumPointValue} points.");
+                .WithMessage($"Cada desenlace vale entre 0 y {MaximumPointValue} puntos.");
 
         RuleFor(configuration => configuration.Tiebreakers)
-            .NotNull().WithMessage("The tiebreakers rule is required.");
+            .NotNull().WithMessage("La regla de desempates es obligatoria.");
 
         When(configuration => configuration.Tiebreakers is not null, () =>
         {
             RuleFor(configuration => configuration.Tiebreakers)
                 .Must(tiebreakers => tiebreakers.Count > 0)
-                    .WithMessage("At least one tiebreaker is needed, or two teams level on " +
-                                 "points have no defined order.")
+                    .WithMessage("Se necesita al menos un desempate, o dos equipos igualados en " +
+                                 "puntos no tienen un orden definido.")
                 .Must(tiebreakers => tiebreakers.Distinct(StringComparer.Ordinal).Count()
                                      == tiebreakers.Count)
-                    .WithMessage("A tiebreaker cannot appear twice: applied a second time it " +
-                                 "separates nothing the first pass did not.")
+                    .WithMessage("Un desempate no puede aparecer dos veces: aplicado una segunda " +
+                                 "vez no separa nada que la primera pasada no haya separado.")
                 .Must(tiebreakers => tiebreakers.All(Tiebreaker.All.Contains))
-                    .WithMessage("Unknown tiebreakers. Available: " +
+                    .WithMessage("Desempates desconocidos. Disponibles: " +
                                  $"{string.Join(", ", Tiebreaker.All.Order(StringComparer.Ordinal))}.");
         });
 
@@ -91,8 +91,8 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
         {
             RuleFor(configuration => configuration.Walkover!.WinnerScore)
                 .GreaterThan(configuration => configuration.Walkover!.LoserScore)
-                .WithMessage("A walkover is a win: the side that appeared has to end above " +
-                             "the one that did not.");
+                .WithMessage("Un walkover es una victoria: el lado que se presentó tiene que " +
+                             "terminar por encima del que no.");
 
             RuleFor(configuration => configuration.Walkover!.LoserScore)
                 .GreaterThanOrEqualTo((short)0);
@@ -102,9 +102,9 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
         {
             RuleFor(configuration => configuration.Metrics!)
                 .Must(metrics => metrics.All(code => !string.IsNullOrWhiteSpace(code)))
-                    .WithMessage("A metric is named by its code.")
+                    .WithMessage("Una métrica se nombra por su código.")
                 .Must(metrics => metrics.Distinct(StringComparer.Ordinal).Count() == metrics.Count)
-                    .WithMessage("A metric cannot be listed twice.");
+                    .WithMessage("Una métrica no puede aparecer dos veces.");
         });
     }
 }

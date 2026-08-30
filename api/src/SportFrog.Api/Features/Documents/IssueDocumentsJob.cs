@@ -243,10 +243,6 @@ public sealed class IssueDocumentsJob(
         var front = await ArtworkAsync(organizationId, work.Layout.Front.BackgroundKey, cancellationToken);
         var back = await ArtworkAsync(organizationId, work.Layout.Back?.BackgroundKey, cancellationToken);
 
-        var wantsPhoto = work.Layout.Front.Fields
-            .Concat(work.Layout.Back?.Fields ?? [])
-            .Any(field => field.Source == "athlete.photo");
-
         var printed = new List<Printed>(work.Subjects.Count);
         var problems = new List<DocumentProblem>();
         var cards = new List<SheetCard>(work.Subjects.Count);
@@ -259,16 +255,6 @@ public sealed class IssueDocumentsJob(
             if (subject.AthleteId is { } athleteId && work.AlreadyHeld.Contains(athleteId))
             {
                 problems.Add(new DocumentProblem(subject.Label, SkipReason.AlreadyIssued));
-                continue;
-            }
-
-            // A design that prints a face, for somebody with no face on file.
-            // Skipped rather than printed with a hole: a credential without a
-            // photograph does not do the one thing a credential is for, and
-            // handing one over would be worse than saying who is missing.
-            if (wantsPhoto && !HasPhoto(subject.PhotoKey))
-            {
-                problems.Add(new DocumentProblem(subject.Label, SkipReason.NoPhoto));
                 continue;
             }
 
@@ -366,21 +352,6 @@ public sealed class IssueDocumentsJob(
         }
     }
 
-    /// <summary>
-    /// Whether there is a photograph the generator can actually draw.
-    /// </summary>
-    /// <remarks>
-    /// A photograph uploaded before images moved out of the database is still
-    /// sitting in the column as a data URL. It is a real picture and the
-    /// interface shows it, but nothing here can fetch it from the bucket — so
-    /// for the purposes of printing there is no photograph, and saying so is
-    /// better than printing a card with a hole in it. Correcting the athlete
-    /// converts it.
-    /// </remarks>
-    private static bool HasPhoto(string? key) =>
-        !string.IsNullOrEmpty(key)
-        && !key.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
-
     private async Task<byte[]?> ArtworkAsync(
         Guid organizationId,
         string? key,
@@ -390,23 +361,28 @@ public sealed class IssueDocumentsJob(
             : await store.ReadAsync(organizationId, key, cancellationToken);
 
     /// <summary>
-    /// A subject's photograph, or nothing if it cannot be read.
+    /// A subject's photograph, or the placeholder silhouette if there isn't one
+    /// to draw.
     /// </summary>
     /// <remarks>
-    /// A missing object is not a reason to fail the card here — the batch has
-    /// already decided that a design wanting a photograph skips anybody
-    /// without one, and this is the narrower case of a key that points at
-    /// something the bucket has lost. The card comes out with a blank where
-    /// the face goes and the operator sees a document they can look at.
+    /// Three cases end up here, and all three print the placeholder rather
+    /// than fail the card: no key at all, because nobody has uploaded a
+    /// photograph yet; a key still holding a data URL, from before images
+    /// moved out of the database, which nothing here can fetch from the
+    /// bucket; and a key pointing at an object the bucket has since lost.
+    /// A credential is not the place a missing photograph gets discovered —
+    /// the roster already shows that — so the card comes out with
+    /// <see cref="DefaultAvatar"/> in its place instead of holding up the rest
+    /// of the batch.
     /// </remarks>
-    private async Task<byte[]?> PhotoAsync(
+    private async Task<byte[]> PhotoAsync(
         Guid organizationId,
         string? key,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(key) || key.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return DefaultAvatar.Bytes;
         }
 
         try
@@ -417,7 +393,7 @@ public sealed class IssueDocumentsJob(
         {
             logger.LogWarning(failure, "Could not read the photograph {Key}.", key);
 
-            return null;
+            return DefaultAvatar.Bytes;
         }
     }
 

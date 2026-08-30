@@ -16,6 +16,7 @@ import { useNavigate, Link as RouterLink } from 'react-router';
 import useSWR from 'swr';
 import publicAxios from 'src/lib/public-axios';
 import { Iconify } from 'src/components/iconify';
+import { ColorModeToggle } from 'src/components/color-mode-toggle';
 
 const SL = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };
 const SC = { draft: 'default', scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error' };
@@ -33,7 +34,7 @@ export default function PublicPortalPage() {
   const total = data?.total || 0;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <PublicNavbar />
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Typography variant="h4" fontWeight={700} sx={{ mb: 1 }}>Competiciones publicas</Typography>
@@ -86,7 +87,7 @@ export default function PublicPortalPage() {
 function PublicNavbar() {
   const navigate = useNavigate();
   return (
-    <AppBar position="static" elevation={0} sx={{ bgcolor: 'white', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider' }}>
+    <AppBar position="static" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider' }}>
       <Toolbar>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }} onClick={() => navigate('/')}>
           <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -95,7 +96,8 @@ function PublicNavbar() {
           <Typography variant="h6" fontWeight={700}>SportFrog</Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }} />
-        <Button component={RouterLink} to="/" sx={{ mr: 1 }}>Inicio</Button>
+        <ColorModeToggle sx={{ mr: 0.5 }} />
+          <Button component={RouterLink} to="/" sx={{ mr: 1 }}>Inicio</Button>
         <Button variant="outlined" component={RouterLink} to="/auth/jwt/sign-in">Iniciar sesion</Button>
       </Toolbar>
     </AppBar>

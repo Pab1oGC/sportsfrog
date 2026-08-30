@@ -19,6 +19,7 @@ import Alert from '@mui/material/Alert';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { useConfirm } from 'src/components/confirm-dialog';
 
 var KINDS = ['credential', 'certificate'];
 var KIND_LABELS = { credential: 'Credencial', certificate: 'Certificado' };
@@ -29,6 +30,7 @@ function emptyForm() {
 }
 
 export default function TemplatesPage() {
+  var confirm = useConfirm();
   var navigate = useNavigate();
   var { data, mutate, isLoading } = useApi(endpoints.templates);
   var [open, setOpen] = useState(false);
@@ -77,7 +79,8 @@ export default function TemplatesPage() {
   };
 
   var handleDelete = async function(id) {
-    if (confirm('Eliminar plantilla?')) {
+    var ok = await confirm('Eliminar plantilla?', { confirmLabel: 'Eliminar', danger: true });
+    if (ok) {
       await apiDelete(endpoints.template(id));
       mutate();
     }
@@ -85,7 +88,7 @@ export default function TemplatesPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h4" fontWeight={700}>Plantillas de documentos</Typography>
         <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={function() { handleOpen(null); }}>
           Nueva plantilla

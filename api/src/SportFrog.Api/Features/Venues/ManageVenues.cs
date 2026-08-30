@@ -36,7 +36,7 @@ public static class ManageVenues
         public Validator()
         {
             RuleFor(request => request.Name)
-                .NotEmpty().WithMessage("The venue name is required.")
+                .NotEmpty().WithMessage("El nombre de la sede es obligatorio.")
                 .MaximumLength(120);
 
             RuleFor(request => request.Address)
@@ -89,7 +89,7 @@ public static class ManageVenues
         if (await database.Venues.AnyAsync(venue => venue.Name == name, cancellationToken))
         {
             return Results.Problem(
-                detail: "A venue with that name already exists.",
+                detail: "Ya existe una sede con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -113,7 +113,7 @@ public static class ManageVenues
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "A venue with that name already exists.",
+                detail: "Ya existe una sede con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -175,7 +175,7 @@ public static class ManageVenues
                 other => other.Id != id && other.Name == name, cancellationToken))
         {
             return Results.Problem(
-                detail: "A venue with that name already exists.",
+                detail: "Ya existe una sede con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -196,7 +196,7 @@ public static class ManageVenues
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "A venue with that name already exists.",
+                detail: "Ya existe una sede con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -224,10 +224,10 @@ public static class ManageVenues
             // fixture placed on it — no error, no trace, a calendar that has
             // quietly forgotten where it is being played.
             return Results.Problem(
-                detail: "This venue is in use — a fixture is placed on one of its spaces, or a " +
-                        "competition schedules against one — so it cannot be removed. Deactivate " +
-                        "it instead: it stops being offered for new fixtures and everything that " +
-                        "already points at it keeps doing so.",
+                detail: "Esta sede está en uso — hay un partido colocado en uno de sus espacios, " +
+                        "o una competencia programa contra uno — así que no se puede eliminar. " +
+                        "Desactivala en su lugar: deja de ofrecerse para partidos nuevos y todo " +
+                        "lo que ya apunta a ella sigue apuntando.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

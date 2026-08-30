@@ -40,7 +40,7 @@ public static class CreateRuleset
         if (await database.Rulesets.AnyAsync(ruleset => ruleset.Name == name, cancellationToken))
         {
             return Results.Problem(
-                detail: "A ruleset with that name already exists.",
+                detail: "Ya existe un reglamento con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -67,7 +67,7 @@ public static class CreateRuleset
             // settles the ordinary case and this settles the race, because
             // only the index sees both writes.
             return Results.Problem(
-                detail: "A ruleset with that name already exists.",
+                detail: "Ya existe un reglamento con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

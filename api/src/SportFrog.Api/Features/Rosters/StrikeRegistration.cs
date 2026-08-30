@@ -57,9 +57,9 @@ public static class StrikeRegistration
             // goals for a player who was never registered as far as any query
             // can tell.
             return Results.Problem(
-                detail: "Events have been recorded for this player, so the registration cannot " +
-                        "be struck. Withdraw them instead: they leave the squad and what they " +
-                        "did stays on record.",
+                detail: "Se registraron eventos para este jugador, así que el registro no se " +
+                        "puede anular. Retiralo en su lugar: deja la nómina y lo que hizo queda " +
+                        "en el registro.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

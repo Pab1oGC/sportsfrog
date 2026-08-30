@@ -54,17 +54,25 @@ public static class AdvanceBracket
             return Results.NotFound();
         }
 
-        if (competition.Format != CompetitionFormat.Knockout)
+        // A pure knockout is a bracket from the first match. A group stage
+        // only becomes one the moment PromoteGroupStage runs — before that,
+        // this is refused the same way, just with the truer reason.
+        if (competition.Format is not (CompetitionFormat.Knockout or CompetitionFormat.Groups))
         {
             return Results.Problem(
-                detail: $"Rounds are advanced in a knockout. This competition is drawn as " +
-                        $"{competition.Format}, where every fixture is known from the start.",
+                detail: $"Las rondas avanzan en una eliminatoria. Esta competencia está " +
+                        $"sorteada como {competition.Format}, donde todos los partidos se " +
+                        $"conocen desde el principio.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        // Phase is what separates the two stages on a category that played
+        // groups first: the group draw never sets it, every knockout match
+        // does. A pure knockout has no group matches to exclude, so the
+        // filter costs it nothing.
         var matches = await database.Matches
             .AsNoTracking()
-            .Where(match => match.CategoryId == categoryId)
+            .Where(match => match.CategoryId == categoryId && match.Phase != null)
             .Select(match => new
             {
                 match.RoundNumber,
@@ -74,13 +82,18 @@ public static class AdvanceBracket
                 match.HomeTotal,
                 match.AwayTotal,
                 match.WalkoverTeamId,
+                match.PenaltyHomeScore,
+                match.PenaltyAwayScore,
             })
             .ToListAsync(cancellationToken);
 
         if (matches.Count == 0)
         {
             return Results.Problem(
-                detail: "This category has no bracket yet. Draw its first round before advancing.",
+                detail: competition.Format == CompetitionFormat.Groups
+                    ? "Esta categoría todavía no tiene una fase eliminatoria sorteada. Promové a " +
+                      "los clasificados de la fase de grupos primero."
+                    : "Esta categoría todavía no tiene llaves. Sorteá su primera ronda antes de avanzar.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -90,8 +103,8 @@ public static class AdvanceBracket
         if (last.Any(match => match.Status is not (MatchState.Finished or MatchState.Walkover)))
         {
             return Results.Problem(
-                detail: "Not every match of the current round has a result, so it is not known " +
-                        "who plays the next one.",
+                detail: "No todos los partidos de la ronda actual tienen resultado, así que " +
+                        "todavía no se sabe quién juega la siguiente.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -107,14 +120,19 @@ public static class AdvanceBracket
 
             if (match.HomeTotal == match.AwayTotal)
             {
-                // A knockout has to produce somebody. A level result means the
-                // tie was not actually decided — extra time, penalties or a
-                // replay happened and were not recorded — and guessing a
-                // winner here would put a team into the next round on the
-                // strength of nothing.
+                if (match.PenaltyHomeScore is { } penaltyHome && match.PenaltyAwayScore is { } penaltyAway)
+                {
+                    winners.Add(penaltyHome > penaltyAway ? match.HomeTeamId : match.AwayTeamId);
+                    continue;
+                }
+
+                // A knockout has to produce somebody. A level result with no
+                // shootout recorded means the tie was not actually decided,
+                // and guessing a winner here would put a team into the next
+                // round on the strength of nothing.
                 return Results.Problem(
-                    detail: "A match of this round ended level. A knockout needs a winner: record " +
-                            "how the tie was decided before advancing.",
+                    detail: "Un partido de esta ronda terminó empatado. Una eliminatoria necesita " +
+                            "un ganador: registrá el desempate por penales antes de avanzar.",
                     statusCode: StatusCodes.Status409Conflict);
             }
 
@@ -123,18 +141,46 @@ public static class AdvanceBracket
 
         // Teams that entered and have never played: the byes of the opening
         // round. A bye leaves no match behind, so this is what it looks like
-        // from the outside.
-        var played = matches
-            .SelectMany(match => new[] { match.HomeTeamId, match.AwayTeamId })
-            .ToHashSet();
+        // from the outside — but only round one can ever have one. Every
+        // round after it starts from an entry list that is already a power
+        // of two, which a bracket never has to make room in again.
+        List<Guid> byes;
 
-        var byes = await database.Teams
-            .AsNoTracking()
-            .Where(team => team.CategoryId == categoryId && team.IsActive)
-            .Where(team => !played.Contains(team.Id))
-            .OrderBy(team => team.Name)
-            .Select(team => team.Id)
-            .ToListAsync(cancellationToken);
+        if (round > 1)
+        {
+            byes = [];
+        }
+        else
+        {
+            var played = matches
+                .SelectMany(match => new[] { match.HomeTeamId, match.AwayTeamId })
+                .ToHashSet();
+
+            if (competition.Format == CompetitionFormat.Groups)
+            {
+                // "Every active team in the category" is the wrong universe
+                // once groups exist — most of them never entered the
+                // knockout at all. What PromoteGroupStage drew is the right
+                // one, and it is the only place that answer still exists.
+                var entrants = await database.Categories
+                    .AsNoTracking()
+                    .Where(candidate => candidate.Id == categoryId)
+                    .Select(candidate => candidate.KnockoutEntrants)
+                    .SingleAsync(cancellationToken);
+
+                byes = [.. (entrants ?? []).Where(team => !played.Contains(team))];
+            }
+            else
+            {
+                byes = await database.Teams
+                    .AsNoTracking()
+                    .Where(team => team.CategoryId == categoryId && team.IsActive)
+                    .Where(team => !played.Contains(team.Id))
+                    .OrderBy(team => team.Name)
+                    .Select(team => team.Id)
+                    .ToListAsync(cancellationToken);
+            }
+        }
 
         // Byes first, keeping the order the opening draw gave them.
         List<Guid> advancing = [.. byes, .. winners];

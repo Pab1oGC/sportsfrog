@@ -9,9 +9,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 /**
  * Diálogo CRUD genérico: acepta children como contenido.
  */
-export function CrudDialog({ open, editId, entityName, error, saving, onClose, onSave, children }) {
+export function CrudDialog({ open, editId, entityName, error, saving, onClose, onSave, children, maxWidth = 'sm' }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth>
       <DialogTitle>{editId ? 'Editar' : 'Nuevo'} {entityName}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
         {error && <Alert severity="error" onClose={onClose}>{error}</Alert>}

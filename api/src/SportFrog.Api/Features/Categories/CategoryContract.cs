@@ -18,7 +18,8 @@ public sealed record CategoryContract(
     DateOnly? BirthDateFrom,
     DateOnly? BirthDateTo,
     short? MaxRosterSize,
-    short DisplayOrder);
+    short DisplayOrder,
+    short? QualifiersPerGroup);
 
 internal sealed class CategoryContractValidator : AbstractValidator<CategoryContract>
 {
@@ -32,13 +33,13 @@ internal sealed class CategoryContractValidator : AbstractValidator<CategoryCont
     public CategoryContractValidator()
     {
         RuleFor(contract => contract.Name)
-            .NotEmpty().WithMessage("The category name is required.")
+            .NotEmpty().WithMessage("El nombre de la categoría es obligatorio.")
             .MaximumLength(80);
 
         RuleFor(contract => contract.Gender)
             .Must(gender => Sex.IsAcceptable(gender))
             .When(contract => contract.Gender is not null)
-            .WithMessage("The category is open to F or M, or left unset to admit anyone.");
+            .WithMessage("La categoría admite F o M, o se deja sin definir para admitir a cualquiera.");
 
         // Read as the window of birth dates the category admits: the earliest
         // is its oldest player, the latest its youngest. Either end may be
@@ -46,17 +47,27 @@ internal sealed class CategoryContractValidator : AbstractValidator<CategoryCont
         RuleFor(contract => contract.BirthDateTo)
             .GreaterThanOrEqualTo(contract => contract.BirthDateFrom!.Value)
             .When(contract => contract.BirthDateFrom.HasValue && contract.BirthDateTo.HasValue)
-            .WithMessage("The oldest birth date admitted cannot be later than the youngest: " +
-                         "as written, no one could ever qualify.");
+            .WithMessage("La fecha de nacimiento más antigua admitida no puede ser posterior a la " +
+                         "más reciente: tal como está, nadie podría calificar nunca.");
 
         RuleFor(contract => contract.MaxRosterSize)
             .InclusiveBetween((short)1, MaximumRosterSize)
             .When(contract => contract.MaxRosterSize.HasValue)
-            .WithMessage($"A roster holds between 1 and {MaximumRosterSize} players, or is left " +
-                         "unset to leave it uncapped.");
+            .WithMessage($"Una nómina tiene entre 1 y {MaximumRosterSize} jugadores, o se deja " +
+                         "sin definir para no ponerle límite.");
 
         RuleFor(contract => contract.DisplayOrder)
             .InclusiveBetween((short)0, (short)999);
+
+        // A group of one team is not a group, and nothing sends more than a
+        // handful forward — the ceiling exists for the same reason the
+        // roster one does, to catch a mistyped number rather than to
+        // restrict a real tournament.
+        RuleFor(contract => contract.QualifiersPerGroup)
+            .InclusiveBetween((short)1, (short)16)
+            .When(contract => contract.QualifiersPerGroup.HasValue)
+            .WithMessage("La cantidad de clasificados por grupo debe estar entre 1 y 16, o se " +
+                         "deja sin definir para no resaltar ninguna fila.");
     }
 }
 

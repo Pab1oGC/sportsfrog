@@ -62,7 +62,7 @@ public sealed class OrganizationContextMiddleware(
             await RefuseAsync(
                 context,
                 StatusCodes.Status401Unauthorized,
-                "Authentication required.",
+                "Se requiere autenticación.",
                 "no credentials were presented");
             return;
         }
@@ -75,7 +75,7 @@ public sealed class OrganizationContextMiddleware(
             await RefuseAsync(
                 context,
                 StatusCodes.Status400BadRequest,
-                $"The {OrganizationHeader} header is required and must be an organization identifier.",
+                $"El encabezado {OrganizationHeader} es obligatorio y debe ser un identificador de organización.",
                 "the organization header was missing or malformed");
             return;
         }
@@ -88,7 +88,7 @@ public sealed class OrganizationContextMiddleware(
             await RefuseAsync(
                 context,
                 StatusCodes.Status401Unauthorized,
-                "Authentication required.",
+                "Se requiere autenticación.",
                 "the token carries no usable subject");
             return;
         }
@@ -103,7 +103,7 @@ public sealed class OrganizationContextMiddleware(
             await RefuseAsync(
                 context,
                 StatusCodes.Status403Forbidden,
-                "This operation is not allowed.",
+                "Esta operación no está permitida.",
                 "the token grants no role in organization {OrganizationId}",
                 organizationId);
             return;

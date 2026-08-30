@@ -46,8 +46,8 @@ public static class DeleteRuleset
         if (await usage.IsInUseAsync(id, cancellationToken))
         {
             return Results.Problem(
-                detail: "A competition is being played under this ruleset, so it cannot be " +
-                        "removed. Its results are read against these rules.",
+                detail: "Hay una competencia jugándose bajo este reglamento, así que no se puede " +
+                        "eliminar. Sus resultados se leen contra estas reglas.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -65,8 +65,8 @@ public static class DeleteRuleset
             // write. The check produces the message; the foreign key produces
             // the guarantee, and it is the one that cannot be raced.
             return Results.Problem(
-                detail: "A competition is being played under this ruleset, so it cannot be " +
-                        "removed. Its results are read against these rules.",
+                detail: "Hay una competencia jugándose bajo este reglamento, así que no se puede " +
+                        "eliminar. Sus resultados se leen contra estas reglas.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

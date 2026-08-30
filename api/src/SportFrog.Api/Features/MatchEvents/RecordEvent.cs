@@ -37,22 +37,22 @@ public static class RecordEvent
         public Validator()
         {
             RuleFor(request => request.RosterEntryId)
-                .NotEmpty().WithMessage("The player is required.");
+                .NotEmpty().WithMessage("El jugador es obligatorio.");
 
             RuleFor(request => request.MetricId)
-                .NotEmpty().WithMessage("The event is required.");
+                .NotEmpty().WithMessage("El evento es obligatorio.");
 
             RuleFor(request => request.Minute)
                 .InclusiveBetween((short)0, MaximumMinute)
                 .When(request => request.Minute.HasValue)
-                .WithMessage($"A minute is between 0 and {MaximumMinute}, or is left unset.");
+                .WithMessage($"El minuto está entre 0 y {MaximumMinute}, o se deja sin definir.");
 
             // Mirrors the schema's CHECK (quantity > 0). Stated here as well
             // so a zero is answered by naming the field rather than by a
             // constraint name.
             RuleFor(request => request.Quantity)
                 .InclusiveBetween(1, MaximumQuantity)
-                .WithMessage($"A quantity is between 1 and {MaximumQuantity}.");
+                .WithMessage($"La cantidad está entre 1 y {MaximumQuantity}.");
         }
     }
 

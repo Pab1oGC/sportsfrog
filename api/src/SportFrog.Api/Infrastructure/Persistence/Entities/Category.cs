@@ -71,6 +71,33 @@ public sealed class Category
     /// </remarks>
     public short DisplayOrder { get; set; }
 
+    /// <summary>
+    /// How many of each group advance, as the organizers declared it —
+    /// "top 2", "top 4" — for highlighting the qualifying rows on the
+    /// standings table.
+    /// </summary>
+    /// <remarks>
+    /// Not read by <c>PromoteGroupStage</c>, which takes its own count at the
+    /// moment of promotion and can disagree with this (best-third wildcards,
+    /// an uneven count across groups): this is what was announced ahead of
+    /// time, not a record of what was carried out. Null means the rule was
+    /// never declared, or the category is not played as groups.
+    /// </remarks>
+    public short? QualifiersPerGroup { get; set; }
+
+    /// <summary>
+    /// Who qualified out of the group stage, in seeded order, once the
+    /// knockout bracket is drawn.
+    /// </summary>
+    /// <remarks>
+    /// Null for a category that never ran a group stage, and null still for
+    /// one that did but has not yet been promoted to a knockout. Set once, at
+    /// the moment of promotion, and read back only to tell a genuine bye
+    /// apart from a team the group stage eliminated — both are active teams
+    /// that never played a knockout match, and only this says which is which.
+    /// </remarks>
+    public Guid[]? KnockoutEntrants { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

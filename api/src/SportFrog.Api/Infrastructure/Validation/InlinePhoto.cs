@@ -59,7 +59,7 @@ public static class InlinePhoto
     }
 
     public static string Requirement =>
-        $"The photo must be a PNG, JPEG or WebP data URL under {MaximumLength / (1024 * 1024)} MB.";
+        $"La foto debe ser una data URL PNG, JPEG o WebP de menos de {MaximumLength / (1024 * 1024)} MB.";
 
     /// <summary>
     /// Reads the bytes out of an accepted data URL.

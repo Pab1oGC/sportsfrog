@@ -39,7 +39,7 @@ public static class RateLimitPolicies
                 }
 
                 await context.HttpContext.Response.WriteAsJsonAsync(
-                    new { detail = "Too many requests. Try again shortly." },
+                    new { detail = "Demasiadas solicitudes. Probá de nuevo en un momento." },
                     cancellationToken);
             };
         });

@@ -22,19 +22,24 @@ public static class UpdateTeam
     /// and keeps everything it already played, which is why this is a flag
     /// and not a deletion.
     /// </param>
-    public sealed record Request(string Name, string? GroupLabel, bool IsActive);
+    public sealed record Request(string Name, string? GroupLabel, short? Seed, bool IsActive);
 
     internal sealed class Validator : AbstractValidator<Request>
     {
         public Validator()
         {
             RuleFor(request => request.Name)
-                .NotEmpty().WithMessage("The team name is required.")
+                .NotEmpty().WithMessage("El nombre del equipo es obligatorio.")
                 .MaximumLength(120);
 
             RuleFor(request => request.GroupLabel)
                 .MaximumLength(40)
                 .When(request => request.GroupLabel is not null);
+
+            RuleFor(request => request.Seed)
+                .InclusiveBetween((short)1, (short)26)
+                .When(request => request.Seed.HasValue)
+                .WithMessage("El bombo es un número entre 1 y 26.");
         }
     }
 
@@ -66,6 +71,7 @@ public static class UpdateTeam
         team.GroupLabel = string.IsNullOrWhiteSpace(request.GroupLabel)
             ? null
             : request.GroupLabel.Trim();
+        team.Seed = request.Seed;
         team.IsActive = request.IsActive;
 
         await database.SaveChangesAsync(cancellationToken);

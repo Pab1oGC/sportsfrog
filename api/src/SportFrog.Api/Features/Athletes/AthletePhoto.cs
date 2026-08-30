@@ -117,6 +117,6 @@ public sealed class AthletePhoto(ObjectStore store, OrganizationContext organiza
     public static IResult NotAnImage() =>
         Results.ValidationProblem(new Dictionary<string, string[]>
         {
-            ["photoUrl"] = ["The photo could not be read as an image."],
+            ["photoUrl"] = ["La foto no se pudo leer como una imagen."],
         });
 }

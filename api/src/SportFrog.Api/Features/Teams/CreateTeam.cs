@@ -18,7 +18,7 @@ public static class CreateTeam
     /// which is what it is nearly always going to be — a club only needs its
     /// own name here when it fields two teams in the same draw.
     /// </param>
-    public sealed record Request(Guid ClubId, string? Name, string? GroupLabel);
+    public sealed record Request(Guid ClubId, string? Name, string? GroupLabel, short? Seed);
 
     public sealed record Response(Guid Id, string Name);
 
@@ -27,7 +27,7 @@ public static class CreateTeam
         public Validator()
         {
             RuleFor(request => request.ClubId)
-                .NotEmpty().WithMessage("The club is required.");
+                .NotEmpty().WithMessage("El club es obligatorio.");
 
             RuleFor(request => request.Name)
                 .MaximumLength(120)
@@ -36,6 +36,11 @@ public static class CreateTeam
             RuleFor(request => request.GroupLabel)
                 .MaximumLength(40)
                 .When(request => request.GroupLabel is not null);
+
+            RuleFor(request => request.Seed)
+                .InclusiveBetween((short)1, (short)26)
+                .When(request => request.Seed.HasValue)
+                .WithMessage("El bombo es un número entre 1 y 26.");
         }
     }
 
@@ -76,8 +81,8 @@ public static class CreateTeam
             // appear in it having played none of them. Before the first
             // whistle the draw can still absorb a late entry.
             return Results.Problem(
-                detail: "This competition is already under way, so no more clubs can be entered. " +
-                        "A club that joins now would stand in a table it did not play for.",
+                detail: "Esta competencia ya está en curso, así que no se pueden inscribir más " +
+                        "clubes. Un club que se sume ahora aparecería en una tabla que no jugó.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -89,7 +94,7 @@ public static class CreateTeam
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["ClubId"] = ["No club of this organization has that identifier."],
+                ["ClubId"] = ["Ningún club de esta organización tiene ese identificador."],
             });
         }
 
@@ -100,7 +105,7 @@ public static class CreateTeam
             // record meaningless.
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["ClubId"] = [$"{club.Name} is not active, so it cannot be entered."],
+                ["ClubId"] = [$"{club.Name} no está activo, así que no se puede inscribir."],
             });
         }
 
@@ -111,9 +116,9 @@ public static class CreateTeam
                 cancellationToken))
         {
             return Results.Problem(
-                detail: $"{club.Name} is already entered in this category. A club that needs two " +
-                        "teams in one draw enters twice under different clubs, not twice under " +
-                        "the same one.",
+                detail: $"{club.Name} ya está inscripto en esta categoría. Un club que necesita " +
+                        "dos equipos en un mismo sorteo se inscribe dos veces bajo clubes " +
+                        "distintos, no dos veces bajo el mismo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -127,6 +132,7 @@ public static class CreateTeam
             GroupLabel = string.IsNullOrWhiteSpace(request.GroupLabel)
                 ? null
                 : request.GroupLabel.Trim(),
+            Seed = request.Seed,
         };
 
         database.Teams.Add(team);
@@ -142,7 +148,7 @@ public static class CreateTeam
             // Two entries for the same club racing each other. The check above
             // settles the ordinary case; only the index sees this one.
             return Results.Problem(
-                detail: $"{club.Name} is already entered in this category.",
+                detail: $"{club.Name} ya está inscripto en esta categoría.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

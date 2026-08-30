@@ -36,7 +36,7 @@ internal sealed class FixturePolicy(SportFrogDbContext database)
         {
             // Reported first and alone: everything below would repeat itself
             // about a single team, and the caller has one thing to fix.
-            return [new FixtureViolation("AwayTeamId", "A team cannot play itself.")];
+            return [new FixtureViolation("AwayTeamId", "Un equipo no puede jugar contra sí mismo.")];
         }
 
         await InspectTeamAsync(categoryId, homeTeamId, "HomeTeamId", violations, cancellationToken);
@@ -66,7 +66,7 @@ internal sealed class FixturePolicy(SportFrogDbContext database)
         if (team is null)
         {
             violations.Add(new FixtureViolation(
-                property, "No team of this organization has that identifier."));
+                property, "Ningún equipo de esta organización tiene ese identificador."));
             return;
         }
 
@@ -74,8 +74,8 @@ internal sealed class FixturePolicy(SportFrogDbContext database)
         {
             violations.Add(new FixtureViolation(
                 property,
-                $"{team.Name} is entered in a different category. A fixture is played between " +
-                "two teams of the same division."));
+                $"{team.Name} está inscripto en otra categoría. Un partido se juega entre " +
+                "dos equipos de la misma división."));
             return;
         }
 
@@ -85,7 +85,7 @@ internal sealed class FixturePolicy(SportFrogDbContext database)
             // stops being given new ones. Scheduling it again would undo the
             // withdrawal without anyone deciding to.
             violations.Add(new FixtureViolation(
-                property, $"{team.Name} has withdrawn from this category, so it is not scheduled."));
+                property, $"{team.Name} se retiró de esta categoría, así que no se le programa."));
         }
     }
 
@@ -122,7 +122,7 @@ internal sealed class FixturePolicy(SportFrogDbContext database)
         if (space is null)
         {
             violations.Add(new FixtureViolation(
-                "VenueSpaceId", "No space of this organization has that identifier."));
+                "VenueSpaceId", "Ningún espacio de esta organización tiene ese identificador."));
             return;
         }
 
@@ -130,8 +130,8 @@ internal sealed class FixturePolicy(SportFrogDbContext database)
         {
             violations.Add(new FixtureViolation(
                 "VenueSpaceId",
-                $"{space.VenueName} / {space.Name} is not available, so nothing can be scheduled " +
-                "on it."));
+                $"{space.VenueName} / {space.Name} no está disponible, así que no se puede " +
+                "programar nada ahí."));
         }
     }
 }

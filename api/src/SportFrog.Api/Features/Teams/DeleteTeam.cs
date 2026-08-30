@@ -53,9 +53,9 @@ public static class DeleteTeam
             // that name a team nobody can read, and a table built from them
             // would be missing a side.
             return Results.Problem(
-                detail: "This team appears in a fixture, so its entry cannot be struck. " +
-                        "Deactivate it instead: it stops being scheduled and keeps what it " +
-                        "already played.",
+                detail: "Este equipo aparece en un partido, así que su inscripción no se puede " +
+                        "anular. Desactivalo en su lugar: deja de programarse y conserva lo que " +
+                        "ya jugó.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

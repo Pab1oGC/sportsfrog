@@ -72,7 +72,7 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
 
         if (periods.Count == 0)
         {
-            return [new ResultViolation("PeriodScores", "A result needs at least one period.")];
+            return [new ResultViolation("PeriodScores", "Un resultado necesita al menos un período.")];
         }
 
         InspectNumbering(periods, violations);
@@ -108,19 +108,19 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
         if (numbers.Distinct().Count() != numbers.Count)
         {
             violations.Add(new ResultViolation(
-                "PeriodScores", "A period is reported twice."));
+                "PeriodScores", "Un período está reportado dos veces."));
         }
         else if (!numbers.Order().SequenceEqual(Enumerable.Range(1, numbers.Count).Select(n => (short)n)))
         {
             violations.Add(new ResultViolation(
                 "PeriodScores",
-                $"The periods must be numbered 1 to {numbers.Count} with none missing."));
+                $"Los períodos deben numerarse del 1 al {numbers.Count} sin que falte ninguno."));
         }
 
         if (periods.Any(period => period.Home < 0 || period.Away < 0))
         {
             violations.Add(new ResultViolation(
-                "PeriodScores", "A period score cannot be negative."));
+                "PeriodScores", "El marcador de un período no puede ser negativo."));
         }
     }
 
@@ -143,10 +143,10 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
         {
             violations.Add(new ResultViolation(
                 "PeriodScores",
-                $"{rules.Sport.Name} is played in " +
-                $"{PeriodLabel.Count(expected, rules.Configuration.Periods.Label)} under these " +
-                $"rules, and {PeriodLabel.Count(periods.Count, rules.Configuration.Periods.Label)} " +
-                (periods.Count == 1 ? "was" : "were") + " reported."));
+                $"{rules.Sport.Name} se juega en " +
+                $"{PeriodLabel.Count(expected, rules.Configuration.Periods.Label)} bajo estas " +
+                $"reglas, y se reportaron " +
+                $"{PeriodLabel.Count(periods.Count, rules.Configuration.Periods.Label)}."));
         }
     }
 
@@ -164,7 +164,7 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
         {
             // Nothing decides a tied set, so a tied one was not finished.
             violations.Add(new ResultViolation(
-                "PeriodScores", $"A {label} cannot end level."));
+                "PeriodScores", $"Un {label} no puede terminar empatado."));
             return;
         }
 
@@ -178,16 +178,16 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
             violations.Add(new ResultViolation(
                 "PeriodScores",
                 winner < toWin
-                    ? $"Neither side reached {PeriodLabel.Count(toWin, label)}, so this match " +
-                      "was not finished. Postpone it if it will be resumed."
-                    : $"A match is won at {PeriodLabel.Count(toWin, label)}, and one side has " +
-                      $"{winner}. Nothing is played after the deciding {label}."));
+                    ? $"Ningún lado llegó a {PeriodLabel.Count(toWin, label)}, así que este " +
+                      "partido no terminó. Aplazálo si se va a reanudar."
+                    : $"Un partido se gana en {PeriodLabel.Count(toWin, label)}, y un lado tiene " +
+                      $"{winner}. No se juega nada después del {label} decisivo."));
         }
 
         if (loser >= toWin)
         {
             violations.Add(new ResultViolation(
-                "PeriodScores", $"Both sides cannot reach {PeriodLabel.Count(toWin, label)}."));
+                "PeriodScores", $"Los dos lados no pueden llegar a {PeriodLabel.Count(toWin, label)}."));
         }
     }
 

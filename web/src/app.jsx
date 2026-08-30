@@ -1,30 +1,25 @@
-import { ThemeProvider, createTheme } from "@mui/material/styles";
-import CssBaseline from "@mui/material/CssBaseline";
+import { Toaster } from "sonner";
 import { AuthProvider } from "src/auth/context/jwt";
 import { Snackbar } from "src/components/snackbar";
+import { ConfirmProvider } from "src/components/confirm-dialog";
 import { RouterProvider, createBrowserRouter } from "react-router";
 import { routesSection } from "src/routes/sections";
+import { ColorModeProvider } from "src/theme";
 
 const router = createBrowserRouter(routesSection);
 
-const theme = createTheme({
-  palette: { primary: { main: "#1B8A2E" }, background: { default: "#f4f6f8" } },
-  typography: { fontFamily: "Inter, sans-serif" },
-  shape: { borderRadius: 12 },
-  components: {
-    MuiButton: { styleOverrides: { root: { textTransform: "none", fontWeight: 600 } } },
-    MuiCard: { styleOverrides: { root: { boxShadow: "0 2px 12px rgba(0,0,0,0.08)" } } },
-  },
-});
-
 export default function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
-        <Snackbar />
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </ThemeProvider>
+    <ColorModeProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <Snackbar />
+          {/* sonner: toast.success/toast.error, usados en la mayoría de las
+              páginas, no rendereaban nada sin este montaje. */}
+          <Toaster position="top-right" richColors closeButton />
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </ConfirmProvider>
+    </ColorModeProvider>
   );
 }

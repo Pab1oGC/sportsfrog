@@ -28,22 +28,22 @@ public static class AddMember
         {
             RuleFor(request => request.FullName)
                 .NotEmpty()
-                .WithMessage("The person's name is required.");
+                .WithMessage("El nombre de la persona es obligatorio.");
 
             RuleFor(request => request.Email)
                 .Must(email => Email.TryParse(email?.Trim(), out _))
-                .WithMessage("The email address is not well formed.");
+                .WithMessage("El correo electrónico no tiene un formato válido.");
 
             RuleFor(request => request.Role)
                 .Must(role => TryReadRole(role, out _))
-                .WithMessage("The role is not one this organization defines.");
+                .WithMessage("Ese rol no es uno que esta organización defina.");
 
             // Ownership is established by registering the organization and is
             // not something an administrator hands out: allowing it would let
             // an administrator create a peer they cannot then remove.
             RuleFor(request => request.Role)
                 .Must(role => !TryReadRole(role, out var parsed) || parsed != MembershipRole.Owner)
-                .WithMessage("Ownership cannot be granted.");
+                .WithMessage("La propiedad no se puede otorgar.");
         }
     }
 
@@ -86,7 +86,7 @@ public static class AddMember
         if (existing is { DeletedAt: not null })
         {
             return Results.Problem(
-                detail: "That email address is not available.",
+                detail: "Ese correo electrónico no está disponible.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -98,8 +98,8 @@ public static class AddMember
             if (!Password.TryParse(request.Password, out _))
             {
                 return Invalid(
-                    $"The password must be at least {Password.MinimumLength} characters and " +
-                    "include an uppercase letter, a lowercase letter, a digit and a special character.");
+                    $"La contraseña debe tener al menos {Password.MinimumLength} caracteres e " +
+                    "incluir una mayúscula, una minúscula, un número y un carácter especial.");
             }
 
             user = new User
@@ -121,7 +121,7 @@ public static class AddMember
                 // unique constraint also enforces. Changing someone's role is
                 // a different operation from adding them.
                 return Results.Problem(
-                    detail: "That person already belongs to this organization.",
+                    detail: "Esa persona ya pertenece a esta organización.",
                     statusCode: StatusCodes.Status409Conflict);
             }
 

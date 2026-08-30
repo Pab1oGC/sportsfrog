@@ -45,6 +45,18 @@ public sealed class Team
     public string? GroupLabel { get; set; }
 
     /// <summary>
+    /// Which pot this team sits in for a seeded group draw.
+    /// </summary>
+    /// <remarks>
+    /// Null means the team draws from no particular pot — which is also what
+    /// every team having no pot at all means, and is exactly a plain random
+    /// draw. Set by hand ahead of a draw that wants to keep, say, the
+    /// strongest side of each pot apart; read by the draw and never written
+    /// by anything else.
+    /// </remarks>
+    public short? Seed { get; set; }
+
+    /// <summary>
     /// Whether the team is still competing.
     /// </summary>
     /// <remarks>

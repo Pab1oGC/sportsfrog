@@ -62,9 +62,9 @@ public static class UpdateCategory
         if (competition.Status != CompetitionState.Draft && EligibilityChanged(category, contract, gender))
         {
             return Results.Problem(
-                detail: "This competition has left draft, so who this category admits is fixed. " +
-                        "Rosters were accepted against these rules, and changing them now would " +
-                        "not remove the players already registered under them.",
+                detail: "Esta competencia ya salió de borrador, así que a quién admite esta " +
+                        "categoría quedó fijo. Las nóminas se aceptaron contra estas reglas, y " +
+                        "cambiarlas ahora no quitaría a los jugadores ya registrados bajo ellas.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -86,7 +86,7 @@ public static class UpdateCategory
                 cancellationToken))
         {
             return Results.Problem(
-                detail: "This competition already has a category with that name.",
+                detail: "Esta competencia ya tiene una categoría con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -97,6 +97,7 @@ public static class UpdateCategory
         category.BirthDateTo = contract.BirthDateTo;
         category.MaxRosterSize = contract.MaxRosterSize;
         category.DisplayOrder = contract.DisplayOrder;
+        category.QualifiersPerGroup = contract.QualifiersPerGroup;
 
         try
         {
@@ -107,7 +108,7 @@ public static class UpdateCategory
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "This competition already has a category with that name.",
+                detail: "Esta competencia ya tiene una categoría con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

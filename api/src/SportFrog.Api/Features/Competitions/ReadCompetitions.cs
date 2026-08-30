@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Competitions;
@@ -29,7 +30,25 @@ public static class ReadCompetitions
         DateOnly? StartsOn,
         DateOnly? EndsOn,
         bool IsPublic,
-        CompetitionSettings Settings);
+        CompetitionSettings Settings,
+        int CategoryCount,
+        PublicPreview? PublicPreview);
+
+    /// <summary>
+    /// Temporary links for whatever pictures the competition's public
+    /// settings reference, so the admin panel can show them without signing
+    /// a key itself. Kept apart from <see cref="Summary.Settings"/> rather
+    /// than written into it, because that field keeps the raw keys — what a
+    /// save sends back unchanged when a picture was left alone.
+    /// </summary>
+    public sealed record PublicPreview(string? BannerUrl, IReadOnlyList<SponsorPreview> Sponsors);
+
+    /// <param name="LogoKey">
+    /// The same key <see cref="Summary.Settings"/> carries for this sponsor,
+    /// repeated here so a caller can match a preview back to its entry
+    /// without depending on both lists staying in the same order.
+    /// </param>
+    public sealed record SponsorPreview(string LogoKey, string? Name, string? Url, string LogoUrl);
 
     public static IEndpointRouteBuilder MapReadCompetitions(this IEndpointRouteBuilder routes)
     {
@@ -57,6 +76,7 @@ public static class ReadCompetitions
     /// </remarks>
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
+        PortalPicture pictures,
         CancellationToken cancellationToken,
         string? status = null,
         string? sport = null,
@@ -89,25 +109,37 @@ public static class ReadCompetitions
             state = parsed;
         }
 
-        return Results.Ok(await Project(database.Competitions
+        var competitions = await Project(database, database.Competitions
                 .Where(competition => state == null || competition.Status == state)
                 .Where(competition => sport == null || competition.SportCode == sport)
                 .Where(competition => search == null
                     || EF.Functions.ILike(competition.Name, $"%{search}%"))
                 .OrderByDescending(competition => competition.Season)
                 .ThenBy(competition => competition.Name))
-            .ToListAsync(cancellationToken));
+            .ToListAsync(cancellationToken);
+
+        var listing = new List<Summary>(competitions.Count);
+
+        foreach (var competition in competitions)
+        {
+            listing.Add(await PresentAsync(competition, pictures, cancellationToken));
+        }
+
+        return Results.Ok(listing);
     }
 
     private static async Task<IResult> ReadAsync(
         Guid id,
         SportFrogDbContext database,
+        PortalPicture pictures,
         CancellationToken cancellationToken)
     {
-        var competition = await Project(database.Competitions.Where(candidate => candidate.Id == id))
+        var competition = await Project(database, database.Competitions.Where(candidate => candidate.Id == id))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return competition is null ? Results.NotFound() : Results.Ok(competition);
+        return competition is null
+            ? Results.NotFound()
+            : Results.Ok(await PresentAsync(competition, pictures, cancellationToken));
     }
 
     /// <summary>
@@ -119,8 +151,14 @@ public static class ReadCompetitions
     /// what a competition is recognized by in an interface. Reading it here
     /// costs a join the database was going to make anyway, and saves the
     /// caller a second request for a single string.
+    ///
+    /// This stops short of the final shape: it still carries the settings'
+    /// raw picture keys rather than signed links, because signing needs
+    /// <see cref="PortalPicture"/> and cannot happen inside a query the
+    /// database is asked to translate. <see cref="PresentAsync"/> finishes
+    /// the job once this has run.
     /// </remarks>
-    private static IQueryable<Summary> Project(IQueryable<Competition> competitions) =>
+    private static IQueryable<Summary> Project(SportFrogDbContext database, IQueryable<Competition> competitions) =>
         competitions.Select(competition => new Summary(
             competition.Id,
             competition.SportCode,
@@ -135,5 +173,33 @@ public static class ReadCompetitions
             competition.StartsOn,
             competition.EndsOn,
             competition.IsPublic,
-            competition.Settings));
+            competition.Settings,
+            database.Categories.Count(category => category.CompetitionId == competition.Id),
+            null));
+
+    /// <summary>Signs whatever pictures the competition's public settings reference.</summary>
+    private static async Task<Summary> PresentAsync(
+        Summary competition, PortalPicture pictures, CancellationToken cancellationToken)
+    {
+        if (competition.Settings.Public is not { } @public)
+        {
+            return competition;
+        }
+
+        var bannerUrl = @public.BannerKey is { } banner
+            ? await pictures.LinkAsync(banner, cancellationToken)
+            : null;
+
+        var sponsors = new List<SponsorPreview>();
+
+        foreach (var sponsor in @public.Sponsors ?? [])
+        {
+            if (await pictures.LinkAsync(sponsor.LogoKey, cancellationToken) is { } logoUrl)
+            {
+                sponsors.Add(new SponsorPreview(sponsor.LogoKey, sponsor.Name, sponsor.Url, logoUrl));
+            }
+        }
+
+        return competition with { PublicPreview = new PublicPreview(bannerUrl, sponsors) };
+    }
 }

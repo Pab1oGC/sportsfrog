@@ -103,6 +103,48 @@ Para ver qué hizo:
 docker compose logs migrate
 ```
 
+### Despliegue: todo dockerizado
+
+Otro perfil, para un despliegue de verdad en vez de una prueba local: agrega
+el frontend, compilado y servido por nginx, que además hace de proxy inverso
+hacia la API y hacia MinIO — el mismo truco de mismo-origen que ya hace
+`vite.config.js` en desarrollo, así que producción tampoco necesita CORS. El
+resultado es un solo contenedor (`web`) al que apunta cualquier cosa de
+afuera: un `cloudflared tunnel`, un balanceador, lo que sea.
+
+```bash
+cp .env.example .env
+# En .env: ASPNETCORE_ENVIRONMENT=Production, y contraseñas reales
+docker compose --profile production up -d --build
+# El sitio completo queda en http://localhost:8081 (o el WEB_PORT que hayas puesto)
+```
+
+Antes de abrir un túnel de Cloudflare (o cualquier otra forma de hacerlo
+público), hay **un solo valor que hay que cambiar**: `STORAGE_ENDPOINT` en
+`.env`, a la dirección pública real —la que da `cloudflared`, o tu propio
+dominio—, y reiniciar el contenedor `api`:
+
+```bash
+# .env
+STORAGE_ENDPOINT=https://lo-que-sea-que-te-haya-dado-cloudflared.trycloudflare.com
+
+docker compose --profile production up -d api
+```
+
+La razón: cada link a una foto, un logo o una credencial que entrega la API
+va firmado contra `STORAGE_ENDPOINT`. Dejarlo en el valor por defecto
+(`http://minio:9000`, que solo existe dentro de la red de Docker) hace que
+esos links se vean perfectos en tu propia máquina y salgan rotos para
+cualquiera que abra el túnel — es exactamente el mismo problema, a escala de
+todo el sitio, que tener el backend apuntando a `localhost` cuando alguien
+lo mira desde el celular. `web/nginx.conf` es la otra mitad: reenvía
+`/sportfrog/` de vuelta a MinIO bajo esa misma dirección pública, así que el
+link que se firma es también un link que resuelve.
+
+Un túnel rápido (`cloudflared tunnel --url ...`, sin cuenta) cambia de
+dirección cada vez que se reinicia — hay que repetir el paso de arriba cada
+vez. Un túnel con nombre, atado a un dominio propio, no tiene ese problema.
+
 ---
 
 ## Aplicar las migraciones

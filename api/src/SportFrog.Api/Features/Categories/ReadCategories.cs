@@ -21,7 +21,8 @@ public static class ReadCategories
         DateOnly? BirthDateFrom,
         DateOnly? BirthDateTo,
         short? MaxRosterSize,
-        short DisplayOrder);
+        short DisplayOrder,
+        short? QualifiersPerGroup);
 
     public static IEndpointRouteBuilder MapReadCategories(this IEndpointRouteBuilder routes)
     {
@@ -110,5 +111,6 @@ public static class ReadCategories
             category.BirthDateFrom,
             category.BirthDateTo,
             category.MaxRosterSize,
-            category.DisplayOrder));
+            category.DisplayOrder,
+            category.QualifiersPerGroup));
 }

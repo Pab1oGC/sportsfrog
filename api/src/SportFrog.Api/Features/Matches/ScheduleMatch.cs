@@ -29,15 +29,15 @@ public static class ScheduleMatch
         public Validator()
         {
             RuleFor(request => request.HomeTeamId)
-                .NotEmpty().WithMessage("The home team is required.");
+                .NotEmpty().WithMessage("El equipo local es obligatorio.");
 
             RuleFor(request => request.AwayTeamId)
-                .NotEmpty().WithMessage("The away team is required.");
+                .NotEmpty().WithMessage("El equipo visitante es obligatorio.");
 
             RuleFor(request => request.RoundNumber)
                 .InclusiveBetween((short)1, (short)200)
                 .When(request => request.RoundNumber.HasValue)
-                .WithMessage("A round number is between 1 and 200.");
+                .WithMessage("El número de ronda está entre 1 y 200.");
 
             RuleFor(request => request.Phase)
                 .MaximumLength(40)
@@ -85,7 +85,7 @@ public static class ScheduleMatch
             // anything; it edits history. A draft is left open because a
             // calendar is often built before the competition is announced.
             return Results.Problem(
-                detail: "This competition is over, so its calendar is closed.",
+                detail: "Esta competencia ya terminó, así que su calendario está cerrado.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -133,8 +133,8 @@ public static class ScheduleMatch
             // nothing here could enforce it against two requests arriving
             // together — so this only has to say it in words.
             return Results.Problem(
-                detail: "That space is already taken at that time. Two matches cannot share a " +
-                        "pitch, so move one of them.",
+                detail: "Ese espacio ya está tomado a esa hora. Dos partidos no pueden compartir " +
+                        "cancha, así que movés uno de los dos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

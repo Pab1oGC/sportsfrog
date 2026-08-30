@@ -18,6 +18,8 @@ internal sealed class SportMetricConfiguration : IEntityTypeConfiguration<SportM
         builder.Property(x => x.Code).HasColumnName("code").IsRequired();
         builder.Property(x => x.Label).HasColumnName("label").IsRequired();
         builder.Property(x => x.AffectsScore).HasColumnName("affects_score");
+        builder.Property(x => x.ScorePoints).HasColumnName("score_points");
+        builder.Property(x => x.CountsForOpponent).HasColumnName("counts_for_opponent");
         builder.Property(x => x.IsRankable).HasColumnName("is_rankable");
         builder.Property(x => x.DisplayOrder).HasColumnName("display_order");
 

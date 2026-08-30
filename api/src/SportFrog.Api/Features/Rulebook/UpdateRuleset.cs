@@ -44,8 +44,8 @@ public static class UpdateRuleset
             // moving it to another would leave a document that validated
             // against rules nobody is playing by.
             return Results.Problem(
-                detail: $"This ruleset is written for {ruleset.SportCode} and stays with it. " +
-                        "Register a separate ruleset for another sport.",
+                detail: $"Este reglamento está escrito para {ruleset.SportCode} y se queda con " +
+                        "ese deporte. Registrá un reglamento aparte para otro deporte.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -55,7 +55,7 @@ public static class UpdateRuleset
                 other => other.Id != id && other.Name == name, cancellationToken))
         {
             return Results.Problem(
-                detail: "A ruleset with that name already exists.",
+                detail: "Ya existe un reglamento con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -83,10 +83,10 @@ public static class UpdateRuleset
             // entry channel rolls the transaction back on a refusal, so the
             // assignments above never reach the row.
             return Results.Problem(
-                detail: "This ruleset is already being played under, so its rules cannot be " +
-                        "rewritten: results recorded under them would change without anyone " +
-                        "editing a match. Register a new ruleset for the next competition. " +
-                        "Renaming this one is still allowed.",
+                detail: "Ya se está jugando bajo este reglamento, así que sus reglas no se " +
+                        "pueden reescribir: los resultados ya registrados cambiarían sin que " +
+                        "nadie edite un partido. Registrá un reglamento nuevo para la próxima " +
+                        "competencia. Renombrar este sigue permitido.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -99,7 +99,7 @@ public static class UpdateRuleset
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "A ruleset with that name already exists.",
+                detail: "Ya existe un reglamento con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

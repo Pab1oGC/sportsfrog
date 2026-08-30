@@ -3,6 +3,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Competitions;
@@ -40,6 +41,7 @@ public static class UpdateCompetition
         Guid id,
         CompetitionContract contract,
         SportFrogDbContext database,
+        PortalPicture pictures,
         CancellationToken cancellationToken)
     {
         var competition = await database.Competitions.SingleOrDefaultAsync(
@@ -55,9 +57,9 @@ public static class UpdateCompetition
         if (settled && contract.RulesetId != competition.RulesetId)
         {
             return Results.Problem(
-                detail: "This competition has left draft, so its ruleset is fixed. Results " +
-                        "already recorded are read against it, and replacing it now would " +
-                        "restate them without anyone editing a match.",
+                detail: "Esta competencia ya salió de borrador, así que su reglamento quedó " +
+                        "fijo. Los resultados ya registrados se leen contra él, y reemplazarlo " +
+                        "ahora los reescribiría sin que nadie edite un partido.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -66,9 +68,9 @@ public static class UpdateCompetition
         if (settled && captureLevel != competition.CaptureLevel)
         {
             return Results.Problem(
-                detail: "This competition has left draft, so how much detail it records is " +
-                        "fixed. Changing it now would leave a season measured one way at the " +
-                        "start and another at the end.",
+                detail: "Esta competencia ya salió de borrador, así que cuánto detalle registra " +
+                        "quedó fijo. Cambiarlo ahora dejaría una temporada medida de una forma " +
+                        "al principio y de otra al final.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -101,8 +103,25 @@ public static class UpdateCompetition
                 other => other.Id != id && other.Slug == slug, cancellationToken))
         {
             return Results.Problem(
-                detail: "A competition already uses that address.",
+                detail: "Ya hay una competencia usando esa dirección.",
                 statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var previousPublic = competition.Settings.Public;
+        var settings = contract.Settings;
+
+        if (settings?.Public is { } requestedPublic)
+        {
+            if (await CompetitionPortalPictures.ResolveAsync(requestedPublic, pictures, cancellationToken)
+                is not { } resolvedPublic)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["Settings.Public"] = ["Alguna imagen del portal público no se pudo leer."],
+                });
+            }
+
+            settings = settings with { Public = resolvedPublic };
         }
 
         competition.Name = contract.Name.Trim();
@@ -112,7 +131,7 @@ public static class UpdateCompetition
         competition.CaptureLevel = captureLevel;
         competition.StartsOn = contract.StartsOn;
         competition.EndsOn = contract.EndsOn;
-        competition.Settings = contract.Settings ?? new CompetitionSettings();
+        competition.Settings = settings ?? new CompetitionSettings();
 
         try
         {
@@ -123,9 +142,14 @@ public static class UpdateCompetition
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "A competition already uses that address.",
+                detail: "Ya hay una competencia usando esa dirección.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // Only once the row is safely saved: a picture forgotten before that
+        // and then a rollback would leave the still-referenced key gone.
+        await CompetitionPortalPictures.ForgetOrphanedAsync(
+            previousPublic, competition.Settings.Public, pictures, cancellationToken);
 
         return Results.NoContent();
     }

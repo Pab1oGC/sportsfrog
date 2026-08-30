@@ -36,8 +36,8 @@ public static class CorrectRegistration
             RuleFor(request => request.JerseyNumber)
                 .InclusiveBetween((short)0, MaximumJerseyNumber)
                 .When(request => request.JerseyNumber.HasValue)
-                .WithMessage($"A shirt number is between 0 and {MaximumJerseyNumber}, or is left " +
-                             "unset until the numbers are handed out.");
+                .WithMessage($"El número de camiseta está entre 0 y {MaximumJerseyNumber}, o se " +
+                             "deja sin definir hasta que se repartan los números.");
 
             RuleFor(request => request.Position)
                 .MaximumLength(40)
@@ -96,7 +96,7 @@ public static class CorrectRegistration
             // Two corrections claiming one number. The check above answers the
             // ordinary case; only the partial index sees this one.
             return Results.Problem(
-                detail: "That shirt was taken at the same moment. Read the squad and try again.",
+                detail: "Esa camiseta se tomó en el mismo instante. Volvé a leer la nómina e intentá de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

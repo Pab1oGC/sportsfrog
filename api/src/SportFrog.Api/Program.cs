@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
@@ -186,6 +187,8 @@ builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
+builder.Services.AddScoped<SportFrog.Api.Features.Clubs.ClubPhoto>();
+builder.Services.AddScoped<SportFrog.Api.Infrastructure.Storage.PortalPicture>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
@@ -208,6 +211,36 @@ builder.Services
 builder.Services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);
 
 var app = builder.Build();
+
+// First in the pipeline, ahead of logging, rate limiting and everything else
+// that reads Connection.RemoteIpAddress: behind any reverse proxy that
+// address is the proxy's, the same one for every visitor, not each caller's.
+// The rate limiter partitions by it (RateLimitPolicies.PartitionByCaller) and
+// OrganizationContextMiddleware records it against every establish — both
+// silently share one budget and one address across the whole audience
+// without this.
+//
+// KnownNetworks and KnownProxies are cleared rather than left at their
+// default of loopback-only. This application does not know, and cannot know
+// from here, what address the reverse proxy in front of it will have — that
+// is decided by whoever deploys it, on infrastructure this repository has no
+// view of. Trusting the immediate hop unconditionally is the standard trade
+// for that situation, and it is a safe one only because Kestrel is never
+// meant to be reachable directly: whoever deploys this is responsible for
+// making sure the only path in is through their reverse proxy.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+
+// KnownIPNetworks and KnownProxies come pre-populated with loopback, and
+// assigning "= { }" to either would only mean "add nothing to what is
+// already there" — the properties have no setter, so that line would compile
+// and do nothing. Clearing them is a statement, not an initializer.
+forwardedHeaders.KnownIPNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+
+app.UseForwardedHeaders(forwardedHeaders);
 
 app.UseSportFrogRequestLogging();
 
@@ -233,6 +266,8 @@ app.UseMiddleware<OrganizationContextMiddleware>();
 var api = app.MapGroup("").ValidateContracts();
 
 api.MapRegisterOrganization();
+api.MapReadOrganization();
+api.MapUpdateOrganization();
 api.MapAddMember();
 
 api.MapCreateClub();
@@ -295,6 +330,7 @@ api.MapDeleteMatch();
 api.MapRecordResult();
 api.MapChangeMatchStatus();
 api.MapAwardWalkover();
+api.MapRecordPenalties();
 
 api.MapRecordEvent();
 api.MapReadEvents();
@@ -304,15 +340,18 @@ api.MapDeleteEvent();
 api.MapReadStandings();
 api.MapReadLeaders();
 
+api.MapDrawGroups();
 api.MapDrawCalendar();
 api.MapScheduleCalendar();
 api.MapAdvanceBracket();
+api.MapPromoteGroupStage();
 
 api.MapReadPublicCompetitions();
 api.MapReadPublicCompetition();
 api.MapReadPublicTables();
 api.MapReadPublicCalendar();
 api.MapReadPublicRoster();
+api.MapReadPublicMatchEvents();
 api.MapVerifyDocument();
 
 api.MapCreateAthlete();

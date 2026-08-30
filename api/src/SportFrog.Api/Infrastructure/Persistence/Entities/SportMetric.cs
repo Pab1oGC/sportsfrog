@@ -30,6 +30,20 @@ public sealed class SportMetric
     /// </remarks>
     public bool AffectsScore { get; set; }
 
+    /// <summary>
+    /// How many points recording this metric once (quantity 1) is worth
+    /// toward the match score. Meaningless where <see cref="AffectsScore"/>
+    /// is false — a football goal and a basketball free throw are both worth
+    /// one, a field goal two, a three-pointer three.
+    /// </summary>
+    public int ScorePoints { get; set; } = 1;
+
+    /// <summary>
+    /// True only for an own goal: the points it is worth belong to the other
+    /// team, not to the team the roster entry recording it plays for.
+    /// </summary>
+    public bool CountsForOpponent { get; set; }
+
     /// <summary>Whether the metric can head a leaderboard — top scorer, most assists.</summary>
     public bool IsRankable { get; set; }
 

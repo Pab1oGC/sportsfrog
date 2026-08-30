@@ -92,4 +92,40 @@ public sealed record PublicSettings
     public bool ShowLeaders { get; init; } = true;
 
     public bool ShowRosters { get; init; }
+
+    /// <summary>
+    /// The cover image behind the competition's name, as a storage key —
+    /// never a URL. Absent means the plain brand background every
+    /// competition had before this existed.
+    /// </summary>
+    public string? BannerKey { get; init; }
+
+    /// <summary>The competition's own color for its public page, as "#rrggbb".</summary>
+    public string? AccentColor { get; init; }
+
+    /// <summary>A line or two under the name: who runs this, what it is for.</summary>
+    public string? Description { get; init; }
+
+    public string? Instagram { get; init; }
+
+    public string? Facebook { get; init; }
+
+    public string? WhatsApp { get; init; }
+
+    public string? Website { get; init; }
+
+    /// <summary>Who paid to appear on the page, in the order they appear.</summary>
+    public IReadOnlyList<SponsorLink>? Sponsors { get; init; }
+}
+
+/// <summary>One name in the strip of sponsors a public page may show.</summary>
+public sealed record SponsorLink
+{
+    /// <summary>The mark itself, as a storage key.</summary>
+    public required string LogoKey { get; init; }
+
+    public string? Name { get; init; }
+
+    /// <summary>Where the mark links to, if it should be clickable at all.</summary>
+    public string? Url { get; init; }
 }

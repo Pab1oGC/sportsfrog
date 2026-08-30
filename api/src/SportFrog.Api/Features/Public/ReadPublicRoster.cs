@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Public;
@@ -35,6 +36,7 @@ public static class ReadPublicRoster
         Guid TeamId,
         string TeamName,
         string ClubName,
+        string? ClubLogoUrl,
         Guid CategoryId,
         string CategoryName,
         IReadOnlyList<Player> Players);
@@ -54,6 +56,7 @@ public static class ReadPublicRoster
         string competitionSlug,
         Guid teamId,
         PublicCompetitionReader reader,
+        ObjectStore store,
         CancellationToken cancellationToken)
     {
         var page = await reader.ReadAsync(
@@ -90,6 +93,7 @@ public static class ReadPublicRoster
                         candidate.Id,
                         candidate.Name,
                         ClubName = candidate.Club!.Name,
+                        ClubLogoKey = candidate.Club.LogoUrl,
                         candidate.CategoryId,
                         CategoryName = candidate.Category!.Name,
                     })
@@ -99,6 +103,10 @@ public static class ReadPublicRoster
                 {
                     return new Gate(null);
                 }
+
+                var logoUrl = string.IsNullOrEmpty(team.ClubLogoKey)
+                    ? null
+                    : await store.ReadLinkAsync(resolved.OrganizationId, team.ClubLogoKey, cancellationToken);
 
                 var players = await database.RosterEntries
                     .AsNoTracking()
@@ -118,7 +126,7 @@ public static class ReadPublicRoster
                     .ToListAsync(cancellationToken);
 
                 return new Gate(new Response(
-                    team.Id, team.Name, team.ClubName, team.CategoryId, team.CategoryName, players));
+                    team.Id, team.Name, team.ClubName, logoUrl, team.CategoryId, team.CategoryName, players));
             },
             cancellationToken);
 

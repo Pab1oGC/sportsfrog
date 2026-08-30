@@ -1,5 +1,6 @@
 using FluentValidation;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Competitions;
@@ -56,10 +57,10 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
     public CompetitionContractValidator()
     {
         RuleFor(contract => contract.RulesetId)
-            .NotEmpty().WithMessage("The ruleset is required.");
+            .NotEmpty().WithMessage("El reglamento es obligatorio.");
 
         RuleFor(contract => contract.Name)
-            .NotEmpty().WithMessage("The competition name is required.")
+            .NotEmpty().WithMessage("El nombre de la competencia es obligatorio.")
             .MaximumLength(120);
 
         // Checked against the normalized form, since that is what gets
@@ -70,18 +71,18 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
             .WithMessage(Slug.Requirement);
 
         RuleFor(contract => contract.Season)
-            .NotEmpty().WithMessage("The season is required.")
+            .NotEmpty().WithMessage("La temporada es obligatoria.")
             .MaximumLength(40);
 
         RuleFor(contract => contract.Format)
             .Must(CompetitionFormat.All.Contains)
-            .WithMessage("Unknown format. Available: " +
+            .WithMessage("Formato desconocido. Disponibles: " +
                          $"{string.Join(", ", CompetitionFormat.All.Order(StringComparer.Ordinal))}.");
 
         RuleFor(contract => contract.CaptureLevel)
             .Must(level => TryReadCaptureLevel(level, out _))
             .WithMessage(
-                $"Unknown capture level. Available: {WireEnum.Options<CaptureLevel>()}.");
+                $"Nivel de captura desconocido. Disponibles: {WireEnum.Options<CaptureLevel>()}.");
 
         // The scheduling windows are checked for shape only. Whether the
         // spaces they name exist is not asked here: the venues module already
@@ -92,13 +93,13 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
         {
             RuleFor(contract => contract.Settings!.Schedule!.SlotMinutes)
                 .InclusiveBetween((short)1, (short)600)
-                .WithMessage("A fixture occupies its space for between 1 and 600 minutes.");
+                .WithMessage("Un partido ocupa su espacio entre 1 y 600 minutos.");
 
             RuleFor(contract => contract.Settings!.Schedule!.Spaces)
                 .Must(spaces => spaces == null || spaces.All(IsUsableWindow))
-                .WithMessage("Each scheduling window needs a space, days between 0 (Sunday) and " +
-                             "6, and times written as HH:mm with the first no later than the " +
-                             "last.");
+                .WithMessage("Cada ventana de horario necesita un espacio, días entre 0 " +
+                             "(domingo) y 6, y horas escritas como HH:mm, con la primera no " +
+                             "posterior a la última.");
         });
 
         // Mirrors ck_competition_dates. Stated here as well so the caller is
@@ -107,6 +108,71 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
         RuleFor(contract => contract.EndsOn)
             .GreaterThanOrEqualTo(contract => contract.StartsOn!.Value)
             .When(contract => contract.StartsOn.HasValue && contract.EndsOn.HasValue)
-            .WithMessage("A competition cannot end before it starts.");
+            .WithMessage("Una competencia no puede terminar antes de empezar.");
+
+        // Customization of the public page. Every field here is optional —
+        // a competition that never opens this settles for the plain page it
+        // always had — so everything below only runs When it was touched.
+        When(contract => contract.Settings?.Public is not null, () =>
+        {
+            // A picture field arrives one of two ways: a data URL, freshly
+            // picked and waiting to be uploaded, or a key this store already
+            // handed out, sent back unchanged because nothing about it
+            // changed. IsAcceptable alone would refuse the second shape —
+            // it does not look like an image, it looks like the key of one.
+            RuleFor(contract => contract.Settings!.Public!.BannerKey)
+                .Must(value => PortalPicture.IsStoredKey(value!) || InlinePhoto.IsAcceptable(value))
+                .When(contract => contract.Settings!.Public!.BannerKey is not null)
+                .WithMessage(InlinePhoto.Requirement);
+
+            RuleFor(contract => contract.Settings!.Public!.AccentColor)
+                .Matches("^#[0-9a-fA-F]{6}$")
+                .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.AccentColor))
+                .WithMessage("El color se escribe como #rrggbb.");
+
+            RuleFor(contract => contract.Settings!.Public!.Description)
+                .MaximumLength(500)
+                .WithMessage("La presentación tiene como máximo 500 caracteres.");
+
+            RuleFor(contract => contract.Settings!.Public!.Instagram).MaximumLength(200);
+            RuleFor(contract => contract.Settings!.Public!.Facebook).MaximumLength(200);
+            RuleFor(contract => contract.Settings!.Public!.WhatsApp).MaximumLength(200);
+            RuleFor(contract => contract.Settings!.Public!.Website).MaximumLength(200);
+
+            RuleFor(contract => contract.Settings!.Public!.Sponsors)
+                .Must(sponsors => sponsors == null || sponsors.Count <= MaximumSponsors)
+                .WithMessage($"Como máximo {MaximumSponsors} auspiciantes.");
+
+            // Guarded rather than folded into the Must above with ?? []: an
+            // empty fallback is a fresh collection expression, and RuleForEach
+            // cannot infer which property it is validating from one — it
+            // needs the real property access underneath, which only shows up
+            // once null is ruled out here instead of inside the expression.
+            When(contract => contract.Settings!.Public!.Sponsors is { Count: > 0 }, () =>
+            {
+                RuleForEach(contract => contract.Settings!.Public!.Sponsors!)
+                    .ChildRules(sponsor =>
+                    {
+                        sponsor.RuleFor(s => s.LogoKey)
+                            .NotEmpty().WithMessage("Cada auspiciante necesita un logo.")
+                            .Must(value => PortalPicture.IsStoredKey(value) || InlinePhoto.IsAcceptable(value))
+                            .When(s => !string.IsNullOrEmpty(s.LogoKey))
+                            .WithMessage(InlinePhoto.Requirement);
+
+                        sponsor.RuleFor(s => s.Name)
+                            .MaximumLength(80)
+                            .WithMessage("El nombre del auspiciante tiene como máximo 80 caracteres.");
+
+                        sponsor.RuleFor(s => s.Url)
+                            .MaximumLength(300);
+                    });
+            });
+        });
     }
+
+    /// <summary>
+    /// Enough to sponsor a competition without the strip turning into
+    /// something a phone has to scroll sideways to read.
+    /// </summary>
+    private const int MaximumSponsors = 16;
 }

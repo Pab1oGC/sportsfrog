@@ -29,7 +29,7 @@ public static class ChangeCompetitionStatus
             RuleFor(request => request.Status)
                 .Must(status => WireEnum.TryParse<CompetitionState>(status, out _))
                 .WithMessage(
-                    $"Unknown state. Available: {WireEnum.Options<CompetitionState>()}.");
+                    $"Estado desconocido. Disponibles: {WireEnum.Options<CompetitionState>()}.");
         }
     }
 
@@ -80,10 +80,10 @@ public static class ChangeCompetitionStatus
 
             return Results.Problem(
                 detail: destinations.Count == 0
-                    ? $"A {WireEnum.Label(competition.Status)} competition stays that way. Set up a new " +
-                      "one instead."
-                    : $"A {WireEnum.Label(competition.Status)} competition can only move to: " +
-                      $"{string.Join(", ", destinations.Select(WireEnum.Label))}.",
+                    ? $"Una competencia {WireEnum.Label(competition.Status)} se queda así. " +
+                      "Armá una nueva en su lugar."
+                    : $"Una competencia {WireEnum.Label(competition.Status)} solo puede pasar " +
+                      $"a: {string.Join(", ", destinations.Select(WireEnum.Label))}.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -94,7 +94,7 @@ public static class ChangeCompetitionStatus
             // which role would have been enough, for the same reason the role
             // filter says nothing.
             return Results.Problem(
-                detail: "This operation is not allowed.",
+                detail: "Esta operación no está permitida.",
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
@@ -139,8 +139,8 @@ public static class ChangeCompetitionStatus
                 // divisions has no teams either, so announcing it would
                 // publish an empty page.
                 return Results.Problem(
-                    detail: "This competition has no categories yet, so there is nothing to " +
-                            "schedule. Add at least one division first.",
+                    detail: "Esta competencia todavía no tiene categorías, así que no hay nada " +
+                            "que programar. Agregá al menos una división primero.",
                     statusCode: StatusCodes.Status409Conflict);
 
             case (CompetitionState.Scheduled, CompetitionState.Draft)
@@ -150,15 +150,16 @@ public static class ChangeCompetitionStatus
                 // cannot be redrawn without deciding what happens to the
                 // result. Nothing here is prepared to make that decision.
                 return Results.Problem(
-                    detail: "Results have already been recorded, so this competition cannot go " +
-                            "back to being set up. Cancel it instead if it is being abandoned.",
+                    detail: "Ya se registraron resultados, así que esta competencia no puede " +
+                            "volver a estar en armado. Cancelala en su lugar si se está " +
+                            "abandonando.",
                     statusCode: StatusCodes.Status409Conflict);
 
             case (CompetitionState.InProgress, CompetitionState.Finished)
                 when await activity.HasMatchesUnderWayAsync(competition.Id, cancellationToken):
                 return Results.Problem(
-                    detail: "A match is still being played. Close it before closing the " +
-                            "competition.",
+                    detail: "Todavía hay un partido en curso. Cerralo antes de cerrar la " +
+                            "competencia.",
                     statusCode: StatusCodes.Status409Conflict);
 
             default:

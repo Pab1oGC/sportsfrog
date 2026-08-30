@@ -57,7 +57,7 @@ public static class DrawCalendar
         public Validator() =>
             RuleFor(request => request.Legs)
                 .InclusiveBetween(1, 2)
-                .WithMessage("A draw runs in one leg, or two for home and away.");
+                .WithMessage("Un sorteo corre a una vuelta, o dos para ida y vuelta.");
     }
 
     public static IEndpointRouteBuilder MapDrawCalendar(this IEndpointRouteBuilder routes)
@@ -93,16 +93,17 @@ public static class DrawCalendar
         if (competition.Status is not (CompetitionState.Draft or CompetitionState.Scheduled))
         {
             return Results.Problem(
-                detail: "This competition is already under way, so its calendar cannot be drawn " +
-                        "again.",
+                detail: "Esta competencia ya está en curso, así que su calendario no se puede " +
+                        "volver a sortear.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
         if (competition.Format == CompetitionFormat.Knockout && request.Legs != 1)
         {
             return Results.Problem(
-                detail: "A knockout is drawn in one leg here. A two-legged tie is decided on " +
-                        "aggregate, which is a different object than two independent fixtures.",
+                detail: "Acá una eliminatoria se sortea a una vuelta. Un cruce a ida y vuelta se " +
+                        "decide por acumulado, que es un objeto distinto de dos partidos " +
+                        "independientes.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -119,7 +120,7 @@ public static class DrawCalendar
         if (teams.Count < 2)
         {
             return Results.Problem(
-                detail: "A calendar needs at least two teams still competing in the category.",
+                detail: "Un calendario necesita al menos dos equipos que sigan compitiendo en la categoría.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -130,8 +131,8 @@ public static class DrawCalendar
             // into them yet. Refused rather than quietly treated as one,
             // because the difference is a decision somebody has to make.
             return Results.Problem(
-                detail: "No team has been drawn into a group. Set the group of each team before " +
-                        "drawing a group stage.",
+                detail: "Ningún equipo fue sorteado en un grupo. Definí el grupo de cada equipo " +
+                        "antes de sortear una fase de grupos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -145,9 +146,9 @@ public static class DrawCalendar
             // would leave a result attached to a fixture the new draw does not
             // contain, which is a worse state than any calendar.
             return Results.Problem(
-                detail: "Results have already been recorded in this category, so its calendar " +
-                        "cannot be redrawn. Remove the fixtures that have not been played and " +
-                        "add the missing ones by hand.",
+                detail: "Ya se registraron resultados en esta categoría, así que su calendario " +
+                        "no se puede volver a sortear. Eliminá los partidos que no se jugaron y " +
+                        "agregá los que falten a mano.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

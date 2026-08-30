@@ -31,7 +31,7 @@ public static class AwardWalkover
         public Validator()
         {
             RuleFor(request => request.WinnerTeamId)
-                .NotEmpty().WithMessage("The team the match is awarded to is required.");
+                .NotEmpty().WithMessage("El equipo al que se otorga el partido es obligatorio.");
 
             RuleFor(request => request.Notes)
                 .MaximumLength(1000)
@@ -70,8 +70,8 @@ public static class AwardWalkover
         if (match.Status is MatchState.Finished)
         {
             return Results.Problem(
-                detail: "This match was played and has a result, so it cannot be awarded. " +
-                        "Correct the result instead.",
+                detail: "Este partido se jugó y tiene un resultado, así que no se puede otorgar. " +
+                        "Corregí el resultado en su lugar.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -81,14 +81,14 @@ public static class AwardWalkover
             // is a request built against the wrong fixture.
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["WinnerTeamId"] = ["That team is not playing this match."],
+                ["WinnerTeamId"] = ["Ese equipo no juega este partido."],
             });
         }
 
         if (await policy.FindRulesAsync(match, cancellationToken) is not { } rules)
         {
             return Results.Problem(
-                detail: "The rules for this match cannot be read, so a walkover cannot be scored.",
+                detail: "No se pueden leer las reglas de este partido, así que no se puede anotar un walkover.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -98,8 +98,8 @@ public static class AwardWalkover
             // to award. Refused rather than invented: a number chosen here
             // would quietly become the league's rule.
             return Results.Problem(
-                detail: "The ruleset for this competition does not say what a walkover is worth. " +
-                        "Add it to the ruleset before awarding one.",
+                detail: "El reglamento de esta competencia no dice cuánto vale un walkover. " +
+                        "Agregalo al reglamento antes de otorgar uno.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

@@ -95,7 +95,7 @@ public static class WithdrawPlayer
             // The index counts only players actually on the team, which is
             // exactly the set this rejoins.
             return Results.Problem(
-                detail: "That shirt was taken at the same moment. Read the squad and try again.",
+                detail: "Esa camiseta se tomó en el mismo instante. Volvé a leer la nómina e intentá de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

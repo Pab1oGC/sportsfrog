@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
+import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
 /**
@@ -29,6 +30,7 @@ export function useCrudDialog(opts) {
     onSaved,
   } = opts;
 
+  const confirm = useConfirm();
   const { data, mutate, isLoading } = useApi(resourceUrl);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -82,7 +84,8 @@ export function useCrudDialog(opts) {
 
   const remove = useCallback(
     async (id) => {
-      if (!window.confirm(`Eliminar ${entityName}?`)) return;
+      const ok = await confirm(`Eliminar ${entityName}?`, { confirmLabel: 'Eliminar', danger: true });
+      if (!ok) return;
       try {
         await apiDelete(getUrl(id));
         mutate();
@@ -91,7 +94,7 @@ export function useCrudDialog(opts) {
         toast.error(err.message || 'Error al eliminar.');
       }
     },
-    [entityName, getUrl, mutate],
+    [confirm, entityName, getUrl, mutate],
   );
 
   return {

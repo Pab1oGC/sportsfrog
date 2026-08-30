@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Standings;
 
@@ -29,6 +31,7 @@ public static class ReadStandings
         int Position,
         Guid TeamId,
         string TeamName,
+        string? ClubLogoUrl,
         int Played,
         int Won,
         int Drawn,
@@ -46,6 +49,10 @@ public static class ReadStandings
     /// question about this object, and the answer is in the ruleset rather
     /// than in the numbers on screen.
     /// </param>
+    /// <param name="QualifiersPerGroup">
+    /// How many rows of each group to highlight as advancing, per the
+    /// organizers' declared rule. Null when there is none to show.
+    /// </param>
     public sealed record Response(
         Guid CategoryId,
         string CategoryName,
@@ -53,7 +60,8 @@ public static class ReadStandings
         Guid RulesetId,
         string RulesetName,
         IReadOnlyList<string> Tiebreakers,
-        IReadOnlyList<Group> Groups);
+        IReadOnlyList<Group> Groups,
+        short? QualifiersPerGroup);
 
     public static IEndpointRouteBuilder MapReadStandings(this IEndpointRouteBuilder routes)
     {
@@ -68,6 +76,8 @@ public static class ReadStandings
     private static async Task<IResult> HandleAsync(
         Guid categoryId,
         SportFrogDbContext database,
+        ObjectStore store,
+        OrganizationContext organization,
         CancellationToken cancellationToken)
     {
         if (await StandingsQuery.ForCategoryAsync(database, categoryId, cancellationToken)
@@ -76,31 +86,49 @@ public static class ReadStandings
             return Results.NotFound();
         }
 
-        return Results.Ok(Present(table));
+        return Results.Ok(
+            await PresentAsync(table, store, organization.RequireOrganizationId(), cancellationToken));
     }
 
     /// <summary>
-    /// Numbers the rows and hands the table over.
+    /// Numbers the rows, signs each crest, and hands the table over.
     /// </summary>
     /// <remarks>
     /// Shared with the public reading, so the two describe the same table the
     /// same way — including the positions, which is the part a caller cannot
     /// recompute correctly when two teams are level.
+    ///
+    /// The organization is an explicit argument rather than read from
+    /// <paramref name="table"/> for the same reason <see cref="ObjectStore"/>
+    /// takes it as one: the public reading resolves it from the address, not
+    /// from a request context that does not exist there.
     /// </remarks>
-    internal static Response Present(StandingsResult table) =>
-        new(
-            table.CategoryId,
-            table.CategoryName,
-            table.SportCode,
-            table.RulesetId,
-            table.RulesetName,
-            table.Tiebreakers,
-            [.. table.Groups.Select(group => new Group(
-                group.Label,
-                [.. group.Rows.Select((row, index) => new Row(
+    internal static async Task<Response> PresentAsync(
+        StandingsResult table,
+        ObjectStore store,
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        var groups = new List<Group>(table.Groups.Count);
+
+        foreach (var group in table.Groups)
+        {
+            var rows = new List<Row>(group.Rows.Count);
+
+            for (var index = 0; index < group.Rows.Count; index++)
+            {
+                var row = group.Rows[index];
+
+                var logoUrl = table.LogoKeys.TryGetValue(row.TeamId, out var key)
+                    && !string.IsNullOrEmpty(key)
+                        ? await store.ReadLinkAsync(organizationId, key, cancellationToken)
+                        : null;
+
+                rows.Add(new Row(
                     index + 1,
                     row.TeamId,
                     row.TeamName,
+                    logoUrl,
                     row.Played,
                     row.Won,
                     row.Drawn,
@@ -108,5 +136,20 @@ public static class ReadStandings
                     row.ScoreFor,
                     row.ScoreAgainst,
                     row.ScoreDifference,
-                    row.Points))]))]);
+                    row.Points));
+            }
+
+            groups.Add(new Group(group.Label, rows));
+        }
+
+        return new Response(
+            table.CategoryId,
+            table.CategoryName,
+            table.SportCode,
+            table.RulesetId,
+            table.RulesetName,
+            table.Tiebreakers,
+            groups,
+            table.QualifiersPerGroup);
+    }
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
@@ -9,12 +10,17 @@ import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { SelectionCompetition, SelectionField } from 'src/components/selectors';
+import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
-const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '' });
+const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '' });
 
 export default function CategoriesPage() {
-  const [compId, setCompId] = useState('');
+  const confirm = useConfirm();
+  const [searchParams] = useSearchParams();
+  // Preseleccionada al llegar desde "crear competencia": ese flujo manda para
+  // acá porque una competencia sin categorías no tiene nada que sortear.
+  const [compId, setCompId] = useState(() => searchParams.get('competition') || '');
   const { data: comps } = useApi(endpoints.competitions);
   const { data, mutate, isLoading } = useApi(compId ? endpoints.categories(compId) : null);
   const { data: rulesets } = useApi(endpoints.rulesets);
@@ -34,14 +40,14 @@ export default function CategoriesPage() {
   const openDialog = (row) => {
     setError(null);
     setEditId(row?.id || null);
-    setForm(row ? { name: row.name || '', gender: row.gender || '', birthDateFrom: row.birthDateFrom || '', birthDateTo: row.birthDateTo || '', maxRosterSize: row.maxRosterSize || '', displayOrder: row.displayOrder || 0, rulesetId: row.rulesetId || '' } : emptyForm());
+    setForm(row ? { name: row.name || '', gender: row.gender || '', birthDateFrom: row.birthDateFrom || '', birthDateTo: row.birthDateTo || '', maxRosterSize: row.maxRosterSize || '', displayOrder: row.displayOrder || 0, rulesetId: row.rulesetId || '', qualifiersPerGroup: row.qualifiersPerGroup || '' } : emptyForm());
     setOpen(true);
   };
 
   const save = async () => {
     if (!compId) return; setSaving(true); setError(null);
     try {
-      const body = { name: form.name, gender: form.gender || null, birthDateFrom: form.birthDateFrom || null, birthDateTo: form.birthDateTo || null, maxRosterSize: form.maxRosterSize ? Number(form.maxRosterSize) : null, displayOrder: Number(form.displayOrder), rulesetId: form.rulesetId || null };
+      const body = { name: form.name, gender: form.gender || null, birthDateFrom: form.birthDateFrom || null, birthDateTo: form.birthDateTo || null, maxRosterSize: form.maxRosterSize ? Number(form.maxRosterSize) : null, displayOrder: Number(form.displayOrder), rulesetId: form.rulesetId || null, qualifiersPerGroup: form.qualifiersPerGroup ? Number(form.qualifiersPerGroup) : null };
       editId ? await apiPut(endpoints.category(compId, editId), body) : await apiPost(endpoints.categories(compId), body);
       setOpen(false); mutate(); toast.success('Categoria guardada.');
     } catch (err) { setError(err.message); }
@@ -49,7 +55,9 @@ export default function CategoriesPage() {
   };
 
   const remove = async (catId) => {
-    if (!compId || !confirm('Eliminar categoria?')) return;
+    if (!compId) return;
+    const ok = await confirm('Eliminar categoria?', { confirmLabel: 'Eliminar', danger: true });
+    if (!ok) return;
     await apiDelete(endpoints.category(compId, catId)); mutate(); toast.success('Categoria eliminada.');
   };
 
@@ -71,7 +79,7 @@ export default function CategoriesPage() {
   return (
     <div>
       <PageHeader title="Categorias" actionLabel="Nueva categoria" onAction={() => openDialog(null)}>
-        <Box sx={{ width: 300 }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
+        <Box sx={{ width: { xs: '100%', sm: 300 } }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
       </PageHeader>
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
       <CrudDialog open={open} editId={editId} entityName="Categoria" error={error} saving={saving} onClose={() => setOpen(false)} onSave={save}>
@@ -81,6 +89,16 @@ export default function CategoriesPage() {
         <TextField label="Nac. hasta" type="date" value={form.birthDateTo} onChange={(e) => setForm({ ...form, birthDateTo: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Max. nomina" type="number" value={form.maxRosterSize} onChange={(e) => setForm({ ...form, maxRosterSize: e.target.value })} fullWidth />
         <TextField label="Orden" type="number" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: e.target.value })} fullWidth />
+        {comp?.format === 'groups' && (
+          <TextField
+            label="Clasifican por grupo"
+            type="number"
+            value={form.qualifiersPerGroup}
+            onChange={(e) => setForm({ ...form, qualifiersPerGroup: e.target.value })}
+            helperText="Cuantos equipos de cada grupo pasan a la siguiente ronda. Se deja vacio para no resaltar nada en el portal publico."
+            fullWidth
+          />
+        )}
         <TextField select label="Reglamento propio" value={form.rulesetId} onChange={(e) => setForm({ ...form, rulesetId: e.target.value })} fullWidth disabled={possibleRulesets.length === 0}>
           <MenuItem value="">Usar el de la competencia</MenuItem>
           {possibleRulesets.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}

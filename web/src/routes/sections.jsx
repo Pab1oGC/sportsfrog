@@ -9,7 +9,6 @@ import CircularProgress from "@mui/material/CircularProgress";
 
 var LandingPage = lazy(function() { return import("src/pages/landing-page"); });
 var SignInPage = lazy(function() { return import("src/pages/sign-in"); });
-var SignUpPage = lazy(function() { return import("src/pages/sign-up"); });
 var DashboardPage = lazy(function() { return import("src/pages/dashboard-page"); });
 var CompetitionsPage = lazy(function() { return import("src/pages/competitions-page"); });
 var ClubsPage = lazy(function() { return import("src/pages/clubs-page"); });
@@ -26,6 +25,7 @@ var TemplatesPage = lazy(function() { return import("src/pages/templates-page");
 var TemplateDesignerPage = lazy(function() { return import("src/pages/template-designer"); });
 var DocumentsPage = lazy(function() { return import("src/pages/documents-page"); });
 var MembersPage = lazy(function() { return import("src/pages/members-page"); });
+var OrganizationPage = lazy(function() { return import("src/pages/organization-page"); });
 var PublicPortalPage = lazy(function() { return import("src/pages/public/public-portal"); });
 var PublicCompetitionPage = lazy(function() { return import("src/pages/public/public-competition"); });
 
@@ -50,7 +50,6 @@ export var routesSection = [
 
   // Auth
   { path: "/auth/jwt/sign-in", element: <GuestGuard><SignInPage /></GuestGuard> },
-  { path: "/auth/jwt/sign-up", element: <SignUpPage /> },
   { path: "/auth", element: <Navigate to="/auth/jwt/sign-in" replace /> },
 
   // Dashboard
@@ -74,6 +73,7 @@ export var routesSection = [
       { path: "templates/:id/design", element: <LazyPage Component={TemplateDesignerPage} /> },
       { path: "documents", element: <LazyPage Component={DocumentsPage} /> },
       { path: "members", element: <LazyPage Component={MembersPage} /> },
+      { path: "organization", element: <LazyPage Component={OrganizationPage} /> },
     ],
   },
 

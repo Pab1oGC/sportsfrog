@@ -24,6 +24,12 @@ public static class ReadEvents
         string MetricCode,
         string MetricLabel,
         bool AffectsScore,
+
+        /// <summary>
+        /// True only for an own goal: the roster entry above plays for
+        /// <see cref="TeamId"/>, but the goal counts for the other team.
+        /// </summary>
+        bool CountsForOpponent,
         short? PeriodNumber,
         short? Minute,
         int Quantity);
@@ -113,6 +119,7 @@ public static class ReadEvents
             recorded.Metric!.Code,
             recorded.Metric.Label,
             recorded.Metric.AffectsScore,
+            recorded.Metric.CountsForOpponent,
             recorded.PeriodNumber,
             recorded.Minute,
             recorded.Quantity));

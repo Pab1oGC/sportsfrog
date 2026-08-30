@@ -103,6 +103,13 @@ Hay un perfil de Compose que levanta la API en un contenedor, migraciones
 incluidas, para quien solo quiere verla andar sin SDK ni IDE. Está documentado
 en [`api/README.md`](api/README.md).
 
+### Desplegarlo, todo dockerizado
+
+Otro perfil de Compose levanta el sitio completo — Postgres, MinIO, la API y
+el frontend detrás de nginx — para un despliegue real en vez de una prueba
+local. También está en [`api/README.md`](api/README.md), con el paso que hay
+que hacer antes de exponerlo con un túnel o un dominio propio.
+
 ---
 
 ## Qué hace el sistema

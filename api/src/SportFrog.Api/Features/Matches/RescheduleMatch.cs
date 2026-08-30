@@ -35,15 +35,15 @@ public static class RescheduleMatch
         public Validator()
         {
             RuleFor(request => request.HomeTeamId)
-                .NotEmpty().WithMessage("The home team is required.");
+                .NotEmpty().WithMessage("El equipo local es obligatorio.");
 
             RuleFor(request => request.AwayTeamId)
-                .NotEmpty().WithMessage("The away team is required.");
+                .NotEmpty().WithMessage("El equipo visitante es obligatorio.");
 
             RuleFor(request => request.RoundNumber)
                 .InclusiveBetween((short)1, (short)200)
                 .When(request => request.RoundNumber.HasValue)
-                .WithMessage("A round number is between 1 and 200.");
+                .WithMessage("El número de ronda está entre 1 y 200.");
 
             RuleFor(request => request.Phase)
                 .MaximumLength(40)
@@ -86,8 +86,8 @@ public static class RescheduleMatch
         if (teamsChanged && match.Status is not (MatchState.Scheduled or MatchState.Postponed))
         {
             return Results.Problem(
-                detail: "This match has already been played or awarded, so who played it is " +
-                        "fixed. Only a fixture still waiting to be played can change sides.",
+                detail: "Este partido ya se jugó o se otorgó, así que quién lo jugó quedó fijo. " +
+                        "Solo un partido que todavía espera jugarse puede cambiar de equipos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -121,8 +121,8 @@ public static class RescheduleMatch
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "That space is already taken at that time. Two matches cannot share a " +
-                        "pitch, so move one of them.",
+                detail: "Ese espacio ya está tomado a esa hora. Dos partidos no pueden compartir " +
+                        "cancha, así que movés uno de los dos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

@@ -15,6 +15,11 @@ namespace SportFrog.Api.Features.Clubs;
 /// </summary>
 public static class ReadClubs
 {
+    /// <param name="LogoUrl">
+    /// A temporary link to the crest, not the crest and not its permanent
+    /// address. It expires; it is meant to be loaded now, by the page that
+    /// asked for it, and not stored anywhere.
+    /// </param>
     public sealed record Summary(Guid Id, string Name, string? ShortName, string? LogoUrl, bool IsActive);
 
     public static IEndpointRouteBuilder MapReadClubs(this IEndpointRouteBuilder routes)
@@ -34,33 +39,51 @@ public static class ReadClubs
 
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
+        ClubPhoto photos,
         CancellationToken cancellationToken,
         string? search = null)
     {
         search = QueryFilter.OrAbsent(search);
 
-        return Results.Ok(await database.Clubs
+        var clubs = await database.Clubs
             .Where(club => search == null || EF.Functions.ILike(club.Name, $"%{search}%"))
             .OrderBy(club => club.Name)
-            .Select(club => new Summary(
-                club.Id, club.Name, club.ShortName, club.LogoUrl, club.IsActive))
-            .ToListAsync(cancellationToken));
+            .ToListAsync(cancellationToken);
+
+        var listing = new List<Summary>(clubs.Count);
+
+        foreach (var club in clubs)
+        {
+            listing.Add(await PresentAsync(club, photos, cancellationToken));
+        }
+
+        return Results.Ok(listing);
     }
 
     private static async Task<IResult> ReadAsync(
         Guid id,
         SportFrogDbContext database,
+        ClubPhoto photos,
         CancellationToken cancellationToken)
     {
-        var club = await database.Clubs
-            .Where(candidate => candidate.Id == id)
-            .Select(candidate => new Summary(
-                candidate.Id, candidate.Name, candidate.ShortName, candidate.LogoUrl, candidate.IsActive))
-            .SingleOrDefaultAsync(cancellationToken);
+        var club = await database.Clubs.SingleOrDefaultAsync(
+            candidate => candidate.Id == id, cancellationToken);
 
         // A club of another organization is not found rather than forbidden,
         // and that is not a choice made here: the policy never returned it, so
         // there is nothing to distinguish it from one that does not exist.
-        return club is null ? Results.NotFound() : Results.Ok(club);
+        return club is null ? Results.NotFound() : Results.Ok(await PresentAsync(club, photos, cancellationToken));
     }
+
+    /// <summary>Turns a row into what a reader gets, signing the crest on the way.</summary>
+    private static async Task<Summary> PresentAsync(
+        Club club,
+        ClubPhoto photos,
+        CancellationToken cancellationToken) =>
+        new(
+            club.Id,
+            club.Name,
+            club.ShortName,
+            await photos.LinkAsync(club.LogoUrl, cancellationToken),
+            club.IsActive);
 }

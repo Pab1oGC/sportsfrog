@@ -20,7 +20,11 @@ public enum DocumentBatchState
 [JsonConverter(typeof(SnakeCaseEnumConverter<SkipReason>))]
 public enum SkipReason
 {
-    /// <summary>The design prints a photograph and this person has none.</summary>
+    /// <summary>
+    /// Historical only. Older batches skipped anybody without a photograph
+    /// when the design wanted one; a batch run today prints a placeholder
+    /// silhouette instead, so nothing new is ever recorded with this reason.
+    /// </summary>
     NoPhoto,
 
     /// <summary>They already hold one for this competition.</summary>

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Standings;
 using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Public;
@@ -54,13 +55,14 @@ public static class ReadPublicTables
         string organizationSlug,
         string competitionSlug,
         PublicCompetitionReader reader,
+        ObjectStore store,
         CancellationToken cancellationToken) =>
         PublishedAsync(
             organizationSlug,
             competitionSlug,
             reader,
             shows => shows.ShowStandings,
-            async (database, categories) =>
+            async (database, organizationId, categories) =>
             {
                 var tables = new List<ReadStandings.Response>(categories.Count);
 
@@ -69,7 +71,8 @@ public static class ReadPublicTables
                     if (await StandingsQuery.ForCategoryAsync(database, categoryId, cancellationToken)
                         is { } table)
                     {
-                        tables.Add(ReadStandings.Present(table));
+                        tables.Add(await ReadStandings.PresentAsync(
+                            table, store, organizationId, cancellationToken));
                     }
                 }
 
@@ -88,7 +91,7 @@ public static class ReadPublicTables
             competitionSlug,
             reader,
             shows => shows.ShowLeaders,
-            async (database, categories) =>
+            async (database, organizationId, categories) =>
             {
                 // Clamped rather than refused. A visitor is not filling in a
                 // form, they followed a link, and a page that answers a silly
@@ -136,7 +139,7 @@ public static class ReadPublicTables
         string competitionSlug,
         PublicCompetitionReader reader,
         Func<PublicSettings, bool> published,
-        Func<SportFrogDbContext, IReadOnlyList<Guid>, Task<object>> read,
+        Func<SportFrogDbContext, Guid, IReadOnlyList<Guid>, Task<object>> read,
         CancellationToken cancellationToken)
     {
         var page = await reader.ReadAsync(
@@ -165,7 +168,7 @@ public static class ReadPublicTables
                     .Select(category => category.Id)
                     .ToListAsync(cancellationToken);
 
-                return new Gate(await read(database, categories));
+                return new Gate(await read(database, resolved.OrganizationId, categories));
             },
             cancellationToken);
 

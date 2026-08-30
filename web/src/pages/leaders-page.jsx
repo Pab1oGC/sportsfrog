@@ -42,9 +42,9 @@ export default function LeadersPage() {
 
 function CascadeFilters({ cascade }) {
   return (
-    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700 }}>
-      <Box sx={{ flex: 1 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
-      <Box sx={{ flex: 1 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
+    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
+      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
+      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
     </Box>
   );
 }

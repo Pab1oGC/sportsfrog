@@ -24,6 +24,26 @@ public sealed class StorageOptions
     [Required(AllowEmptyStrings = false)]
     public string Endpoint { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The address a browser uses to reach the same objects <see cref="Endpoint"/>
+    /// serves, when it isn't the same address. Null means it is — a local
+    /// container, or a deployment where the storage host is itself public.
+    /// </summary>
+    /// <remarks>
+    /// Behind a reverse proxy that puts object storage on the same public
+    /// origin as the site (see web/nginx.conf) but reaches it internally
+    /// under a different host — a Docker service name nothing outside the
+    /// network can resolve — <see cref="Endpoint"/> still has to be that
+    /// internal address: it is what actually receives every request this
+    /// process makes, bootstrap check included, and it is what the signature
+    /// on a link is computed against. This is only ever used to rewrite the
+    /// scheme and host of an already-signed link before it is handed to a
+    /// browser — see <see cref="ObjectStore.ReadLinkAsync"/> — never to talk
+    /// to storage directly. Changing it can't invalidate a signature that
+    /// was already computed.
+    /// </remarks>
+    public string? PublicUrl { get; set; }
+
     [Required(AllowEmptyStrings = false)]
     public string Bucket { get; set; } = string.Empty;
 

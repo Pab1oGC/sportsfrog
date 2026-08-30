@@ -50,8 +50,8 @@ public static class DeleteMatch
             // of a table that was computed with it, and the two teams would
             // silently lose a match each.
             return Results.Problem(
-                detail: "This match has a result, so it cannot be removed. Cancel it instead if " +
-                        "it should not count.",
+                detail: "Este partido tiene un resultado, así que no se puede eliminar. Cancelálo " +
+                        "en su lugar si no debería contar.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

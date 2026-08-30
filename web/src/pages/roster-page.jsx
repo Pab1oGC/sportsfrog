@@ -19,6 +19,7 @@ import { endpoints, default as axios } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub } from 'src/components/selectors';
+import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
 const PREVIEW_COLS = [
@@ -34,6 +35,7 @@ const PREVIEW_COLS = [
 ];
 
 export default function RosterPage() {
+  const confirm = useConfirm();
   const cascade = useCascade();
   const { data: roster, mutate, isLoading } = useApi(cascade.teamId ? endpoints.roster(cascade.teamId) : null);
   const { data: athletes } = useApi(endpoints.athletes);
@@ -69,7 +71,8 @@ export default function RosterPage() {
   };
 
   const strike = async (entry) => {
-    if (!confirm('Anular registro?')) return;
+    const ok = await confirm('Anular registro?', { confirmLabel: 'Anular', danger: true });
+    if (!ok) return;
     try { await apiDelete(endpoints.rosterEntry(entry.id)); mutate(); } catch (err) { toast.error(err.message); }
   };
 
@@ -159,8 +162,8 @@ function ExcelImportDialog({ open, onClose, step, file, result, loading, onFileC
   return (
     <Box component="div">
       {open && (
-        <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'rgba(0,0,0,0.5)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-          <Box component="div" sx={{ bgcolor: 'white', borderRadius: 2, p: 3, minWidth: 500, maxWidth: 900 }} onClick={(e) => e.stopPropagation()}>
+        <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'rgba(0,0,0,0.5)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }} onClick={onClose}>
+          <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, width: { xs: '100%', sm: 500 }, maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Importar nomina desde Excel</Typography>
             <Stepper activeStep={step} sx={{ mb: 3 }}>
               <Step><StepLabel>Subir archivo</StepLabel></Step>

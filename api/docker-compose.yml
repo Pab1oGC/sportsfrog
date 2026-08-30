@@ -52,8 +52,11 @@ services:
   # whoever doesn't have the SDK doesn't need 'dotnet ef'.
   #
   # Connects as the schema owner. The API itself never applies migrations.
+  #
+  # Shared by both profiles below: a real deployment needs exactly the same
+  # thing a quick local look does here, just against a database that means it.
   migrate:
-    profiles: ["full"]
+    profiles: ["full", "production"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -70,17 +73,22 @@ services:
   # writing it runs it from their IDE against the data containers, with a
   # debugger and hot reload.
   #
-  # This service exists for whoever just wants to try the application
-  # without installing the .NET SDK. It sits behind a profile, so
-  # 'docker compose up -d' ignores it:
+  # This one service now answers to two profiles, for two different reasons:
   #
-  #   docker compose up -d                    postgres and minio only
-  #   docker compose --profile full up -d     + the API
+  #   docker compose up -d                          postgres and minio only
+  #   docker compose --profile full up -d           + the API, for a quick
+  #                                                    local look without the
+  #                                                    SDK — ASPNETCORE_ENVIRONMENT
+  #                                                    stays Development unless
+  #                                                    .env says otherwise
+  #   docker compose --profile production up -d     + the API and the web
+  #                                                    container — the real
+  #                                                    deployment
   #
   # Doesn't apply migrations at startup: that's done separately, with a
   # different user. See the README.
   api:
-    profiles: ["full"]
+    profiles: ["full", "production"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -88,17 +96,44 @@ services:
     container_name: sportfrog-api
     restart: unless-stopped
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       # Inside the Compose network the database isn't localhost but the
       # service name. These variables take precedence over appsettings.
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
-      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=;Username=sportfrog_public;Password="
+      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
       # Required: the options are validated on start, so the API refuses to
       # boot without it rather than failing at the first sign-in.
       Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
+      # Also required and validated on start (DocumentOptions), and set here
+      # rather than left to appsettings.Development.json for the same reason
+      # ASPNETCORE_ENVIRONMENT is parametrized above: --profile production
+      # runs as Production, which never reads that file. What a credential's
+      # QR code opens to — override in .env to the public origin once you
+      # have one, same as STORAGE_ENDPOINT above.
+      Documents__VerificationBaseUrl: ${VERIFICATION_BASE_URL:-http://localhost:5173/verificar}
       # Object storage. The API creates the bucket on first start if it is
       # missing, so a fresh volume needs nothing done to it by hand.
+      #
+      # Endpoint is always the address only this Compose network can
+      # resolve — it's what this process actually calls (the bootstrap
+      # check included), not just what a link is signed against, so it can
+      # never be the public address: the api container can't reach itself
+      # through a tunnel that doesn't exist yet at the moment it boots.
+      #
+      # PublicUrl is the address a browser uses instead. Empty by default,
+      # which is correct for --profile full: nobody outside the host is
+      # meant to reach it, so every link stays exactly what it's signed
+      # against. --profile production has to set it in .env to whatever the
+      # public actually uses — a cloudflared tunnel's hostname, or a real
+      # domain — because that's the address every signed link gets rewritten
+      # to before it's handed out (see ObjectStore.Rehost). Left empty
+      # behind a tunnel, every photo, logo and credential comes back as a
+      # broken link the moment anyone outside this machine opens the page.
+      # See web/nginx.conf, which is the other half of why that works: it
+      # reverse-proxies /sportfrog/ back to MinIO under that same public
+      # address.
       Storage__Endpoint: "http://minio:9000"
+      Storage__PublicUrl: ${STORAGE_ENDPOINT:-}
       Storage__Bucket: "sportfrog"
       Storage__AccessKey: ${MINIO_ROOT_USER}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
@@ -112,6 +147,23 @@ services:
       # Doesn't start until the schema has been applied.
       migrate:
         condition: service_completed_successfully
+
+  # Everything dockerized end to end: builds the SPA and serves it behind
+  # nginx, which also reverse-proxies /api and /sportfrog to the API and to
+  # object storage (see web/nginx.conf). A visitor — or a cloudflared tunnel
+  # pointed at this one container — only ever talks to nginx; it never needs
+  # to know the API or MinIO exist.
+  web:
+    profiles: ["production"]
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: sportfrog-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT}:80"
+    depends_on:
+      - api
 
 volumes:
   postgres-data:

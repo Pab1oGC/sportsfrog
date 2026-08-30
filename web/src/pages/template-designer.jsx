@@ -18,6 +18,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
+import { useConfirm } from 'src/components/confirm-dialog';
 
 /* ---------------------------------------------------------------------------
    Los limites son los de LayoutPolicy.cs, repetidos aca a proposito: sujetar
@@ -78,6 +79,7 @@ function limpiarCampo(campo) {
 }
 
 export default function TemplateDesignerPage() {
+  var confirm = useConfirm();
   var params = useParams();
   var navigate = useNavigate();
   var templateId = params.id;
@@ -415,8 +417,9 @@ export default function TemplateDesignerPage() {
     setSel(null);
   };
 
-  var quitarReverso = function() {
-    if (!confirm('Quitar el reverso y todos sus campos?')) return;
+  var quitarReverso = async function() {
+    var ok = await confirm('Quitar el reverso y todos sus campos?', { confirmLabel: 'Quitar', danger: true });
+    if (!ok) return;
     setCaras(function(previas) { return Object.assign({}, previas, { back: null }); });
     setFondos(function(previos) { return Object.assign({}, previos, { back: '' }); });
     setCara('front');

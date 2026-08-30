@@ -27,7 +27,7 @@ public static class ChangeMatchStatus
             RuleFor(request => request.Status)
                 .Must(status => WireEnum.TryParse<MatchState>(status, out _))
                 .WithMessage(
-                    $"Unknown state. Available: {WireEnum.Options<MatchState>()}.");
+                    $"Estado desconocido. Disponibles: {WireEnum.Options<MatchState>()}.");
         }
     }
 
@@ -70,10 +70,10 @@ public static class ChangeMatchStatus
         {
             return Results.Problem(
                 detail: target == MatchState.Finished
-                    ? "A match is finished by recording its result, not by naming the state: " +
-                      "use the result endpoint."
-                    : "A walkover is awarded to a team, so it needs to name one: use the " +
-                      "walkover endpoint.",
+                    ? "Un partido termina registrando su resultado, no nombrando el estado: " +
+                      "usá el endpoint de resultado."
+                    : "Un walkover se otorga a un equipo, así que necesita nombrar uno: usá el " +
+                      "endpoint de walkover.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -83,9 +83,9 @@ public static class ChangeMatchStatus
 
             return Results.Problem(
                 detail: destinations.Count == 0
-                    ? $"This match is {WireEnum.Label(match.Status)}, and that is decided by its " +
-                      "result. Correct the result instead."
-                    : $"A {WireEnum.Label(match.Status)} match can only move to: " +
+                    ? $"Este partido está {WireEnum.Label(match.Status)}, y eso lo decide su " +
+                      "resultado. Corregí el resultado en su lugar."
+                    : $"Un partido {WireEnum.Label(match.Status)} solo puede pasar a: " +
                       $"{string.Join(", ", destinations.Select(WireEnum.Label))}.",
                 statusCode: StatusCodes.Status409Conflict);
         }
@@ -104,8 +104,8 @@ public static class ChangeMatchStatus
             // cancelled match frees its slot — and putting one back onto the
             // calendar can find the slot taken in the meantime.
             return Results.Problem(
-                detail: "Another match has taken that space and time while this one was off the " +
-                        "calendar. Move it before putting it back.",
+                detail: "Otro partido tomó ese espacio y horario mientras este estaba fuera del " +
+                        "calendario. Moverlo antes de ponerlo de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

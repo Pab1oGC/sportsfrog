@@ -28,6 +28,22 @@ internal static class StorageKeys
     public static string AthletePhoto(Guid organizationId, Guid athleteId, string extension) =>
         $"{Prefix(organizationId)}athletes/{athleteId:n}/{Guid.NewGuid():n}.{extension}";
 
+    /// <summary>A club's crest or logo.</summary>
+    public static string ClubLogo(Guid organizationId, Guid clubId, string extension) =>
+        $"{Prefix(organizationId)}clubs/{clubId:n}/{Guid.NewGuid():n}.{extension}";
+
+    /// <summary>
+    /// An image with no entity of its own to be filed under — the
+    /// organization's mark, a competition's cover, a sponsor's logo.
+    /// </summary>
+    /// <param name="category">
+    /// A folder name, not a type check: nothing here validates it against a
+    /// fixed list, and the caller is the one who has to keep it stable — a
+    /// category that changes name orphans every key already stored under it.
+    /// </param>
+    public static string Picture(Guid organizationId, string category, string extension) =>
+        $"{Prefix(organizationId)}pictures/{category}/{Guid.NewGuid():n}.{extension}";
+
     /// <summary>
     /// An uploaded archive of photographs, kept under its batch.
     /// </summary>

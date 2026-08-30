@@ -13,9 +13,11 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Tooltip from '@mui/material/Tooltip';
 import { useNavigate, useSearchParams, Link as RouterLink } from 'react-router';
 import { signIn } from 'src/auth/context/jwt';
+import { useAuthContext } from 'src/auth/hooks';
 
 export default function SignInPage() {
   const navigate = useNavigate();
+  const { checkSession } = useAuthContext();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get('returnTo') || '/dashboard';
 
@@ -30,14 +32,20 @@ export default function SignInPage() {
     setLoading(true); setError('');
     try {
       await signIn({ email, password, remember });
+      // Antes recargaba la pagina entera para que AuthProvider notara la
+      // sesion nueva. Eso tambien borraba el refresh token que acababa de
+      // guardarse en memoria — el unico lugar donde vive cuando no se tilda
+      // "recordarme" — dejando la renovacion automatica sin nada que usar
+      // desde el primer segundo. checkSession() logra lo mismo (relee el
+      // access token y actualiza el contexto) sin reiniciar el modulo.
+      await checkSession();
       navigate(returnTo, { replace: true });
-      window.location.reload();
     } catch (err) { setError(err.message || 'Credenciales incorrectas'); }
     finally { setLoading(false); }
-  }, [email, password, remember, navigate, returnTo]);
+  }, [email, password, remember, navigate, returnTo, checkSession]);
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.100', p: 2 }}>
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 2 }}>
       <Card sx={{ width: 420, maxWidth: '100%' }}>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
@@ -68,9 +76,6 @@ export default function SignInPage() {
           </form>
 
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
-            No tienes cuenta? <Link component={RouterLink} to="/auth/jwt/sign-up">Crear organizacion</Link>
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
             <Link component={RouterLink} to="/">Volver al inicio</Link>
           </Typography>
         </CardContent>

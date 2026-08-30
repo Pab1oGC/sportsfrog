@@ -34,15 +34,15 @@ internal sealed class RulesetContractValidator : AbstractValidator<RulesetContra
     public RulesetContractValidator(RulesetPolicy policy)
     {
         RuleFor(contract => contract.SportCode)
-            .NotEmpty().WithMessage("The sport is required.")
+            .NotEmpty().WithMessage("El deporte es obligatorio.")
             .MaximumLength(50);
 
         RuleFor(contract => contract.Name)
-            .NotEmpty().WithMessage("The ruleset name is required.")
+            .NotEmpty().WithMessage("El nombre del reglamento es obligatorio.")
             .MaximumLength(120);
 
         RuleFor(contract => contract.Config)
-            .NotNull().WithMessage("The configuration is required.")
+            .NotNull().WithMessage("La configuración es obligatoria.")
             .SetValidator(new RulesetShapeValidator());
 
         // Held back until the structure is sound, so a configuration missing

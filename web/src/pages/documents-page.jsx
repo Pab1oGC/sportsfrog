@@ -22,6 +22,7 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
+import { toast } from 'sonner';
 
 // Los cuatro estados de DocumentBatchState. El mapa anterior decia
 // "processing" y "completed", que la API no usa: un lote terminado llegaba
@@ -134,7 +135,7 @@ export default function DocumentsPage() {
       setRevokeReason('');
       mutateIssued();
     } catch (err) {
-      alert(err.message || 'No se pudo revocar el documento.');
+      toast.error(err.message || 'No se pudo revocar el documento.');
     }
   };
 
@@ -194,7 +195,7 @@ export default function DocumentsPage() {
           {p.row.status !== 'revoked' && (
             <Tooltip title="Revocar">
               <IconButton size="small" onClick={function() { setRevokeTarget(p.row); setRevokeReason(''); setRevokeOpen(true); }}>
-                <Iconify icon="eva:ban-outline" width={18} sx={{ color: 'error.main' }} />
+                <Iconify icon="eva:slash-outline" width={18} sx={{ color: 'error.main' }} />
               </IconButton>
             </Tooltip>
           )}
@@ -207,7 +208,7 @@ export default function DocumentsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h4" fontWeight={700}>Documentos</Typography>
         <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={handleOpenRequest}>Solicitar lote</Button>
       </Box>
@@ -232,7 +233,7 @@ export default function DocumentsPage() {
         {/* La API filtra los emitidos por competencia. Categoria y equipo no
             los filtra, asi que no se ofrecen aca: un control que no hace nada
             es peor que su ausencia. */}
-        <Box sx={{ width: 300 }}>
+        <Box sx={{ width: { xs: '100%', sm: 300 } }}>
           <SelectionCompetition
             value={compId}
             onChange={function(e) { setCompId(e.target.value); setCatId(''); setTeamId(''); }}
@@ -341,9 +342,9 @@ export default function DocumentsPage() {
             <TextField label="Motivo del certificado" value={form.certificateType} onChange={function(e) { setForm(Object.assign({}, form, { certificateType: e.target.value })); }} fullWidth required helperText="Ej: Participacion en la Copa Apertura 2026" />
           )}
           {form.kind === 'credential' && (
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField label="Vigente desde" type="date" value={form.validFrom} onChange={function(e) { setForm(Object.assign({}, form, { validFrom: e.target.value })); }} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-              <TextField label="Vigente hasta" type="date" value={form.validTo} onChange={function(e) { setForm(Object.assign({}, form, { validTo: e.target.value })); }} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <TextField label="Vigente desde" type="date" value={form.validFrom} onChange={function(e) { setForm(Object.assign({}, form, { validFrom: e.target.value })); }} sx={{ flex: '1 1 160px' }} slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField label="Vigente hasta" type="date" value={form.validTo} onChange={function(e) { setForm(Object.assign({}, form, { validTo: e.target.value })); }} sx={{ flex: '1 1 160px' }} slotProps={{ inputLabel: { shrink: true } }} />
             </Box>
           )}
         </DialogContent>

@@ -6,10 +6,11 @@ import MenuItem from '@mui/material/MenuItem';
 import CircularProgress from '@mui/material/CircularProgress';
 import InputLabel from '@mui/material/InputLabel';
 import FormControl from '@mui/material/FormControl';
+import FormHelperText from '@mui/material/FormHelperText';
 import { useApi } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 
-function SelectionField({ label, value, onChange, options, isLoading, disabled, fullWidth = true, size = 'medium', emptyLabel }) {
+function SelectionField({ label, value, onChange, options, isLoading, disabled, fullWidth = true, size = 'medium', emptyLabel, helperText }) {
   return (
     <FormControl fullWidth={fullWidth} disabled={disabled || isLoading} size={size} sx={{ mb: 2 }}>
       <InputLabel>{label}</InputLabel>
@@ -18,6 +19,7 @@ function SelectionField({ label, value, onChange, options, isLoading, disabled, 
         <MenuItem value=""><em>{isLoading ? 'Cargando...' : (emptyLabel || 'Seleccionar...')}</em></MenuItem>
         {(options || []).map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
       </Select>
+      {helperText && <FormHelperText>{helperText}</FormHelperText>}
     </FormControl>
   );
 }
@@ -52,4 +54,23 @@ function SelectionVenue({ value, onChange, ...props }) {
   return <SelectionField label="Sede" value={value} onChange={onChange} options={options} isLoading={isLoading} {...props} />;
 }
 
-export { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub, SelectionVenue };
+// La cancha/pista concreta donde se juega un partido — no la sede entera,
+// que puede tener varias. Un solo desplegable en vez de sede-y-luego-cancha
+// porque la lista completa de espacios de la organizacion suele ser corta.
+// Solo ofrece los que se pueden usar ahora: el espacio activo y su sede
+// tambien activa, que es exactamente lo que IsAvailable ya responde.
+function SelectionSpace({ value, onChange, ...props }) {
+  const { data, isLoading } = useApi(endpoints.spaces);
+  const options = (data || [])
+    .filter((s) => s.isAvailable)
+    .map((s) => ({ value: s.id, label: `${s.venueName} — ${s.name}` }));
+  // Un desplegable vacio y uno sin datos todavia se ven identicos si no se
+  // dice la diferencia: el primero significa "no hay nada creado", no "el
+  // campo esta roto".
+  const helperText = !isLoading && options.length === 0
+    ? 'No hay canchas activas todavia. Se crean desde Sedes.'
+    : undefined;
+  return <SelectionField label="Cancha / espacio" value={value} onChange={onChange} options={options} isLoading={isLoading} helperText={helperText} {...props} />;
+}
+
+export { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub, SelectionVenue, SelectionSpace };

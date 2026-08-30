@@ -117,6 +117,6 @@ public static class SignIn
     /// </remarks>
     private static IResult Rejected() =>
         Results.Problem(
-            detail: "The email address or password is incorrect.",
+            detail: "El correo electrónico o la contraseña son incorrectos.",
             statusCode: StatusCodes.Status401Unauthorized);
 }

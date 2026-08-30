@@ -65,7 +65,7 @@ public static class CreateCategory
                 cancellationToken))
         {
             return Results.Problem(
-                detail: "This competition already has a category with that name.",
+                detail: "Esta competencia ya tiene una categoría con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -81,6 +81,7 @@ public static class CreateCategory
             BirthDateTo = contract.BirthDateTo,
             MaxRosterSize = contract.MaxRosterSize,
             DisplayOrder = contract.DisplayOrder,
+            QualifiersPerGroup = contract.QualifiersPerGroup,
         };
 
         database.Categories.Add(category);
@@ -94,7 +95,7 @@ public static class CreateCategory
                   { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Results.Problem(
-                detail: "This competition already has a category with that name.",
+                detail: "Esta competencia ya tiene una categoría con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -9,12 +9,14 @@ import Chip from '@mui/material/Chip';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Container from '@mui/material/Container';
+import { alpha } from '@mui/material/styles';
 import { Link as RouterLink, useNavigate } from 'react-router';
 import useSWR from 'swr';
 import publicAxios from 'src/lib/public-axios';
 import { Iconify } from 'src/components/iconify';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { ColorModeToggle } from 'src/components/color-mode-toggle';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -29,14 +31,14 @@ var features = [
   { icon: 'mdi:calendar-clock-outline', title: 'Calendario', desc: 'El fixture se sortea solo y los partidos se reparten entre tus canchas.' },
   { icon: 'mdi:format-list-numbered', title: 'Tabla de posiciones', desc: 'Se recalcula con cada resultado, con los desempates que definiste.' },
   { icon: 'mdi:certificate-outline', title: 'Credenciales', desc: 'Acomoda los datos sobre tu arte y emitilas en lote, con QR verificable.' },
-  { icon: 'mdi:globe-outline', title: 'Portal publico', desc: 'Tus resultados en una direccion que cualquiera puede abrir y compartir.' }
+  { icon: 'mdi:earth', title: 'Portal publico', desc: 'Tus resultados en una direccion que cualquiera puede abrir y compartir.' }
 ];
 
 var steps = [
-  { num: '01', title: 'Crea tu organizacion', desc: 'Registra tu liga o federacion en segundos.' },
-  { num: '02', title: 'Configura la competencia', desc: 'Define categorias, reglamento y equipos participantes.' },
-  { num: '03', title: 'Sortea el calendario', desc: 'El sistema arma los cruces y los reparte entre sedes y horarios.' },
-  { num: '04', title: 'Publica resultados', desc: 'El portal publico los muestra apenas los cargas.' }
+  { num: '01', title: 'Configura la competencia', desc: 'Define categorias, reglamento y equipos participantes.' },
+  { num: '02', title: 'Sortea el calendario', desc: 'El sistema arma los cruces y los reparte entre sedes y horarios.' },
+  { num: '03', title: 'Carga resultados', desc: 'La tabla de posiciones y los lideres se recalculan solos.' },
+  { num: '04', title: 'Publica y emite', desc: 'El portal publico se actualiza solo, y las credenciales salen en lote.' }
 ];
 
 /** Alguien pidio que no se mueva nada, y eso vale mas que la animacion. */
@@ -70,7 +72,6 @@ export default function LandingPage() {
   ] : [];
 
   var enVivo = competencias.slice(0, 6);
-  var destacada = competencias.find(function(c) { return c.status === 'in_progress'; }) || competencias[0];
 
   // Las entradas de las secciones fijas.
   //
@@ -88,7 +89,7 @@ export default function LandingPage() {
         .from('.hero-titulo', { y: 50, opacity: 0, duration: 0.9 })
         .from('.hero-sub', { y: 30, opacity: 0, duration: 0.7 }, '-=0.5')
         .from('.hero-botones', { y: 24, opacity: 0, duration: 0.6 }, '-=0.4')
-        .from('.hero-visual', { scale: 0.9, opacity: 0, duration: 0.9, ease: 'back.out(1.4)' }, '-=0.5');
+        .from('.hero-fondo', { scale: 1.08, opacity: 0, duration: 1.2, ease: 'power2.out' }, 0);
 
       gsap.from('.feature-card', {
         y: 60, opacity: 0, duration: 0.6, stagger: 0.1,
@@ -126,65 +127,103 @@ export default function LandingPage() {
   }, [enVivo.length]);
 
   return (
-    <Box ref={raizRef} sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
-      <AppBar position="fixed" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider', zIndex: 1200 }}>
+    <Box ref={raizRef} sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      {/* bgcolor sacado del tema (background.paper con alfa) en vez de un
+          blanco fijo — antes se quedaba blanco aunque se cambiara a modo
+          oscuro, con texto claro encima de un fondo claro. */}
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.72),
+          backdropFilter: 'blur(16px) saturate(1.4)',
+          color: 'text.primary',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          boxShadow: (theme) => theme.palette.mode === 'dark'
+            ? '0 1px 0 rgba(255,255,255,0.06)'
+            : '0 1px 12px rgba(15,40,20,0.06)',
+          zIndex: 1200,
+        }}
+      >
         <Toolbar>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2, cursor: 'pointer' }} onClick={function() { navigate('/'); }}>
-            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Box
+            sx={{
+              display: 'flex', alignItems: 'center', gap: 1.1, mr: 2, cursor: 'pointer',
+              transition: 'opacity 0.15s ease', '&:hover': { opacity: 0.8 },
+            }}
+            onClick={function() { navigate('/'); }}
+          >
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, background: 'linear-gradient(135deg, #1B8A2E 0%, #0d6b1e 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(27,138,46,0.35)' }}>
               <Typography sx={{ color: 'white', fontWeight: 800, fontSize: 16 }}>SF</Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700}>SportFrog</Typography>
+            <Typography variant="h6" fontWeight={700} letterSpacing={-0.2}>SportFrog</Typography>
           </Box>
           <Box sx={{ flexGrow: 1 }} />
+          <ColorModeToggle sx={{ mr: 0.5 }} />
           <Button component={RouterLink} to="/public" sx={{ mr: 1, display: { xs: 'none', sm: 'flex' } }}>Competiciones</Button>
-          <Button variant="outlined" component={RouterLink} to="/auth/jwt/sign-in" sx={{ mr: 1 }}>Iniciar sesion</Button>
-          <Button variant="contained" component={RouterLink} to="/auth/jwt/sign-up" sx={{ display: { xs: 'none', sm: 'flex' } }}>Crear organizacion</Button>
+          <Button variant="contained" component={RouterLink} to="/auth/jwt/sign-in">Iniciar sesion</Button>
         </Toolbar>
       </AppBar>
 
       {/* -------------------------------------------------------------- hero */}
-      <Box sx={{ background: 'linear-gradient(135deg, #1B8A2E 0%, #0d6b1e 45%, #084a14 100%)', color: 'white', pt: { xs: 13, md: 17 }, pb: { xs: 12, md: 20 }, px: 3, position: 'relative', overflow: 'hidden' }}>
-        <Box sx={{ position: 'absolute', top: -140, right: -100, width: 420, height: 420, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-        <Box sx={{ position: 'absolute', bottom: -100, left: -100, width: 320, height: 320, borderRadius: '50%', background: 'rgba(255,255,255,0.035)' }} />
+      <Box sx={{
+        background: 'linear-gradient(135deg, #1B8A2E 0%, #0d6b1e 45%, #084a14 100%)',
+        color: 'white', pt: { xs: 13, md: 17 }, pb: { xs: 12, md: 20 }, px: 3, position: 'relative', overflow: 'hidden',
+      }}>
+        {/* El degrade de arriba es el fondo de respaldo: se ve mientras no
+            haya fotos en web/public/hero/, y sigue ahi por si alguna
+            llegara a fallar. Las fotos, cuando existen, se pintan encima. */}
+        <HeroCarrusel className="hero-fondo" />
+
+        {/* Oscurecido en verde, mas fuerte del lado del texto y casi
+            transparente hacia la derecha — las fotos tienen que verse, no
+            desaparecer bajo el color: solo el rincon donde esta el texto
+            necesita suficiente contraste para leerse. */}
+        <Box sx={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(100deg, rgba(6,54,16,0.9) 0%, rgba(8,74,20,0.68) 35%, rgba(13,107,30,0.32) 62%, rgba(13,107,30,0.12) 100%)',
+        }} />
+        {/* Y un poco de piso oscuro abajo de todo — ahi es donde se apoyan
+            las tarjetas de cifras, superpuestas con margen negativo. */}
+        <Box sx={{
+          position: 'absolute', insetInline: 0, bottom: 0, height: '35%',
+          background: 'linear-gradient(to top, rgba(8,30,14,0.55), transparent)',
+        }} />
 
         <Container maxWidth="lg" sx={{ position: 'relative' }}>
-          <Grid container spacing={{ xs: 5, md: 6 }} alignItems="center">
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box className="hero-titulo">
-                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 10, px: 2, py: 0.6, mb: 3 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#7CFC00' }} />
-                  <Typography variant="caption" fontWeight={600}>Plataforma deportiva hecha en Bolivia</Typography>
+          <Box sx={{ maxWidth: 640 }}>
+            <Box className="hero-titulo">
+              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 10, px: 2, py: 0.6, mb: 3 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#7CFC00' }} />
+                <Typography variant="caption" fontWeight={600}>Plataforma deportiva hecha en Bolivia</Typography>
+              </Box>
+              <Typography variant="h1" fontWeight={900} sx={{ fontSize: { xs: '2.1rem', sm: '2.8rem', md: '3.4rem' }, lineHeight: 1.12, mb: 2.5 }}>
+                Tu liga entera, de la inscripcion{' '}
+                <Box component="span" sx={{ background: 'linear-gradient(90deg, #7CFC00, #baff5c)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+                  al campeon
                 </Box>
-                <Typography variant="h1" fontWeight={900} sx={{ fontSize: { xs: '2.1rem', sm: '2.8rem', md: '3.4rem' }, lineHeight: 1.12, mb: 2.5 }}>
-                  Tu liga entera, de la inscripcion al campeon
-                </Typography>
-              </Box>
-
-              <Typography className="hero-sub" variant="h5" sx={{ opacity: 0.92, fontWeight: 300, mb: 4, fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.65, maxWidth: 520 }}>
-                Inscribi jugadores, sortea el fixture, carga resultados y emiti credenciales.
-                Todo se publica solo en una pagina que cualquiera puede abrir.
               </Typography>
+            </Box>
 
-              <Box className="hero-botones" sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Button variant="contained" size="large" component={RouterLink} to="/auth/jwt/sign-up"
-                  startIcon={<Iconify icon="eva:rocket-outline" />}
-                  sx={{ bgcolor: 'white', color: 'primary.main', px: 3.5, py: 1.4, borderRadius: 2.5, fontWeight: 700, boxShadow: '0 4px 20px rgba(0,0,0,0.18)', '&:hover': { bgcolor: 'grey.100' } }}>
-                  Crear mi organizacion
-                </Button>
-                <Button variant="outlined" size="large" component={RouterLink} to="/public"
-                  startIcon={<Iconify icon="eva:eye-outline" />}
-                  sx={{ borderColor: 'rgba(255,255,255,0.5)', color: 'white', px: 3.5, py: 1.4, borderRadius: 2.5, fontWeight: 600, '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)' } }}>
-                  Ver competencias
-                </Button>
-              </Box>
-            </Grid>
+            <Typography className="hero-sub" variant="h5" sx={{ opacity: 0.92, fontWeight: 300, mb: 4, fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.65 }}>
+              Inscribi jugadores, sortea el fixture, carga resultados y emiti credenciales.
+              Todo se publica solo en una pagina que cualquiera puede abrir.
+            </Typography>
 
-            <Grid size={{ xs: 12, md: 6 }} sx={{ display: { xs: 'none', md: 'block' } }}>
-              <Box className="hero-visual" sx={{ display: 'flex', justifyContent: 'center' }}>
-                <VistaPrevia competencia={destacada} />
-              </Box>
-            </Grid>
-          </Grid>
+            <Box className="hero-botones" sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Button variant="contained" size="large" component={RouterLink} to="/auth/jwt/sign-in"
+                startIcon={<Iconify icon="eva:log-in-outline" />}
+                sx={{ bgcolor: 'white', color: 'primary.main', px: 3.5, py: 1.4, borderRadius: 2.5, fontWeight: 700, boxShadow: '0 4px 20px rgba(0,0,0,0.18)', '&:hover': { bgcolor: 'grey.100' } }}>
+                Iniciar sesion
+              </Button>
+              <Button variant="outlined" size="large" component={RouterLink} to="/public"
+                startIcon={<Iconify icon="eva:eye-outline" />}
+                sx={{ borderColor: 'rgba(255,255,255,0.5)', color: 'white', px: 3.5, py: 1.4, borderRadius: 2.5, fontWeight: 600, '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)' } }}>
+                Ver competencias
+              </Button>
+            </Box>
+          </Box>
         </Container>
       </Box>
 
@@ -269,7 +308,7 @@ export default function LandingPage() {
               <Grid key={f.title} size={{ xs: 12, sm: 6, md: 4 }}>
                 <Card className="feature-card" sx={{ height: '100%', borderRadius: 3, border: '1px solid', borderColor: 'divider', transition: 'transform .25s, box-shadow .25s, border-color .25s', '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 36px rgba(27,138,46,0.12)', borderColor: 'primary.main' } }}>
                   <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ width: 48, height: 48, borderRadius: 2.5, bgcolor: 'primary.lighter', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
+                    <Box sx={{ width: 48, height: 48, borderRadius: 2.5, background: 'linear-gradient(135deg, rgba(27,138,46,0.16), rgba(27,138,46,0.05))', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
                       <Iconify icon={f.icon} width={24} sx={{ color: 'primary.main' }} />
                     </Box>
                     <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>{f.title}</Typography>
@@ -294,8 +333,9 @@ export default function LandingPage() {
               return (
                 <Grid key={s.num} size={{ xs: 12, sm: 6, md: 3 }}>
                   <Box className="step-item">
-                    <Typography variant="h1" fontWeight={900} sx={{ color: 'rgba(255,255,255,0.07)', fontSize: '3.6rem', lineHeight: 1 }}>{s.num}</Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ mt: -1.5, position: 'relative' }}>{s.title}</Typography>
+                    <Typography variant="h1" fontWeight={900} sx={{ color: 'rgba(124,252,0,0.1)', fontSize: '3.6rem', lineHeight: 1 }}>{s.num}</Typography>
+                    <Box sx={{ width: 32, height: 3, borderRadius: 2, bgcolor: '#7CFC00', mt: -1.5, mb: 1.5 }} />
+                    <Typography variant="h6" fontWeight={700} sx={{ position: 'relative' }}>{s.title}</Typography>
                     <Typography variant="body2" sx={{ color: 'grey.400', mt: 1, lineHeight: 1.7 }}>{s.desc}</Typography>
                   </Box>
                 </Grid>
@@ -307,16 +347,24 @@ export default function LandingPage() {
 
       {/* --------------------------------------------------------------- cta */}
       <Container maxWidth="md" sx={{ py: { xs: 7, md: 10 } }}>
-        <Card className="cta-card" sx={{ textAlign: 'center', borderRadius: 4, background: 'linear-gradient(135deg, #1B8A2E 0%, #0d6b1e 100%)', color: 'white', p: { xs: 4, md: 6 }, boxShadow: '0 20px 60px rgba(27,138,46,0.28)' }}>
-          <Typography variant="h3" fontWeight={800} sx={{ mb: 1.5, fontSize: { xs: '1.4rem', md: '1.9rem' } }}>Empeza a organizar tu liga hoy</Typography>
-          <Typography variant="body1" sx={{ opacity: 0.9, mb: 3.5, maxWidth: 520, mx: 'auto' }}>
-            Crea tu organizacion y carga tu primera competencia en una tarde.
+        <Card className="cta-card" sx={{ textAlign: 'center', borderRadius: 4, background: 'linear-gradient(135deg, #1B8A2E 0%, #0d6b1e 100%)', color: 'white', p: { xs: 4, md: 6 }, boxShadow: '0 20px 60px rgba(27,138,46,0.28)', position: 'relative', overflow: 'hidden' }}>
+          <Box sx={{ position: 'absolute', top: -80, right: -80, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,252,0,0.18) 0%, rgba(124,252,0,0) 70%)' }} />
+          <Typography variant="h3" fontWeight={800} sx={{ mb: 1.5, fontSize: { xs: '1.4rem', md: '1.9rem' }, position: 'relative' }}>Todo listo para tu proxima temporada</Typography>
+          <Typography variant="body1" sx={{ opacity: 0.9, mb: 3.5, maxWidth: 520, mx: 'auto', position: 'relative' }}>
+            Inicia sesion y arma tu competencia en una tarde: categorias, calendario y credenciales incluidos.
           </Typography>
-          <Button variant="contained" size="large" component={RouterLink} to="/auth/jwt/sign-up"
-            startIcon={<Iconify icon="eva:rocket-outline" />}
-            sx={{ bgcolor: 'white', color: 'primary.main', px: 4.5, py: 1.4, borderRadius: 2.5, fontWeight: 700, boxShadow: '0 4px 20px rgba(0,0,0,0.18)', '&:hover': { bgcolor: 'grey.100' } }}>
-            Crear mi organizacion
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', position: 'relative' }}>
+            <Button variant="contained" size="large" component={RouterLink} to="/auth/jwt/sign-in"
+              startIcon={<Iconify icon="eva:log-in-outline" />}
+              sx={{ bgcolor: 'white', color: 'primary.main', px: 4.5, py: 1.4, borderRadius: 2.5, fontWeight: 700, boxShadow: '0 4px 20px rgba(0,0,0,0.18)', '&:hover': { bgcolor: 'grey.100' } }}>
+              Iniciar sesion
+            </Button>
+            <Button variant="text" size="large" component={RouterLink} to="/public"
+              endIcon={<Iconify icon="eva:arrow-forward-outline" width={18} />}
+              sx={{ color: 'white', px: 2, fontWeight: 600, '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
+              Ver competencias en vivo
+            </Button>
+          </Box>
         </Card>
       </Container>
 
@@ -340,55 +388,69 @@ export default function LandingPage() {
 }
 
 /**
- * La maqueta del hero, armada con una competencia de verdad cuando la hay.
- *
- * Antes eran datos inventados escritos a mano. Mostrar una que existe es mas
- * honesto y ademas se ve mejor: dice que la plataforma esta en uso.
+ * Las fotos del hero: web/public/hero/1, 2 y 3 — sin importar la extension.
+ * Lo que sea que pise esas rutas se sirve tal cual, porque viven en public/ y
+ * Vite no las procesa, así que alcanza con dejar los archivos ahí, con
+ * cualquiera de estos nombres, sin tocar código:
+ *   web/public/hero/1.jpg  (o .jpeg, .png, .webp)
+ *   web/public/hero/2.jpg
+ *   web/public/hero/3.jpg
  */
-function VistaPrevia(props) {
-  var c = props.competencia;
+var HERO_NUMEROS = [1, 2, 3];
+var HERO_EXTENSIONES = ['jpg', 'jpeg', 'png', 'webp'];
+var HERO_INTERVALO_MS = 5000;
+
+/**
+ * El fondo del hero: las tres fotos, una detras de otra con fundido cruzado,
+ * llenando toda la seccion. El texto y el oscurecido en verde van encima,
+ * fuera de este componente — este solo pinta las fotos.
+ */
+function HeroCarrusel(props) {
+  var [indice, setIndice] = useState(0);
+
+  useEffect(function() {
+    if (sinMovimiento()) return undefined;
+
+    var id = setInterval(function() {
+      setIndice(function(i) { return (i + 1) % HERO_NUMEROS.length; });
+    }, HERO_INTERVALO_MS);
+
+    return function() { clearInterval(id); };
+  }, []);
 
   return (
-    <Box sx={{ width: 340, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', p: 3, boxShadow: '0 24px 60px rgba(0,0,0,0.25)' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#7CFC00' }} />
-        <Typography variant="caption" sx={{ opacity: 0.85, letterSpacing: 1 }}>PORTAL PUBLICO</Typography>
-      </Box>
-
-      <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.25 }}>
-        {c ? c.competitionName : 'Copa Apertura 2026'}
-      </Typography>
-      <Typography variant="caption" sx={{ opacity: 0.75 }}>
-        {c ? c.organizationName + ' · ' + c.sportName : 'Tu liga · Futbol'}
-      </Typography>
-
-      <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-        <Typography variant="caption" sx={{ opacity: 0.7 }}>Tabla de posiciones</Typography>
-        {[
-          { n: 'Illimani', p: 15 },
-          { n: 'Miraflores', p: 12 },
-          { n: 'Sopocachi', p: 9 }
-        ].map(function(t, i) {
-          return (
-            <Box key={t.n} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.9, borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-              <Typography variant="body2" fontWeight={600}>{i + 1}. {t.n}</Typography>
-              <Typography variant="body2" fontWeight={700}>{t.p} pts</Typography>
-            </Box>
-          );
-        })}
-      </Box>
-
-      <Box sx={{ display: 'flex', gap: 2, mt: 2.5 }}>
-        <Box sx={{ flex: 1, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 2, p: 1.5, textAlign: 'center' }}>
-          <Typography variant="h6" fontWeight={800}>{c ? c.teams : 16}</Typography>
-          <Typography variant="caption" sx={{ opacity: 0.7 }}>equipos</Typography>
-        </Box>
-        <Box sx={{ flex: 1, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 2, p: 1.5, textAlign: 'center' }}>
-          <Typography variant="h6" fontWeight={800}>{c ? c.categories : 3}</Typography>
-          <Typography variant="caption" sx={{ opacity: 0.7 }}>categorias</Typography>
-        </Box>
-      </Box>
+    <Box className={props.className} sx={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      {HERO_NUMEROS.map(function(numero, i) {
+        return <HeroFoto key={numero} numero={numero} activa={i === indice} />;
+      })}
     </Box>
+  );
+}
+
+/**
+ * Una foto del hero, probando cada extension de HERO_EXTENSIONES en orden
+ * hasta que una cargue. No queda ninguna: no se dibuja nada, y el degrade
+ * de respaldo del hero sigue ahi debajo — un formato que nadie subio nunca
+ * no debe verse como una foto rota.
+ */
+function HeroFoto(props) {
+  var [intento, setIntento] = useState(0);
+  var agotado = intento >= HERO_EXTENSIONES.length;
+
+  if (agotado) return null;
+
+  return (
+    <Box
+      component="img"
+      src={'/hero/' + props.numero + '.' + HERO_EXTENSIONES[intento]}
+      alt=""
+      onError={function() { setIntento(function(n) { return n + 1; }); }}
+      sx={{
+        position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+        opacity: props.activa ? 1 : 0,
+        transition: sinMovimiento() ? 'none' : 'opacity 1.2s ease',
+      }}
+    />
   );
 }
 

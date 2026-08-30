@@ -28,13 +28,13 @@ public static class RegisterPlayer
         public Validator()
         {
             RuleFor(request => request.AthleteId)
-                .NotEmpty().WithMessage("The athlete is required.");
+                .NotEmpty().WithMessage("El deportista es obligatorio.");
 
             RuleFor(request => request.JerseyNumber)
                 .InclusiveBetween((short)0, MaximumJerseyNumber)
                 .When(request => request.JerseyNumber.HasValue)
-                .WithMessage($"A shirt number is between 0 and {MaximumJerseyNumber}, or is left " +
-                             "unset until the numbers are handed out.");
+                .WithMessage($"El número de camiseta está entre 0 y {MaximumJerseyNumber}, o se " +
+                             "deja sin definir hasta que se repartan los números.");
 
             RuleFor(request => request.Position)
                 .MaximumLength(40)
@@ -78,15 +78,15 @@ public static class RegisterPlayer
             // purpose — squads change while a league runs, and refusing that
             // would be refusing how the sport works.
             return Results.Problem(
-                detail: "This competition is over, so its squads are closed.",
+                detail: "Esta competencia ya terminó, así que sus nóminas están cerradas.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
         if (!team.IsActive)
         {
             return Results.Problem(
-                detail: $"{team.Name} has withdrawn from this category, so it is not taking " +
-                        "registrations.",
+                detail: $"{team.Name} se retiró de esta categoría, así que no está tomando " +
+                        "registros.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -98,7 +98,7 @@ public static class RegisterPlayer
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["AthleteId"] = ["No athlete of this organization has that identifier."],
+                ["AthleteId"] = ["Ningún deportista de esta organización tiene ese identificador."],
             });
         }
 
@@ -141,8 +141,8 @@ public static class RegisterPlayer
             // claiming one shirt. The checks above answer the ordinary case;
             // only the indexes see this one.
             return Results.Problem(
-                detail: "That registration collides with one made at the same moment. Read the " +
-                        "squad and try again.",
+                detail: "Ese registro choca con uno hecho en el mismo instante. Volvé a leer la " +
+                        "nómina e intentá de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

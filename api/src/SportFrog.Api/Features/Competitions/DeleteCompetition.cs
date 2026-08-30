@@ -52,8 +52,9 @@ public static class DeleteCompetition
             // its issued credentials with it, which is a different act than
             // discarding a draft nobody saw.
             return Results.Problem(
-                detail: "Only a competition still in draft, or one already cancelled, can be " +
-                        "withdrawn. Cancel this one instead: what was played stays on record.",
+                detail: "Solo se puede eliminar una competencia que sigue en borrador, o una que " +
+                        "ya está cancelada. Cancelá esta en su lugar: lo que se jugó queda en el " +
+                        "registro.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

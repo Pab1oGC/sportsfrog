@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
@@ -28,7 +30,9 @@ public static class ReadPublicCalendar
         Guid CategoryId,
         string CategoryName,
         string HomeTeamName,
+        string? HomeClubLogoUrl,
         string AwayTeamName,
+        string? AwayClubLogoUrl,
         string? VenueName,
         string? SpaceName,
         DateTimeOffset? ScheduledAt,
@@ -36,7 +40,19 @@ public static class ReadPublicCalendar
         string? Phase,
         MatchState Status,
         int? HomeTotal,
-        int? AwayTotal);
+        int? AwayTotal,
+
+        /// <summary>The shootout that broke a level knockout match, once it needed one.</summary>
+        short? PenaltyHomeScore,
+        short? PenaltyAwayScore,
+
+        /// <summary>
+        /// The score read from events recorded so far, while the match is
+        /// still being played. Set only while <see cref="Status"/> is
+        /// <see cref="MatchState.InProgress"/>.
+        /// </summary>
+        int? LiveHomeTotal,
+        int? LiveAwayTotal);
 
     public sealed record Response(IReadOnlyList<Fixture> Fixtures);
 
@@ -54,6 +70,7 @@ public static class ReadPublicCalendar
         string organizationSlug,
         string competitionSlug,
         PublicCompetitionReader reader,
+        ObjectStore store,
         CancellationToken cancellationToken,
         Guid? categoryId = null,
         string? status = null,
@@ -70,8 +87,11 @@ public static class ReadPublicCalendar
         var page = await reader.ReadAsync(
             organizationSlug,
             competitionSlug,
-            async (database, resolved) => new Response(
-                await database.Matches
+            async (database, resolved) =>
+            {
+                // Read as the storage keys first — EF translates this Select
+                // to SQL, and signing a link is not something a query can do.
+                var matches = await database.Matches
                     .AsNoTracking()
                     .Where(match => match.CompetitionId == resolved.CompetitionId)
                     .Where(match => categoryId == null || match.CategoryId == categoryId)
@@ -80,27 +100,136 @@ public static class ReadPublicCalendar
 
                     // Chronological with the undated last, which is where a
                     // fixture drawn but not yet placed belongs on a page
-                    // somebody is reading to find out when they play.
+                    // somebody is reading to find out when they play. Phase
+                    // comes before round number in the tie-break: a category
+                    // promoted to a knockout restarts its round count at one,
+                    // same as its group stage did, so round alone cannot
+                    // tell a group's first jornada from the bracket's first
+                    // round — only Phase, null for one and set for the
+                    // other, can.
                     .OrderBy(match => match.ScheduledAt == null)
                     .ThenBy(match => match.ScheduledAt)
+                    .ThenBy(match => match.Phase != null)
                     .ThenBy(match => match.RoundNumber)
-                    .Select(match => new Fixture(
+                    .Select(match => new
+                    {
                         match.Id,
                         match.CategoryId,
-                        match.Category!.Name,
-                        match.HomeTeam!.Name,
-                        match.AwayTeam!.Name,
-                        match.VenueSpace!.Venue!.Name,
-                        match.VenueSpace.Name,
+                        CategoryName = match.Category!.Name,
+                        match.HomeTeamId,
+                        HomeTeamName = match.HomeTeam!.Name,
+                        HomeLogoKey = match.HomeTeam.Club!.LogoUrl,
+                        match.AwayTeamId,
+                        AwayTeamName = match.AwayTeam!.Name,
+                        AwayLogoKey = match.AwayTeam.Club!.LogoUrl,
+                        VenueName = match.VenueSpace!.Venue!.Name,
+                        SpaceName = match.VenueSpace.Name,
                         match.ScheduledAt,
                         match.RoundNumber,
                         match.Phase,
                         match.Status,
                         match.HomeTotal,
-                        match.AwayTotal))
-                    .ToListAsync(cancellationToken)),
+                        match.AwayTotal,
+                        match.PenaltyHomeScore,
+                        match.PenaltyAwayScore,
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var liveTotals = await LiveTotalsAsync(database, matches
+                    .Where(match => match.Status == MatchState.InProgress)
+                    .Select(match => (match.Id, match.HomeTeamId, match.AwayTeamId))
+                    .ToList(),
+                    cancellationToken);
+
+                var fixtures = new List<Fixture>(matches.Count);
+
+                foreach (var match in matches)
+                {
+                    LiveScore.Totals? live = match.Status == MatchState.InProgress
+                        ? liveTotals.GetValueOrDefault(match.Id)
+                        : null;
+
+                    fixtures.Add(new Fixture(
+                        match.Id,
+                        match.CategoryId,
+                        match.CategoryName,
+                        match.HomeTeamName,
+                        await LinkAsync(store, resolved.OrganizationId, match.HomeLogoKey, cancellationToken),
+                        match.AwayTeamName,
+                        await LinkAsync(store, resolved.OrganizationId, match.AwayLogoKey, cancellationToken),
+                        match.VenueName,
+                        match.SpaceName,
+                        match.ScheduledAt,
+                        match.RoundNumber,
+                        match.Phase,
+                        match.Status,
+                        match.HomeTotal,
+                        match.AwayTotal,
+                        match.PenaltyHomeScore,
+                        match.PenaltyAwayScore,
+                        live?.Home,
+                        live?.Away));
+                }
+
+                return new Response(fixtures);
+            },
             cancellationToken);
 
         return page is null ? Results.NotFound() : Results.Ok(page);
     }
+
+    /// <summary>
+    /// The live score of every match still in progress, keyed by match.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="SportFrog.Api.Features.Matches.ReadMatches"/>'s copy of this same shape — the
+    /// tally lives in <see cref="LiveScore"/> and is tested there; this is
+    /// just the query that feeds it, repeated because the public projection
+    /// reads through <see cref="PublicCompetitionReader"/> rather than the
+    /// organization's own <c>SportFrogDbContext</c> access pattern, so the two
+    /// cannot easily share one query method without sharing far more than
+    /// this one.
+    /// </remarks>
+    private static async Task<Dictionary<Guid, LiveScore.Totals>> LiveTotalsAsync(
+        SportFrogDbContext database,
+        List<(Guid MatchId, Guid HomeTeamId, Guid AwayTeamId)> liveMatches,
+        CancellationToken cancellationToken)
+    {
+        if (liveMatches.Count == 0)
+        {
+            return [];
+        }
+
+        var liveIds = liveMatches.Select(match => match.MatchId).ToList();
+
+        var events = await database.PlayerEvents
+            .AsNoTracking()
+            .Where(recorded => liveIds.Contains(recorded.MatchId) && recorded.Metric!.AffectsScore)
+            .Select(recorded => new
+            {
+                recorded.MatchId,
+                TeamId = recorded.RosterEntry!.TeamId,
+                recorded.Metric!.ScorePoints,
+                recorded.Metric.CountsForOpponent,
+                recorded.Quantity,
+            })
+            .ToListAsync(cancellationToken);
+
+        var byMatch = events.ToLookup(recorded => recorded.MatchId);
+
+        return liveMatches.ToDictionary(
+            match => match.MatchId,
+            match => LiveScore.Compute(
+                byMatch[match.MatchId].Select(recorded => new ScoringEvent(
+                    recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
+                match.HomeTeamId,
+                match.AwayTeamId));
+    }
+
+    /// <summary>A club's crest, signed — or null, for a club that never uploaded one.</summary>
+    private static Task<string?> LinkAsync(
+        ObjectStore store, Guid organizationId, string? key, CancellationToken cancellationToken) =>
+        string.IsNullOrEmpty(key)
+            ? Task.FromResult<string?>(null)
+            : store.ReadLinkAsync(organizationId, key, cancellationToken);
 }

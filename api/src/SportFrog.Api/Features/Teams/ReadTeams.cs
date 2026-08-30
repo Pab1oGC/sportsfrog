@@ -23,6 +23,7 @@ public static class ReadTeams
         string ClubName,
         string Name,
         string? GroupLabel,
+        short? Seed,
         bool IsActive,
         int RosterSize);
 
@@ -96,6 +97,7 @@ public static class ReadTeams
             team.Club!.Name,
             team.Name,
             team.GroupLabel,
+            team.Seed,
             team.IsActive,
             team.Roster.Count(entry => entry.WithdrawnAt == null && entry.DeletedAt == null)));
 }

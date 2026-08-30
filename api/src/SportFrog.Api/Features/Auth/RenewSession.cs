@@ -106,6 +106,6 @@ public static class RenewSession
     /// </summary>
     private static IResult Rejected() =>
         Results.Problem(
-            detail: "The renewal token is not valid.",
+            detail: "El token de renovación no es válido.",
             statusCode: StatusCodes.Status401Unauthorized);
 }

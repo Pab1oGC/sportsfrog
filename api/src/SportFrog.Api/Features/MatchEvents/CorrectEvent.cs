@@ -30,11 +30,11 @@ public static class CorrectEvent
             RuleFor(request => request.Minute)
                 .InclusiveBetween((short)0, MaximumMinute)
                 .When(request => request.Minute.HasValue)
-                .WithMessage($"A minute is between 0 and {MaximumMinute}, or is left unset.");
+                .WithMessage($"El minuto está entre 0 y {MaximumMinute}, o se deja sin definir.");
 
             RuleFor(request => request.Quantity)
                 .InclusiveBetween(1, MaximumQuantity)
-                .WithMessage($"A quantity is between 1 and {MaximumQuantity}.");
+                .WithMessage($"La cantidad está entre 1 y {MaximumQuantity}.");
         }
     }
 

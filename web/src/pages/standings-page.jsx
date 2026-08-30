@@ -25,31 +25,41 @@ export default function StandingsPage() {
   const { data, isLoading } = useApi(cascade.catId ? endpoints.standings(cascade.catId) : null);
 
   const groups = data?.groups || [];
-  const firstGroup = groups[0];
-  const rows = (firstGroup?.rows || []).map((r, i) => ({ ...r, id: r.teamId, position: i + 1 }));
 
   return (
     <Box>
       <PageHeader title="Tabla de Posiciones" />
       <CascadeFilters cascade={cascade} />
       {!cascade.catId && <Typography color="text.secondary">Selecciona una competicion y categoria.</Typography>}
-      {groups.length > 1 && (
-        <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {groups.map((g, i) => (
-            <Typography key={i} variant="body2" fontWeight={600}>Grupo: {g.groupLabel || (i + 1)}</Typography>
-          ))}
-        </Box>
+      {cascade.catId && !isLoading && groups.length === 0 && (
+        <Typography color="text.secondary">Todavia no hay partidos jugados en esta categoria.</Typography>
       )}
-      <DataGrid rows={rows} columns={COLS} loading={isLoading} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
+      {/* Una tabla por grupo, no solo la primera: una fase de grupos tiene
+          tantas tablas independientes como grupos, y mostrar una sola
+          escondía el resto detras de una etiqueta que ni siquiera se leia
+          bien. */}
+      {groups.map((g, i) => {
+        const rows = (g.rows || []).map((r, idx) => ({ ...r, id: r.teamId, position: idx + 1 }));
+        return (
+          <Box key={g.label || i} sx={{ mb: 3 }}>
+            {groups.length > 1 && (
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+                Grupo {g.label || i + 1}
+              </Typography>
+            )}
+            <DataGrid rows={rows} columns={COLS} loading={isLoading} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
+          </Box>
+        );
+      })}
     </Box>
   );
 }
 
 function CascadeFilters({ cascade }) {
   return (
-    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700 }}>
-      <Box sx={{ flex: 1 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
-      <Box sx={{ flex: 1 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
+    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
+      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
+      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
     </Box>
   );
 }

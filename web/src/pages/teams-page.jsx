@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
@@ -9,34 +12,41 @@ import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { SelectionCompetition, SelectionCategory, SelectionClub } from 'src/components/selectors';
+import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
 export default function TeamsPage() {
+  const confirm = useConfirm();
   const cascade = useCascade();
   const { data: teams, mutate, isLoading } = useApi(cascade.catId ? endpoints.teams(cascade.catId) : null);
 
-  const [open, setOpen] = React.useState(false);
-  const [editId, setEditId] = React.useState(null);
-  const [form, setForm] = React.useState({ clubId: '', name: '', groupLabel: '' });
-  const [error, setError] = React.useState('');
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ clubId: '', name: '', groupLabel: '', seed: '', isActive: true });
+  const [error, setError] = useState('');
 
   const openRow = (row) => {
     setEditId(row?.id || null);
-    setForm(row ? { clubId: row.clubId || '', name: row.name || '', groupLabel: row.groupLabel || '' } : { clubId: '', name: '', groupLabel: '' });
+    setForm(row
+      ? { clubId: row.clubId || '', name: row.name || '', groupLabel: row.groupLabel || '', seed: row.seed ?? '', isActive: row.isActive !== false }
+      : { clubId: '', name: '', groupLabel: '', seed: '', isActive: true });
     setError(''); setOpen(true);
   };
 
   const save = async () => {
     if (!cascade.catId) return; setError('');
     try {
-      const body = { clubId: form.clubId, name: form.name || null, groupLabel: form.groupLabel || null };
+      // isActive solo lo pide UpdateTeam (al crear siempre arranca activo),
+      // pero mandarlo tambien en la creacion no molesta.
+      const body = { clubId: form.clubId, name: form.name || null, groupLabel: form.groupLabel || null, seed: form.seed !== '' ? Number(form.seed) : null, isActive: form.isActive };
       editId ? await apiPut(endpoints.team(editId), body) : await apiPost(endpoints.teams(cascade.catId), body);
       setOpen(false); mutate(); toast.success('Equipo guardado.');
     } catch (err) { setError(err.message); }
   };
 
   const remove = async (id) => {
-    if (!confirm('Eliminar equipo?')) return;
+    const ok = await confirm('Eliminar equipo?', { confirmLabel: 'Eliminar', danger: true });
+    if (!ok) return;
     await apiDelete(endpoints.team(id)); mutate(); toast.success('Equipo eliminado.');
   };
 
@@ -44,6 +54,7 @@ export default function TeamsPage() {
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
     { field: 'clubName', headerName: 'Club', width: 160 },
     { field: 'groupLabel', headerName: 'Grupo', width: 100, renderCell: ({ value }) => value ? <Chip label={value} size="small" /> : '--' },
+    { field: 'seed', headerName: 'Bombo', width: 90, renderCell: ({ value }) => value != null ? value : '--' },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Chip label={value ? 'Si' : 'No'} color={value ? 'success' : 'default'} size="small" variant="outlined" /> },
     { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
       <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -61,7 +72,17 @@ export default function TeamsPage() {
       <CrudDialog open={open} editId={editId} entityName="Equipo" error={error} onClose={() => setOpen(false)} onSave={save}>
         <SelectionClub value={form.clubId} onChange={(e) => setForm({ ...form, clubId: e.target.value })} required />
         <TextField label="Nombre del equipo (vacio = nombre del club)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth helperText="Dejar vacio para usar el nombre del club" />
-        <TextField label="Grupo / Zona" value={form.groupLabel} onChange={(e) => setForm({ ...form, groupLabel: e.target.value })} fullWidth helperText="Para formato de grupos: A, B, etc." />
+        <TextField label="Grupo / Zona" value={form.groupLabel} onChange={(e) => setForm({ ...form, groupLabel: e.target.value })} fullWidth helperText="Para formato de grupos: A, B, etc. Un sorteo de grupos lo completa solo." />
+        <TextField
+          label="Bombo"
+          type="number"
+          value={form.seed}
+          onChange={(e) => setForm({ ...form, seed: e.target.value })}
+          fullWidth
+          helperText="Opcional. Para un sorteo de grupos por bombos: equipos del mismo bombo nunca caen en el mismo grupo."
+          slotProps={{ htmlInput: { min: 1, max: 26 } }}
+        />
+        {editId && <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Activo" />}
       </CrudDialog>
     </Box>
   );
@@ -69,11 +90,11 @@ export default function TeamsPage() {
 
 function CascadeFilters({ cascade }) {
   return (
-    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700 }}>
-      <Box sx={{ flex: 1 }}>
+    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
+      <Box sx={{ flex: 1, minWidth: 200 }}>
         <SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required />
       </Box>
-      <Box sx={{ flex: 1 }}>
+      <Box sx={{ flex: 1, minWidth: 200 }}>
         <SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required />
       </Box>
     </Box>

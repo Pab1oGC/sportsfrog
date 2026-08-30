@@ -56,8 +56,8 @@ public static class PublishCompetition
             // would resolve and show nothing, which is worse than not
             // resolving. Announce it first.
             return Results.Problem(
-                detail: "A competition still being set up cannot be published: there would be " +
-                        "nothing on the page. Move it to scheduled first.",
+                detail: "Una competencia que todavía se está armando no se puede publicar: no " +
+                        "habría nada en la página. Pasala a programada primero.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

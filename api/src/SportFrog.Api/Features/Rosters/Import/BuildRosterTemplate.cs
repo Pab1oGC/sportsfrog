@@ -70,10 +70,11 @@ public static class BuildRosterTemplate
     private static void Compose(XLWorkbook workbook, Category category)
     {
         var sheet = workbook.AddWorksheet(RosterSheet.DataSheet);
+        var columns = Columns(category);
 
-        for (var index = 0; index < RosterSheet.Columns.Count; index++)
+        for (var index = 0; index < columns.Count; index++)
         {
-            var column = RosterSheet.Columns[index];
+            var column = columns[index];
             var position = index + 1;
 
             var heading = sheet.Cell(RosterSheet.HeaderRow, position);
@@ -99,12 +100,52 @@ public static class BuildRosterTemplate
         // The document is text, so 0071 keeps its leading zero and a long one
         // does not turn into scientific notation. Both are how identity
         // numbers get quietly corrupted in spreadsheets.
-        sheet.Column(RosterSheet.PositionOf(RosterSheet.Document)).Style.NumberFormat.Format = "@";
-        sheet.Column(RosterSheet.PositionOf(RosterSheet.BirthDate)).Style.DateFormat.Format = "yyyy-mm-dd";
+        sheet.Column(columns.IndexOf(RosterSheet.Document) + 1).Style.NumberFormat.Format = "@";
+        sheet.Column(columns.IndexOf(RosterSheet.BirthDate) + 1).Style.DateFormat.Format = "yyyy-mm-dd";
 
         sheet.SheetView.FreezeRows(RosterSheet.HeaderRow);
         sheet.Columns().AdjustToContents(1, 1, 12d, 26d);
     }
+
+    /// <summary>
+    /// The columns this category's template gets. The full set, minus the
+    /// guardian's name and phone when nobody it admits can be a minor.
+    /// </summary>
+    /// <remarks>
+    /// Those two columns exist for the categories that need them: a squad of
+    /// children needs a parent's name on file for each one. A category whose
+    /// birth-date floor already sits eighteen years back cannot produce a
+    /// minor at all, and handing its operator a spreadsheet with two columns
+    /// that never apply to anyone is not a safeguard kept just in case — it
+    /// is two blank columns they now have to notice are irrelevant and leave
+    /// alone, on every single row.
+    ///
+    /// The reader does not need telling: both columns were already optional
+    /// there, so a template that omits them is simply a workbook nobody
+    /// filled them in on, which is exactly what an adult squad already looks
+    /// like today.
+    /// </remarks>
+    private static List<SheetColumn> Columns(Category category) =>
+        OnlyAdmitsAdults(category)
+            ? RosterSheet.Columns
+                .Where(column => column != RosterSheet.Guardian && column != RosterSheet.GuardianPhone)
+                .ToList()
+            : [.. RosterSheet.Columns];
+
+    /// <summary>
+    /// Whether every athlete this category could possibly admit is already
+    /// an adult, going by its own birth-date floor.
+    /// </summary>
+    /// <remarks>
+    /// The floor is <see cref="Category.BirthDateTo"/>: the latest birth date
+    /// the category takes, which is what bounds how young a player may be. No
+    /// floor at all means no such promise was made — the category might still
+    /// take a child — so guardian columns stay unless the floor itself rules
+    /// that out.
+    /// </remarks>
+    private static bool OnlyAdmitsAdults(Category category) =>
+        category.BirthDateTo is { } latest
+        && latest <= DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-18);
 
     /// <summary>
     /// Turns the category's rules into something Excel refuses as it is typed.

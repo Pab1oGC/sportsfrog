@@ -49,7 +49,7 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
             // one problem the caller actually has.
             return [new RulesetViolation(
                 "SportCode",
-                "That sport is not one the platform supports.")];
+                "Ese deporte no es uno de los que soporta la plataforma.")];
         }
 
         var violations = new List<RulesetViolation>();
@@ -88,8 +88,8 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         {
             violations.Add(new RulesetViolation(
                 "Config.Periods.Count",
-                $"{sport.Name} is played in sets, so the number of sets must be odd: " +
-                "an even number leaves a match that cannot be won."));
+                $"{sport.Name} se juega por sets, así que la cantidad de sets debe ser impar: " +
+                "un número par deja un partido que no se puede ganar."));
 
             return false;
         }
@@ -123,9 +123,9 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         {
             violations.Add(new RulesetViolation(
                 "Config.Points",
-                $"These outcomes have no value: {string.Join(", ", missing)}. " +
-                $"A {sport.Name} match can end in any of them, and a table cannot be " +
-                "built from a result that is worth nothing in particular."));
+                $"Estos desenlaces no tienen valor: {string.Join(", ", missing)}. " +
+                $"Un partido de {sport.Name} puede terminar en cualquiera de ellos, y una " +
+                "tabla no se puede construir con un resultado que no vale nada en particular."));
         }
 
         var unknown = configuration.Points.Keys
@@ -137,8 +137,8 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         {
             violations.Add(new RulesetViolation(
                 "Config.Points",
-                $"These outcomes cannot happen in {sport.Name}: {string.Join(", ", unknown)}. " +
-                $"It can end in: {string.Join(", ", permitted.Order(StringComparer.Ordinal))}."));
+                $"Estos desenlaces no pueden pasar en {sport.Name}: {string.Join(", ", unknown)}. " +
+                $"Puede terminar en: {string.Join(", ", permitted.Order(StringComparer.Ordinal))}."));
         }
     }
 
@@ -171,8 +171,8 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         {
             violations.Add(new RulesetViolation(
                 "Config.Metrics",
-                $"{sport.Name} has no such events: {string.Join(", ", unknown)}. " +
-                $"Available: {string.Join(", ", available.Order(StringComparer.Ordinal))}."));
+                $"{sport.Name} no tiene esos eventos: {string.Join(", ", unknown)}. " +
+                $"Disponibles: {string.Join(", ", available.Order(StringComparer.Ordinal))}."));
         }
 
         // Under a cumulative score the result is the sum of the scoring
@@ -191,7 +191,7 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         {
             violations.Add(new RulesetViolation(
                 "Config.Metrics",
-                $"These events decide the score in {sport.Name} and cannot be left out: " +
+                $"Estos eventos deciden el marcador en {sport.Name} y no se pueden dejar afuera: " +
                 string.Join(", ", scoring) + "."));
         }
     }
@@ -217,15 +217,15 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         {
             violations.Add(new RulesetViolation(
                 "Config.Walkover.WinnerScore",
-                $"A {sport.Name} match is won at {toWin} sets, so a walkover is recorded " +
-                $"with {toWin} and not {walkover.WinnerScore}."));
+                $"Un partido de {sport.Name} se gana en {toWin} sets, así que un walkover se " +
+                $"registra con {toWin} y no con {walkover.WinnerScore}."));
         }
 
         if (walkover.LoserScore >= toWin)
         {
             violations.Add(new RulesetViolation(
                 "Config.Walkover.LoserScore",
-                $"The side that did not appear cannot be credited with {toWin} sets or more."));
+                $"Al lado que no se presentó no se le puede acreditar {toWin} sets o más."));
         }
     }
 }
