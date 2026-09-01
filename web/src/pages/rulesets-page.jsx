@@ -87,7 +87,7 @@ export default function RulesetsPage() {
 
   const columns = [
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
-    { field: 'sportCode', headerName: 'Deporte', width: 120 },
+    { field: 'sportCode', headerName: 'Deporte', width: 120, renderCell: ({ value }) => (sports || []).find((s) => s.code === value)?.name || value },
     { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
       <div style={{ display: 'flex', gap: 4 }}>
         <Iconify icon="eva:edit-fill" sx={{ cursor: 'pointer', color: 'text.secondary' }} onClick={() => openEdit(row)} />

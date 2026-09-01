@@ -67,6 +67,8 @@ export default function CompetitionsPage() {
   const navigate = useNavigate();
   const { data, mutate, isLoading } = useApi(endpoints.competitions);
   const { data: rulesets } = useApi(endpoints.rulesets);
+  const { data: sports } = useApi(endpoints.sports);
+  const nombreDeporte = (code) => sports?.find((s) => s.code === code)?.name || code;
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -216,7 +218,7 @@ export default function CompetitionsPage() {
 
   const columns = [
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 180 },
-    { field: 'sportCode', headerName: 'Deporte', width: 100 },
+    { field: 'sportCode', headerName: 'Deporte', width: 110, renderCell: ({ value }) => nombreDeporte(value) },
     { field: 'season', headerName: 'Temporada', width: 120 },
     { field: 'format', headerName: 'Formato', width: 110, renderCell: ({ value }) => value === 'league' ? 'Todos vs todos' : value === 'knockout' ? 'Eliminacion' : 'Grupos' },
     { field: 'status', headerName: 'Estado', width: 190, renderCell: ({ value, row }) => (
