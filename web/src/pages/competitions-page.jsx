@@ -221,8 +221,8 @@ export default function CompetitionsPage() {
     { field: 'sportCode', headerName: 'Deporte', width: 110, renderCell: ({ value }) => nombreDeporte(value) },
     { field: 'season', headerName: 'Temporada', width: 120 },
     { field: 'format', headerName: 'Formato', width: 110, renderCell: ({ value }) => value === 'league' ? 'Todos vs todos' : value === 'knockout' ? 'Eliminacion' : 'Grupos' },
-    { field: 'status', headerName: 'Estado', width: 190, renderCell: ({ value, row }) => (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+    { field: 'status', headerName: 'Estado', width: 190, align: 'center', headerAlign: 'center', renderCell: ({ value, row }) => (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 0.75 }}>
         <Chip label={SL[value] || value} color={SC[value] || 'default'} size="small" />
         {row.categoryCount === 0 && (
           <Tooltip title="Sin categorias todavia: no se puede sortear ni programar. Agregale una desde Categorias.">
@@ -246,10 +246,10 @@ export default function CompetitionsPage() {
         </IconButton>
       </Tooltip>
     )},
-    { field: 'actions', headerName: '', width: 220, renderCell: ({ row }) => {
+    { field: 'actions', headerName: '', width: 220, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
       const next = NEXT_STATUS[row.status] || [];
       return (
-        <Box sx={{ display: 'flex' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
           {next.map((s) => {
             const icons = { scheduled: 'eva:calendar-outline', in_progress: 'eva:play-circle-fill', finished: 'eva:checkmark-circle-fill', draft: 'eva:edit-fill', cancelled: 'eva:close-circle-fill' };
             const colors = { scheduled: 'info', in_progress: 'warning', finished: 'success', draft: 'default', cancelled: 'error' };
