@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { useLastCompetition } from 'src/hooks/use-last-competition';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
@@ -19,10 +20,12 @@ const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo:
 export default function CategoriesPage() {
   const confirm = useConfirm();
   const [searchParams] = useSearchParams();
-  // Preseleccionada al llegar desde "crear competencia": ese flujo manda para
-  // acá porque una competencia sin categorías no tiene nada que sortear.
-  const [compId, setCompId] = useState(() => searchParams.get('competition') || '');
   const { data: comps } = useApi(endpoints.competitions);
+  // Preseleccionada al llegar desde "crear competencia": ese flujo manda para
+  // acá porque una competencia sin categorías no tiene nada que sortear. Sin
+  // esa señal en la URL, useLastCompetition elige la última usada en
+  // cualquier pantalla, o si es la primera vez, la que está en curso.
+  const [compId, setCompId] = useLastCompetition(comps, searchParams.get('competition'));
   const { data, mutate, isLoading } = useApi(compId ? endpoints.categories(compId) : null);
   const { data: rulesets } = useApi(endpoints.rulesets);
   const { data: sports } = useApi(endpoints.sports);

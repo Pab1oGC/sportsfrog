@@ -22,6 +22,7 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { useLastCompetition } from 'src/hooks/use-last-competition';
 import { SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
 import { toast } from 'sonner';
 
@@ -57,7 +58,8 @@ function emptyForm(compId, catId, teamId) {
 }
 
 export default function DocumentsPage() {
-  var [compId, setCompId] = useState('');
+  var { data: comps } = useApi(endpoints.competitions);
+  var [compId, setCompId] = useLastCompetition(comps);
   var [catId, setCatId] = useState('');
   var [teamId, setTeamId] = useState('');
   var [requestOpen, setRequestOpen] = useState(false);
