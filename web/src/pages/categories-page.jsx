@@ -9,6 +9,7 @@ import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { SelectionCompetition, SelectionField } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
@@ -68,11 +69,8 @@ export default function CategoriesPage() {
     { field: 'birthDateFrom', headerName: 'Nac. desde', width: 120 },
     { field: 'birthDateTo', headerName: 'Nac. hasta', width: 120 },
     { field: 'maxRosterSize', headerName: 'Max nomina', width: 100, renderCell: ({ value }) => value || '--' },
-    { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
-      <div style={{ display: 'flex', gap: 4 }}>
-        <Iconify icon="eva:edit-fill" sx={{ cursor: 'pointer', color: 'text.secondary' }} onClick={() => openDialog(row)} />
-        <Iconify icon="eva:trash-2-outline" sx={{ cursor: 'pointer', color: 'error.main' }} onClick={() => remove(row.id)} />
-      </div>
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
+      <EditDeleteActions onEdit={() => openDialog(row)} onDelete={() => remove(row.id)} />
     )},
   ];
 

@@ -24,6 +24,7 @@ import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionSpace } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { toast } from 'sonner';
 
 const SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
@@ -302,49 +303,52 @@ export default function MatchesPage() {
         : '' },
     { field: 'venueName', headerName: 'Sede', width: 160, renderCell: ({ row }) => row.venueName ? `${row.venueName}${row.spaceName ? ' — ' + row.spaceName : ''}` : '--' },
     { field: 'status', headerName: 'Estado', width: 110, renderCell: ({ value }) => <Chip label={SL[value] || value} color={SC[value] || 'default'} size="small" /> },
-    // Tamaño normal (no "small") y el icono un poco mas grande: en el celular
-    // los botones chicos de antes eran dificiles de tocar sin errarle al de
-    // al lado.
-    { field: 'actions', headerName: '', width: 340, renderCell: ({ row: m }) => (
-      <Box sx={{ display: 'flex', gap: 0.25 }}>
-        <Tooltip title="Reprogramar"><IconButton onClick={() => openEdit(m)}><Iconify icon="eva:calendar-outline" width={22} sx={{ color: 'text.secondary' }} /></IconButton></Tooltip>
-        {m.status === 'scheduled' && <Tooltip title="Iniciar"><IconButton onClick={() => doStatus(m.id, 'in_progress')}><Iconify icon="eva:play-circle-fill" width={22} sx={{ color: 'warning.main' }} /></IconButton></Tooltip>}
-        {/* Futbol, basquet: los goles ya se cargaron como eventos mientras se
-            jugaba, asi que "Finalizar" cierra el partido con esa cuenta en
-            un solo click — pedir el mismo numero otra vez a mano no suma
-            nada. Un deporte por sets (voley) no tiene forma de derivarlo de
-            los eventos (un punto no mueve el marcador ahi), asi que ese
-            sigue pidiendo el resultado a mano. */}
-        {m.status === 'in_progress' && sportInfo?.scoreMode === 'cumulative' && (
-          <Tooltip title="Finalizar con el marcador de los eventos">
-            <IconButton onClick={() => doFinishFromEvents(m)}>
-              <Iconify icon="eva:checkmark-circle-fill" width={22} sx={{ color: 'success.main' }} />
-            </IconButton>
-          </Tooltip>
-        )}
-        {m.status === 'in_progress' && sportInfo?.scoreMode !== 'cumulative' && (
-          <Tooltip title="Resultado">
-            <IconButton onClick={() => { setSelMatch(m); setResForm({ periodScores: m.periodScores?.length ? m.periodScores.map((p) => ({ period: p.period, home: p.home, away: p.away })) : [{ period: 1, home: 0, away: 0 }, { period: 2, home: 0, away: 0 }], notes: m.notes || '' }); setError(''); setResOpen(true); }}>
-              <Iconify icon="eva:checkmark-circle-fill" width={22} sx={{ color: 'success.main' }} />
-            </IconButton>
-          </Tooltip>
-        )}
-        {m.status === 'scheduled' && <Tooltip title="Walkover"><IconButton onClick={() => { setSelMatch(m); setWoForm({ winnerTeamId: m.homeTeamId, notes: '' }); setError(''); setWoOpen(true); }}><Iconify icon="eva:alert-triangle-fill" width={22} sx={{ color: 'warning.main' }} /></IconButton></Tooltip>}
-        {/* Solo tiene sentido en una eliminatoria (fase != null) y con el
-            partido ya empatado: en todo lo demas un empate es un resultado
-            valido y no hay nada que desempatar. */}
-        {m.status === 'finished' && m.phase && m.homeTotal === m.awayTotal && (
-          <Tooltip title="Desempate por penales">
-            <IconButton onClick={() => { setSelMatch(m); setPoForm({ homeScore: m.penaltyHomeScore ?? 0, awayScore: m.penaltyAwayScore ?? 0 }); setError(''); setPoOpen(true); }}>
-              <Iconify icon="eva:radio-button-on-outline" width={22} sx={{ color: 'secondary.main' }} />
-            </IconButton>
-          </Tooltip>
-        )}
-        {(m.status === 'finished' || m.status === 'in_progress') && <Tooltip title="Eventos"><IconButton onClick={() => { setSelMatch(m); setEvForm({ rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 }); setError(''); setEvOpen(true); }}><Iconify icon="eva:film-outline" width={22} sx={{ color: 'info.main' }} /></IconButton></Tooltip>}
-        {m.status === 'in_progress' && <Tooltip title="Cancelar"><IconButton onClick={() => doStatus(m.id, 'cancelled')}><Iconify icon="eva:close-circle-fill" width={22} sx={{ color: 'error.main' }} /></IconButton></Tooltip>}
-        {['cancelled', 'walkover', 'postponed'].includes(m.status) && <Tooltip title="Reabrir (vuelve a programado)"><IconButton onClick={() => doStatus(m.id, 'scheduled')}><Iconify icon="eva:refresh-outline" width={22} sx={{ color: 'info.main' }} /></IconButton></Tooltip>}
-        <Tooltip title="Eliminar"><IconButton onClick={() => delMatch(m.id)}><Iconify icon="eva:trash-2-outline" width={22} sx={{ color: 'error.main' }} /></IconButton></Tooltip>
-      </Box>
+    { field: 'actions', headerName: 'Acciones', width: 110, align: 'center', headerAlign: 'center', renderCell: ({ row: m }) => (
+      <RowActionsMenu
+        primary={[
+          { icon: 'eva:calendar-outline', label: 'Reprogramar', color: 'text.secondary', onClick: () => openEdit(m) },
+          { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => delMatch(m.id) },
+        ]}
+        actions={[
+          m.status === 'scheduled' && { icon: 'eva:play-circle-fill', label: 'Iniciar', color: 'warning.main', onClick: () => doStatus(m.id, 'in_progress') },
+
+          // Futbol, basquet: los goles ya se cargaron como eventos mientras se
+          // jugaba, asi que "Finalizar" cierra el partido con esa cuenta en
+          // un solo click — pedir el mismo numero otra vez a mano no suma
+          // nada. Un deporte por sets (voley) no tiene forma de derivarlo de
+          // los eventos (un punto no mueve el marcador ahi), asi que ese
+          // sigue pidiendo el resultado a mano.
+          m.status === 'in_progress' && sportInfo?.scoreMode === 'cumulative' && {
+            icon: 'eva:checkmark-circle-fill', label: 'Finalizar con el marcador de los eventos', color: 'success.main',
+            onClick: () => doFinishFromEvents(m),
+          },
+          m.status === 'in_progress' && sportInfo?.scoreMode !== 'cumulative' && {
+            icon: 'eva:checkmark-circle-fill', label: 'Resultado', color: 'success.main',
+            onClick: () => { setSelMatch(m); setResForm({ periodScores: m.periodScores?.length ? m.periodScores.map((p) => ({ period: p.period, home: p.home, away: p.away })) : [{ period: 1, home: 0, away: 0 }, { period: 2, home: 0, away: 0 }], notes: m.notes || '' }); setError(''); setResOpen(true); },
+          },
+          m.status === 'scheduled' && {
+            icon: 'eva:alert-triangle-fill', label: 'Walkover', color: 'warning.main',
+            onClick: () => { setSelMatch(m); setWoForm({ winnerTeamId: m.homeTeamId, notes: '' }); setError(''); setWoOpen(true); },
+          },
+
+          // Solo tiene sentido en una eliminatoria (fase != null) y con el
+          // partido ya empatado: en todo lo demas un empate es un resultado
+          // valido y no hay nada que desempatar.
+          m.status === 'finished' && m.phase && m.homeTotal === m.awayTotal && {
+            icon: 'eva:radio-button-on-outline', label: 'Desempate por penales', color: 'secondary.main',
+            onClick: () => { setSelMatch(m); setPoForm({ homeScore: m.penaltyHomeScore ?? 0, awayScore: m.penaltyAwayScore ?? 0 }); setError(''); setPoOpen(true); },
+          },
+          (m.status === 'finished' || m.status === 'in_progress') && {
+            icon: 'eva:film-outline', label: 'Eventos', color: 'info.main',
+            onClick: () => { setSelMatch(m); setEvForm({ rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 }); setError(''); setEvOpen(true); },
+          },
+          m.status === 'in_progress' && { icon: 'eva:close-circle-fill', label: 'Cancelar', color: 'error.main', onClick: () => doStatus(m.id, 'cancelled') },
+          ['cancelled', 'walkover', 'postponed'].includes(m.status) && {
+            icon: 'eva:refresh-outline', label: 'Reabrir (vuelve a programado)', color: 'info.main',
+            onClick: () => doStatus(m.id, 'scheduled'),
+          },
+        ].filter(Boolean)}
+      />
     )},
   ];
 
@@ -665,7 +669,7 @@ export default function MatchesPage() {
             } },
             { field: 'metricLabel', headerName: 'Evento', width: 120 },
             { field: 'quantity', headerName: 'Cant.', width: 60 },
-            { field: 'actions', headerName: '', width: 60, renderCell: ({ row }) => <IconButton size="small" onClick={() => delEvent(row.id)}><Iconify icon="eva:trash-2-outline" width={16} sx={{ color: 'error.main' }} /></IconButton> },
+            { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => <IconButton size="small" onClick={() => delEvent(row.id)}><Iconify icon="eva:trash-2-outline" width={16} sx={{ color: 'error.main' }} /></IconButton> },
           ]} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
         </DialogContent>
         <DialogActions>

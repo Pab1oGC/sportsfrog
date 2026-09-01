@@ -11,6 +11,7 @@ import { useCascade } from 'src/hooks/use-cascade';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { SelectionCompetition, SelectionCategory, SelectionClub } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
@@ -56,11 +57,8 @@ export default function TeamsPage() {
     { field: 'groupLabel', headerName: 'Grupo', width: 100, renderCell: ({ value }) => value ? <Chip label={value} size="small" /> : '--' },
     { field: 'seed', headerName: 'Bombo', width: 90, renderCell: ({ value }) => value != null ? value : '--' },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Chip label={value ? 'Si' : 'No'} color={value ? 'success' : 'default'} size="small" variant="outlined" /> },
-    { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
-      <Box sx={{ display: 'flex', gap: 0.5 }}>
-        <Iconify icon="eva:edit-fill" sx={{ cursor: 'pointer', color: 'text.secondary' }} onClick={() => openRow(row)} />
-        <Iconify icon="eva:trash-2-outline" sx={{ cursor: 'pointer', color: 'error.main' }} onClick={() => remove(row.id)} />
-      </Box>
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
+      <EditDeleteActions onEdit={() => openRow(row)} onDelete={() => remove(row.id)} />
     )},
   ];
 

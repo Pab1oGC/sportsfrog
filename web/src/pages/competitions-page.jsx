@@ -25,6 +25,7 @@ import { leerComoDataUrl } from 'src/lib/data-url';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
@@ -246,19 +247,21 @@ export default function CompetitionsPage() {
         </IconButton>
       </Tooltip>
     )},
-    { field: 'actions', headerName: '', width: 220, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
+    { field: 'actions', headerName: 'Acciones', width: 110, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
       const next = NEXT_STATUS[row.status] || [];
+      const icons = { scheduled: 'eva:calendar-outline', in_progress: 'eva:play-circle-fill', finished: 'eva:checkmark-circle-fill', draft: 'eva:edit-fill', cancelled: 'eva:close-circle-fill' };
+      const colors = { scheduled: 'info', in_progress: 'warning', finished: 'success', draft: 'default', cancelled: 'error' };
       return (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          {next.map((s) => {
-            const icons = { scheduled: 'eva:calendar-outline', in_progress: 'eva:play-circle-fill', finished: 'eva:checkmark-circle-fill', draft: 'eva:edit-fill', cancelled: 'eva:close-circle-fill' };
-            const colors = { scheduled: 'info', in_progress: 'warning', finished: 'success', draft: 'default', cancelled: 'error' };
-            return <Tooltip key={s} title={SL[s]}><IconButton size="small" onClick={() => changeStatus(row.id, s)}><Iconify icon={icons[s] || 'eva:arrow-right-fill'} width={18} sx={{ color: `${colors[s]}.main` }} /></IconButton></Tooltip>;
-          })}
-          {row.status === 'scheduled' && <Tooltip title="Programar"><IconButton size="small" onClick={() => schedule(row.id)}><Iconify icon="eva:clock-outline" width={18} sx={{ color: 'info.main' }} /></IconButton></Tooltip>}
-          <Tooltip title="Editar"><IconButton size="small" onClick={() => openDialog(row)}><Iconify icon="eva:edit-fill" width={18} /></IconButton></Tooltip>
-          <Tooltip title="Eliminar"><IconButton size="small" onClick={() => remove(row.id)}><Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} /></IconButton></Tooltip>
-        </Box>
+        <RowActionsMenu
+          primary={[
+            { icon: 'eva:edit-fill', label: 'Editar', onClick: () => openDialog(row) },
+            { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => remove(row.id) },
+          ]}
+          actions={[
+            ...next.map((s) => ({ icon: icons[s] || 'eva:arrow-right-fill', label: SL[s], color: `${colors[s]}.main`, onClick: () => changeStatus(row.id, s) })),
+            row.status === 'scheduled' && { icon: 'eva:clock-outline', label: 'Programar', color: 'info.main', onClick: () => schedule(row.id) },
+          ].filter(Boolean)}
+        />
       );
     }},
   ];

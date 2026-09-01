@@ -12,6 +12,7 @@ import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { EditDeleteActions } from 'src/components/edit-delete-actions';
 
 // El logo viaja como data URL, igual que la foto de un deportista: el
 // backend la normaliza y la guarda en el almacenamiento de objetos, no en la
@@ -54,11 +55,8 @@ export default function ClubsPage() {
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
     { field: 'shortName', headerName: 'Abrev.', width: 120 },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
-    { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
-      <Box sx={{ display: 'flex', gap: 0.5 }}>
-        <Iconify icon="eva:edit-fill" sx={{ cursor: 'pointer', color: 'text.secondary' }} onClick={() => openEdit(row)} />
-        <Iconify icon="eva:trash-2-outline" sx={{ cursor: 'pointer', color: 'error.main' }} onClick={() => remove(row.id)} />
-      </Box>
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
+      <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
   ];
 

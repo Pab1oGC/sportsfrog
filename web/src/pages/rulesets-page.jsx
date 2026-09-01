@@ -12,6 +12,7 @@ import { useCrudDialog } from 'src/hooks/use-crud';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { EditDeleteActions } from 'src/components/edit-delete-actions';
 
 // Mismos codigos que SportFrog.Domain.Rules.Tiebreaker, en el orden en que
 // se ofrecen para agregar. El orden en que quedan aplicados es el que el
@@ -88,11 +89,8 @@ export default function RulesetsPage() {
   const columns = [
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
     { field: 'sportCode', headerName: 'Deporte', width: 120, renderCell: ({ value }) => (sports || []).find((s) => s.code === value)?.name || value },
-    { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
-      <div style={{ display: 'flex', gap: 4 }}>
-        <Iconify icon="eva:edit-fill" sx={{ cursor: 'pointer', color: 'text.secondary' }} onClick={() => openEdit(row)} />
-        <Iconify icon="eva:trash-2-outline" sx={{ cursor: 'pointer', color: 'error.main' }} onClick={() => remove(row.id)} />
-      </div>
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
+      <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
   ];
 

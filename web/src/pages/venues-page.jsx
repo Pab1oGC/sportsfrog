@@ -14,6 +14,8 @@ import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
@@ -82,33 +84,24 @@ export default function VenuesPage() {
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 150 },
     { field: 'address', headerName: 'Direccion', flex: 1, minWidth: 150 },
     { field: 'isActive', headerName: 'Activa', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
-    { field: 'actions', headerName: '', width: 140, renderCell: ({ row }) => (
-      <Box sx={{ display: 'flex' }}>
-        <Tooltip title="Espacios"><IconButton size="small" onClick={() => setSelected(row)}>
-          <Iconify icon="eva:grid-outline" width={18} sx={{ color: selected?.id === row.id ? 'primary.main' : 'text.secondary' }} />
-        </IconButton></Tooltip>
-        <Tooltip title="Editar"><IconButton size="small" onClick={() => openVenue(row)}>
-          <Iconify icon="eva:edit-fill" width={18} />
-        </IconButton></Tooltip>
-        <Tooltip title="Eliminar"><IconButton size="small" onClick={() => deleteVenue(row.id)}>
-          <Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} />
-        </IconButton></Tooltip>
-      </Box>
+    { field: 'actions', headerName: 'Acciones', width: 110, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
+      <RowActionsMenu
+        primary={[
+          { icon: 'eva:edit-fill', label: 'Editar', onClick: () => openVenue(row) },
+          { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => deleteVenue(row.id) },
+        ]}
+        actions={[
+          { icon: 'eva:grid-outline', label: 'Espacios', color: selected?.id === row.id ? 'primary.main' : 'text.secondary', onClick: () => setSelected(row) },
+        ]}
+      />
     )},
   ];
 
   const sCols = [
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 150 },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
-    { field: 'actions', headerName: '', width: 100, renderCell: ({ row }) => (
-      <Box sx={{ display: 'flex' }}>
-        <Tooltip title="Editar"><IconButton size="small" onClick={() => openSpace(row)}>
-          <Iconify icon="eva:edit-fill" width={18} />
-        </IconButton></Tooltip>
-        <Tooltip title="Eliminar"><IconButton size="small" onClick={() => deleteSpace(row.id)}>
-          <Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} />
-        </IconButton></Tooltip>
-      </Box>
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
+      <EditDeleteActions onEdit={() => openSpace(row)} onDelete={() => deleteSpace(row.id)} />
     )},
   ];
 

@@ -18,6 +18,7 @@ import { useCascade } from 'src/hooks/use-cascade';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
@@ -113,14 +114,16 @@ export default function RosterPage() {
     { field: 'documentId', headerName: 'Documento', width: 120 },
     { field: 'position', headerName: 'Posicion', width: 100, renderCell: ({ value }) => value || '--' },
     { field: 'withdrawnAt', headerName: 'Estado', width: 110, renderCell: ({ value }) => value ? <Chip label="Retirado" color="warning" size="small" /> : <Chip label="Activo" color="success" size="small" /> },
-    { field: 'actions', headerName: '', width: 160, renderCell: ({ row: entry }) => {
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row: entry }) => {
       const w = !!entry.withdrawnAt;
       return (
-        <Box sx={{ display: 'flex' }}>
-          <Tooltip title="Editar"><IconButton size="small" onClick={() => openEdit(entry)}><Iconify icon="eva:edit-fill" width={18} /></IconButton></Tooltip>
-          <Tooltip title={w ? 'Reintegrar' : 'Retirar'}><IconButton size="small" onClick={() => withdraw(entry, !w)}><Iconify icon={w ? 'eva:undo-fill' : 'eva:person-done-outline'} width={18} sx={{ color: w ? 'info.main' : 'warning.main' }} /></IconButton></Tooltip>
-          {!w && <Tooltip title="Anular"><IconButton size="small" onClick={() => strike(entry)}><Iconify icon="eva:close-circle-outline" width={18} sx={{ color: 'error.main' }} /></IconButton></Tooltip>}
-        </Box>
+        <RowActionsMenu
+          primary={{ icon: 'eva:edit-fill', label: 'Editar', onClick: () => openEdit(entry) }}
+          actions={[
+            { icon: w ? 'eva:undo-fill' : 'eva:person-done-outline', label: w ? 'Reintegrar' : 'Retirar', color: w ? 'info.main' : 'warning.main', onClick: () => withdraw(entry, !w) },
+            !w && { icon: 'eva:close-circle-outline', label: 'Anular', color: 'error.main', onClick: () => strike(entry) },
+          ].filter(Boolean)}
+        />
       );
     }},
   ];

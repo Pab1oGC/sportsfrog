@@ -21,6 +21,7 @@ import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
 import { toast } from 'sonner';
 
@@ -162,7 +163,7 @@ export default function DocumentsPage() {
     }},
     { field: 'createdAt', headerName: 'Solicitado', width: 160, valueFormatter: function(v) { return v ? new Date(v).toLocaleString() : '--'; } },
     { field: 'finishedAt', headerName: 'Finalizado', width: 160, valueFormatter: function(v) { return v ? new Date(v).toLocaleString() : '--'; } },
-    { field: 'acciones', headerName: '', width: 60, sortable: false, renderCell: function(p) {
+    { field: 'acciones', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', sortable: false, renderCell: function(p) {
       return (
         <Tooltip title="Ver el lote">
           <IconButton size="small" onClick={function() { setDetalleId(p.row.id); }}>
@@ -182,24 +183,25 @@ export default function DocumentsPage() {
     { field: 'status', headerName: 'Estado', width: 100, renderCell: function(p) { return <Chip label={DL[p.value] || p.value} color={DS[p.value] || 'default'} size="small" />; } },
     { field: 'validTo', headerName: 'Vence', width: 110, renderCell: function(p) { return p.value || '--'; } },
     { field: 'issuedAt', headerName: 'Emitido', width: 140, valueFormatter: function(v) { return v ? new Date(v).toLocaleDateString() : '--'; } },
-    { field: 'actions', headerName: '', width: 96, sortable: false, renderCell: function(p) {
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', sortable: false, renderCell: function(p) {
       return (
-        <Box sx={{ display: 'flex' }}>
-          <Tooltip title={p.row.pdfUrl ? 'Abrir el PDF' : 'Sin archivo'}>
-            <span>
-              <IconButton size="small" disabled={!p.row.pdfUrl} onClick={function() { abrir(p.row.pdfUrl); }}>
-                <Iconify icon="eva:file-text-outline" width={18} />
-              </IconButton>
-            </span>
-          </Tooltip>
-          {p.row.status !== 'revoked' && (
-            <Tooltip title="Revocar">
-              <IconButton size="small" onClick={function() { setRevokeTarget(p.row); setRevokeReason(''); setRevokeOpen(true); }}>
-                <Iconify icon="eva:slash-outline" width={18} sx={{ color: 'error.main' }} />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Box>
+        <RowActionsMenu
+          primary={{
+            icon: 'eva:file-text-outline',
+            label: 'Abrir el PDF',
+            disabled: !p.row.pdfUrl,
+            disabledLabel: 'Sin archivo',
+            onClick: function() { abrir(p.row.pdfUrl); },
+          }}
+          actions={[
+            p.row.status !== 'revoked' && {
+              icon: 'eva:slash-outline',
+              label: 'Revocar',
+              color: 'error.main',
+              onClick: function() { setRevokeTarget(p.row); setRevokeReason(''); setRevokeOpen(true); },
+            },
+          ].filter(Boolean)}
+        />
       );
     }}
   ];
