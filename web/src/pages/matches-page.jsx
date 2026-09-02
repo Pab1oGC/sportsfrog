@@ -21,6 +21,9 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
 import { endpoints } from 'src/lib/axios';
+import { nombreFase } from 'src/lib/phase-labels';
+import { fechaHora } from 'src/lib/format-date';
+import { PENDIENTE } from 'src/lib/match-status';
 import { PageHeader } from 'src/components/page-header';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionSpace } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
@@ -74,9 +77,49 @@ export default function MatchesPage() {
     .filter((m) => !cascade.catId || m.categoryId === cascade.catId)
     .map((m) => ({ ...m, groupLabel: grupoPorEquipo[m.homeTeamId] || null }))
     .sort((a, b) => {
-      const g = (a.groupLabel || '').localeCompare(b.groupLabel || '');
-      if (g !== 0) return g;
-      return (a.roundNumber || 0) - (b.roundNumber || 0);
+      // Lo que ya se jugo (o se cancelo, o se otorgo) no va a cambiar mas:
+      // deja de ser lo primero que alguien necesita ver en esta pantalla, asi
+      // que se hunde al fondo entero, sin importar fase, jornada o grupo. En
+      // curso cuenta como pendiente — es lo mas urgente de todo.
+      const pendA = PENDIENTE[a.status] ? 0 : 1;
+      const pendB = PENDIENTE[b.status] ? 0 : 1;
+      if (pendA !== pendB) return pendA - pendB;
+
+      // Entre los pendientes, la jornada que sigue va primero (1, 2, 3...) y
+      // el mismo sentido pone a la fase de grupos antes que la eliminatoria
+      // (se juega primero). Entre los ya decididos vale lo contrario en los
+      // dos niveles: lo que se jugo mas recientemente queda arriba de ese
+      // bloque y lo mas viejo se sigue hundiendo — la eliminatoria (lo
+      // ultimo en jugarse) por delante de los grupos ya decididos, y dentro
+      // de cada una la ronda mas alta por delante de la anterior (jornada 3
+      // recien terminada por encima de la 2, que a su vez tapa a la 1). Un
+      // mismo signo sirve para los dos sentidos: en pendientes suma, en
+      // decididos resta.
+      const signo = pendA === 0 ? 1 : -1;
+
+      // La fase manda antes que el grupo: un partido de eliminatoria trae el
+      // groupLabel del equipo (que sigue siendo el de la fase de grupos, ese
+      // dato no se borra al promover), y ordenar por grupo primero lo
+      // mezclaba entre los partidos de esa misma zona en vez de dejarlo
+      // despues de que termina toda la fase de grupos. Es null en toda la
+      // fase de grupos y no-null en toda la eliminatoria, igual que ya hace
+      // ReadMatches.Ordered del lado del backend y el calendario publico
+      // (los dos, sin embargo, solo para el orden entre pendientes).
+      const faseA = a.phase ? 1 : 0;
+      const faseB = b.phase ? 1 : 0;
+      if (faseA !== faseB) return signo * (faseA - faseB);
+
+      // Dentro de la fase de grupos, la jornada manda: se lee como un
+      // calendario ("que se juega esta semana", en todos los grupos a la
+      // vez), no zona por zona. El grupo solo desempata partidos de la
+      // misma jornada, para que ahi al menos queden juntos.
+      if (!a.phase) {
+        const r = signo * ((a.roundNumber || 0) - (b.roundNumber || 0));
+        if (r !== 0) return r;
+        return (a.groupLabel || '').localeCompare(b.groupLabel || '');
+      }
+
+      return signo * ((a.roundNumber || 0) - (b.roundNumber || 0));
     });
   const comp = competiciones?.find((c) => c.id === cascade.compId);
   const formato = comp?.format;
@@ -284,10 +327,26 @@ export default function MatchesPage() {
   };
 
   const columns = [
-    { field: 'scheduledAt', headerName: 'Fecha', width: 150, renderCell: ({ value }) => value ? new Date(value).toLocaleString() : 'Sin fecha' },
-    { field: 'roundNumber', headerName: '#', width: 50, renderCell: ({ value }) => value || '--' },
+    { field: 'scheduledAt', headerName: 'Fecha', width: 190, renderCell: ({ value }) => value ? fechaHora(value) : 'Sin fecha' },
+
+    // Jornada solo dice algo en una liga (cada ronda es una fecha del
+    // todos-contra-todos) y en la fase de grupos de un formato mixto. En una
+    // eliminatoria pura no aporta nada por si sola — el numero de ronda ahi
+    // vuelve a empezar en cada cruce y lo que identifica al partido es la
+    // fase (Cuartos, Semifinal...), no un numero.
+    // En un formato de grupos, un partido de la eliminatoria tambien trae
+    // numero de ronda — pero es el conteo interno de la llave (que vuelve a
+    // empezar en 1), no una jornada, y mostrarlo ahi confunde. Fase ya dice
+    // cual es esa ronda con su nombre real (Cuartos, Semifinal...); Jornada
+    // solo aplica mientras el partido todavia es de la fase de grupos.
+    formato !== 'knockout' && { field: 'roundNumber', headerName: 'Jornada', width: 120, renderCell: ({ row }) => row.phase ? '--' : (row.roundNumber || '--') },
     { field: 'groupLabel', headerName: 'Grupo', width: 80, renderCell: ({ value }) => value ? <Chip label={value} size="small" /> : '--' },
-    { field: 'phase', headerName: 'Fase', width: 100, renderCell: ({ value }) => value || '--' },
+
+    // Y a la inversa: Fase solo existe una vez que hay una eliminatoria de
+    // por medio (pura, o la segunda mitad de una de grupos) — en una liga
+    // queda vacia en cada fila, columna que nunca dice nada.
+    formato !== 'league' && { field: 'phase', headerName: 'Fase', width: 130, renderCell: ({ value }) => value ? nombreFase(value) : '--' },
+
     { field: 'homeTeamName', headerName: 'Local', flex: 1, minWidth: 120 },
     // El marcador oficial (homeTotal/awayTotal) queda null hasta que se
     // carga el Resultado, aunque ya haya goles cargados como eventos — son
@@ -350,7 +409,7 @@ export default function MatchesPage() {
         ].filter(Boolean)}
       />
     )},
-  ];
+  ].filter(Boolean);
 
   return (
     <Box>
@@ -658,7 +717,7 @@ export default function MatchesPage() {
                 {row.countsForOpponent && <Chip label="AG" size="small" color="error" variant="outlined" sx={{ height: 18, '& .MuiChip-label': { px: 0.6, fontSize: 10, fontWeight: 700 } }} />}
               </Box>
             ) },
-            { field: 'jerseyNumber', headerName: '#', width: 50 },
+            { field: 'jerseyNumber', headerName: 'Dorsal', width: 65 },
             // Un autogol lo carga un jugador del equipo contrario al que se
             // le atribuye: se muestra el equipo al que le sirvio (igual que
             // el marcador en vivo ya lo cuenta), no el plantel del jugador —

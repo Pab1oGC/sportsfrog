@@ -24,6 +24,8 @@ import useSWR from 'swr';
 import publicAxios from 'src/lib/public-axios';
 import { Iconify } from 'src/components/iconify';
 import { ColorModeToggle } from 'src/components/color-mode-toggle';
+import { FASES } from 'src/lib/phase-labels';
+import { PENDIENTE } from 'src/lib/match-status';
 
 var publicFetcher = function(url) { return publicAxios.get(url).then(function(r) { return r.data; }); };
 var SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
@@ -442,18 +444,7 @@ function Tablero(props) {
    torneo terminó, abre en la última.
    ------------------------------------------------------------------------- */
 
-var FASES = {
-  round_of_32: 'Dieciseisavos',
-  round_of_16: 'Octavos',
-  quarterfinal: 'Cuartos de final',
-  semifinal: 'Semifinales',
-  final: 'Final',
-  third_place: 'Tercer puesto'
-};
-
 /** Un partido que todavía se espera jugar. */
-var PENDIENTE = { scheduled: true, in_progress: true, postponed: true };
-
 function CalendarView(props) {
   var loading = props.loading;
   var selectedCatId = props.selectedCatId;
