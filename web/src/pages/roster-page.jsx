@@ -108,7 +108,7 @@ export default function RosterPage() {
   };
 
   const columns = [
-    { field: 'jerseyNumber', headerName: '#', width: 60 },
+    { field: 'jerseyNumber', headerName: 'Dorsal', width: 70 },
     { field: 'lastName', headerName: 'Apellido', flex: 1, minWidth: 120 },
     { field: 'firstName', headerName: 'Nombre', flex: 1, minWidth: 120 },
     { field: 'documentId', headerName: 'Documento', width: 120 },

@@ -6,7 +6,6 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-import Alert from '@mui/material/Alert';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
@@ -272,9 +271,20 @@ export default function CompetitionsPage() {
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
       <CrudDialog open={open} editId={editId} entityName="Competicion" error={error} saving={saving} onClose={() => setOpen(false)} onSave={save} maxWidth="md">
         <TextField label="Nombre" value={form.name} onChange={handleNameChange} fullWidth required />
-        <TextField label="Direccion publica (slug)" value={form.slug} onChange={handleSlugChange} fullWidth required error={!!slugError} helperText={slugError || slugHelp}
-          slotProps={{ htmlInput: { maxLength: SLUG_MAX, spellCheck: false, autoCapitalize: 'none' } }} />
-        {editId && <Alert severity="warning" sx={{ mt: -1 }}>Cambiar la direccion rompe enlaces existentes.</Alert>}
+        {/* La direccion queda fija desde que se crea: cambiarla romperia
+            cualquier enlace ya compartido, y el backend la rechaza (ver
+            UpdateCompetition). Editando, se muestra pero no se toca. */}
+        <TextField
+          label="Direccion publica (slug)"
+          value={form.slug}
+          onChange={handleSlugChange}
+          fullWidth
+          required
+          disabled={!!editId}
+          error={!editId && !!slugError}
+          helperText={editId ? 'No se puede cambiar una vez creada la competencia.' : (slugError || slugHelp)}
+          slotProps={{ htmlInput: { maxLength: SLUG_MAX, spellCheck: false, autoCapitalize: 'none' } }}
+        />
         <TextField label="Temporada" value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} fullWidth required />
         <TextField select label="Formato" value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value })} fullWidth helperText={FORMATO_INFO[form.format]}>
           {FORMATS.map((f) => <MenuItem key={f} value={f}>{f === 'league' ? 'Todos vs todos' : f === 'knockout' ? 'Eliminacion' : 'Grupos'}</MenuItem>)}

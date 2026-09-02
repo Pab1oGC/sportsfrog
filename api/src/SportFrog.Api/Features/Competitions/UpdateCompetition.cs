@@ -12,15 +12,22 @@ namespace SportFrog.Api.Features.Competitions;
 /// Corrects a competition of the active organization.
 /// </summary>
 /// <remarks>
-/// Two of the fields stop being editable once the competition leaves draft,
-/// and the reason is the same in both cases: they decide how what is played
-/// gets read afterwards.
+/// Three of the fields stop being editable, two of them only once the
+/// competition leaves draft and one from the moment it is created at all.
 ///
 /// The ruleset scores and ranks every match; swapping it once matches exist
 /// restates results nobody touched. The capture level decides whether events
 /// are attributed to players at all; raising it halfway through leaves a top
 /// scorer table built from the second half of the season and presented as the
 /// whole of it.
+///
+/// The slug is the address of the public page, and it is locked from the
+/// start rather than once settled: nothing about a fresh draft makes a link
+/// to it safe to move. The moment a competition is created, whoever set up
+/// the address may have already handed it out — printed it, put it in a
+/// group chat — and a competition still in draft is not exempt from that.
+/// Renaming the competition costs nothing; renaming its address breaks
+/// whatever was shared before whoever changed it thinks to reshare it.
 ///
 /// Everything else — the name, the season, the dates, what the public page
 /// shows — is description, and description gets corrected.
@@ -97,13 +104,12 @@ public static class UpdateCompetition
             competition.SportCode = replacement.SportCode;
         }
 
-        var slug = Slug.Normalize(contract.Slug);
-
-        if (await database.Competitions.AnyAsync(
-                other => other.Id != id && other.Slug == slug, cancellationToken))
+        if (Slug.Normalize(contract.Slug) != competition.Slug)
         {
             return Results.Problem(
-                detail: "Ya hay una competencia usando esa dirección.",
+                detail: "La dirección pública de una competencia queda fija desde que se crea: " +
+                        "cambiarla rompería cualquier enlace que ya se haya compartido. Si hace " +
+                        "falta otra, creá la competencia de nuevo con la dirección que corresponda.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -125,7 +131,6 @@ public static class UpdateCompetition
         }
 
         competition.Name = contract.Name.Trim();
-        competition.Slug = slug;
         competition.Season = contract.Season.Trim();
         competition.Format = contract.Format;
         competition.CaptureLevel = captureLevel;

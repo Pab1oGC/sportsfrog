@@ -70,7 +70,12 @@ export default function TeamsPage() {
       <CrudDialog open={open} editId={editId} entityName="Equipo" error={error} onClose={() => setOpen(false)} onSave={save}>
         <SelectionClub value={form.clubId} onChange={(e) => setForm({ ...form, clubId: e.target.value })} required />
         <TextField label="Nombre del equipo (vacio = nombre del club)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth helperText="Dejar vacio para usar el nombre del club" />
-        <TextField label="Grupo / Zona" value={form.groupLabel} onChange={(e) => setForm({ ...form, groupLabel: e.target.value })} fullWidth helperText="Para formato de grupos: A, B, etc. Un sorteo de grupos lo completa solo." />
+        {/* El grupo ya no se tipea a mano: lo completa el sorteo de grupos
+            (ver Fixtures/Partidos). El campo seguia en el formulario aunque
+            eso ya lo resolvia solo — se saca de aca, pero el valor que ya
+            tenga un equipo (asignado por un sorteo anterior) no se toca:
+            form.groupLabel sigue viajando en el guardado, solo que ya no hay
+            forma de escribirlo a mano. */}
         <TextField
           label="Bombo"
           type="number"

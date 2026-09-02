@@ -66,7 +66,6 @@ export default function CategoriesPage() {
   };
 
   const columns = [
-    { field: 'displayOrder', headerName: '#', width: 60 },
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 180 },
     { field: 'gender', headerName: 'Genero', width: 90, renderCell: ({ value }) => value === 'M' ? 'Masculino' : value === 'F' ? 'Femenino' : 'Abierto' },
     { field: 'birthDateFrom', headerName: 'Nac. desde', width: 120 },
@@ -79,9 +78,10 @@ export default function CategoriesPage() {
 
   return (
     <div>
-      <PageHeader title="Categorias" actionLabel="Nueva categoria" onAction={() => openDialog(null)}>
-        <Box sx={{ width: { xs: '100%', sm: 300 } }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
-      </PageHeader>
+      <PageHeader title="Categorias" actionLabel="Nueva categoria" onAction={() => openDialog(null)} />
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
+      </Box>
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
       <CrudDialog open={open} editId={editId} entityName="Categoria" error={error} saving={saving} onClose={() => setOpen(false)} onSave={save}>
         <TextField label="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth required />
@@ -89,7 +89,6 @@ export default function CategoriesPage() {
         <TextField label="Nac. desde" type="date" value={form.birthDateFrom} onChange={(e) => setForm({ ...form, birthDateFrom: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Nac. hasta" type="date" value={form.birthDateTo} onChange={(e) => setForm({ ...form, birthDateTo: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Max. nomina" type="number" value={form.maxRosterSize} onChange={(e) => setForm({ ...form, maxRosterSize: e.target.value })} fullWidth />
-        <TextField label="Orden" type="number" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: e.target.value })} fullWidth />
         {comp?.format === 'groups' && (
           <TextField
             label="Clasifican por grupo"
