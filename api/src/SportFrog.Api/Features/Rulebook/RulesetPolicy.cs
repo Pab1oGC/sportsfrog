@@ -1,11 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Domain.Rules;
 
 namespace SportFrog.Api.Features.Rulebook;
-
-/// <summary>Something a configuration says that its sport does not allow.</summary>
-internal sealed record RulesetViolation(string Property, string Message);
 
 /// <summary>
 /// Decides whether a configuration makes sense for the sport it claims to be
@@ -21,8 +19,18 @@ internal sealed record RulesetViolation(string Property, string Message);
 /// Kept apart from the endpoints because creating and editing ask the same
 /// question, and two copies of this would answer it differently within a
 /// release.
+///
+/// What is mode-specific — the period-count constraint, the walkover
+/// scoreline — is delegated to <see cref="IRulesetShapeRules"/>, resolved
+/// through <see cref="IRulesetShapeRulesRegistry"/> rather than a mode
+/// check, so a mode this class does not already know is a new registration
+/// and not a new branch. Pricing itself is asked of
+/// <see cref="IMatchOutcomeRulesRegistry"/> the same way.
 /// </summary>
-internal sealed class RulesetPolicy(SportFrogDbContext database)
+internal sealed class RulesetPolicy(
+    SportFrogDbContext database,
+    IMatchOutcomeRulesRegistry outcomeRules,
+    IRulesetShapeRulesRegistry shapeRules)
 {
     /// <summary>
     /// Everything wrong with the configuration, or nothing.
@@ -53,8 +61,9 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         }
 
         var violations = new List<RulesetViolation>();
+        var shape = shapeRules.For(sport.ScoreMode);
 
-        var periodsAreUsable = InspectPeriods(sport, configuration, violations);
+        var periodsAreUsable = shape.InspectPeriods(sport, configuration, violations);
 
         InspectMetrics(sport, configuration, violations);
 
@@ -66,54 +75,25 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
         if (periodsAreUsable)
         {
             InspectPoints(sport, configuration, violations);
-            InspectWalkover(sport, configuration, violations);
+            shape.InspectWalkover(sport, configuration, violations);
         }
 
         return violations;
     }
 
     /// <summary>
-    /// A sport played in sets needs a deciding one.
-    /// </summary>
-    /// <returns>
-    /// Whether the periods can be reasoned from, which the checks that derive
-    /// the possible scorelines depend on.
-    /// </returns>
-    private static bool InspectPeriods(
-        Sport sport,
-        RulesetConfiguration configuration,
-        List<RulesetViolation> violations)
-    {
-        if (sport.ScoreMode == ScoreMode.Sets && configuration.Periods.Count % 2 == 0)
-        {
-            violations.Add(new RulesetViolation(
-                "Config.Periods.Count",
-                $"{sport.Name} se juega por sets, así que la cantidad de sets debe ser impar: " +
-                "un número par deja un partido que no se puede ganar."));
-
-            return false;
-        }
-
-        // A period measured in minutes where the period ends on a score
-        // instead is not refused, only pointless: it describes a clock nobody
-        // reads. Refusing it would block the league that does run a time
-        // limit per set, for scheduling reasons.
-
-        return true;
-    }
-
-    /// <summary>
     /// The priced outcomes must be exactly the ones this sport can produce.
     /// </summary>
-    private static void InspectPoints(
+    private void InspectPoints(
         Sport sport,
         RulesetConfiguration configuration,
         List<RulesetViolation> violations)
     {
-        var required = MatchOutcomes.RequiredFor(sport.ScoreMode, configuration.Periods.Count);
+        var rules = outcomeRules.For(sport.ScoreMode);
+        var required = rules.RequiredOutcomes(configuration.Periods.Count);
 
         var permitted = new HashSet<string>(required, StringComparer.Ordinal);
-        permitted.UnionWith(MatchOutcomes.OptionalFor(sport.ScoreMode));
+        permitted.UnionWith(rules.OptionalOutcomes());
 
         var missing = required
             .Where(outcome => !configuration.Points.ContainsKey(outcome))
@@ -193,39 +173,6 @@ internal sealed class RulesetPolicy(SportFrogDbContext database)
                 "Config.Metrics",
                 $"Estos eventos deciden el marcador en {sport.Name} y no se pueden dejar afuera: " +
                 string.Join(", ", scoring) + "."));
-        }
-    }
-
-    /// <summary>
-    /// A walkover has to be recordable as a real result of this sport.
-    /// </summary>
-    private static void InspectWalkover(
-        Sport sport,
-        RulesetConfiguration configuration,
-        List<RulesetViolation> violations)
-    {
-        if (configuration.Walkover is not { } walkover || sport.ScoreMode != ScoreMode.Sets)
-        {
-            return;
-        }
-
-        // Where the match score is sets won, the score awarded for a walkover
-        // has to be a scoreline the match could have finished on.
-        var toWin = (configuration.Periods.Count + 1) / 2;
-
-        if (walkover.WinnerScore != toWin)
-        {
-            violations.Add(new RulesetViolation(
-                "Config.Walkover.WinnerScore",
-                $"Un partido de {sport.Name} se gana en {toWin} sets, así que un walkover se " +
-                $"registra con {toWin} y no con {walkover.WinnerScore}."));
-        }
-
-        if (walkover.LoserScore >= toWin)
-        {
-            violations.Add(new RulesetViolation(
-                "Config.Walkover.LoserScore",
-                $"Al lado que no se presentó no se le puede acreditar {toWin} sets o más."));
         }
     }
 }

@@ -6,8 +6,14 @@ namespace SportFrog.Api.Features.Matches;
 /// <summary>
 /// A match played in sets stops the moment one side has enough of them.
 /// </summary>
-/// <remarks>Moved out of <see cref="ResultPolicy"/> as-is.</remarks>
-internal sealed class SetsResultShape : IResultShapeRules
+/// <remarks>
+/// Moved out of <see cref="ResultPolicy"/> as-is, except for how the
+/// consolidated score is reached: through the same
+/// <see cref="IMatchOutcomeRulesRegistry"/> a caller resolved through the
+/// container would use, rather than the static
+/// <see cref="ScoreConsolidation"/> facade.
+/// </remarks>
+internal sealed class SetsResultShape(IMatchOutcomeRulesRegistry outcomeRules) : IResultShapeRules
 {
     public ScoreMode Mode => ScoreMode.Sets;
 
@@ -23,8 +29,10 @@ internal sealed class SetsResultShape : IResultShapeRules
             return;
         }
 
+        // Not part of IMatchOutcomeRules: it never branches on mode, so
+        // there is no strategy to resolve — it stays a plain call.
         var toWin = ScoreConsolidation.PeriodsToWin(rules.Configuration.Periods.Count);
-        var (home, away) = ScoreConsolidation.Consolidate(ScoreMode.Sets, periods);
+        var (home, away) = outcomeRules.For(Mode).Consolidate(periods);
         var winner = Math.Max(home, away);
         var loser = Math.Min(home, away);
 

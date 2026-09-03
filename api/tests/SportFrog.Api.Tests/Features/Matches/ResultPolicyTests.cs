@@ -15,11 +15,14 @@ namespace SportFrog.Api.Tests.Features.Matches;
 /// </summary>
 public sealed class ResultPolicyTests
 {
-    // The real registry, built from the real per-mode implementations — not
-    // a mock. Both are pure and DB-free, so this is exactly the wiring
+    // The real registries, built from the real per-mode implementations —
+    // not mocks. All are pure and DB-free, so this is exactly the wiring
     // Program.cs assembles through the container, exercised without one.
+    private static readonly IMatchOutcomeRulesRegistry OutcomeRules =
+        new MatchOutcomeRulesRegistry([new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules()]);
+
     private static readonly ResultPolicy Policy = new(
-        new ResultShapeRulesRegistry([new CumulativeResultShape(), new SetsResultShape()]));
+        new ResultShapeRulesRegistry([new CumulativeResultShape(), new SetsResultShape(OutcomeRules)]));
 
     private static Sport CumulativeSport(string label = "tiempo") => new()
     {

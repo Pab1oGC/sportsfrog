@@ -73,6 +73,7 @@ public static class RecordResult
         SportFrogDbContext database,
         MatchRulesLookup rulesLookup,
         ResultPolicy policy,
+        IMatchOutcomeRulesRegistry outcomeRules,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -92,7 +93,8 @@ public static class RecordResult
         }
 
         return await FinishAsync(
-            match!, rules!, request.PeriodScores, request.Notes, database, organization, clock, cancellationToken);
+            match!, rules!, request.PeriodScores, request.Notes, database, outcomeRules, organization, clock,
+            cancellationToken);
     }
 
     /// <summary>
@@ -112,6 +114,7 @@ public static class RecordResult
         SportFrogDbContext database,
         MatchRulesLookup rulesLookup,
         ResultPolicy policy,
+        IMatchOutcomeRulesRegistry outcomeRules,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -157,7 +160,8 @@ public static class RecordResult
             return Refuse(violations);
         }
 
-        return await FinishAsync(match, rules, periods, notes: null, database, organization, clock, cancellationToken);
+        return await FinishAsync(
+            match, rules, periods, notes: null, database, outcomeRules, organization, clock, cancellationToken);
     }
 
     /// <summary>
@@ -216,11 +220,12 @@ public static class RecordResult
         IReadOnlyList<PeriodScore> periods,
         string? notes,
         SportFrogDbContext database,
+        IMatchOutcomeRulesRegistry outcomeRules,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
-        var (home, away) = ScoreConsolidation.Consolidate(rules.Sport.ScoreMode, periods);
+        var (home, away) = outcomeRules.For(rules.Sport.ScoreMode).Consolidate(periods);
 
         match.PeriodScores = [.. periods.OrderBy(period => period.Period)];
         match.HomeTotal = home;

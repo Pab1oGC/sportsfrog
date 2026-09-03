@@ -174,6 +174,9 @@ builder.Services.AddSingleton<BCryptPasswordHasher>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionIssuer>();
 
+builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.CumulativeRulesetShape>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.SetsRulesetShape>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRulesRegistry, SportFrog.Api.Features.Rulebook.RulesetShapeRulesRegistry>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
