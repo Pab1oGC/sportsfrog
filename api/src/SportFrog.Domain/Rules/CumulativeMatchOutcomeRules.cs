@@ -13,6 +13,8 @@ namespace SportFrog.Domain.Rules;
 /// </remarks>
 public sealed class CumulativeMatchOutcomeRules : IMatchOutcomeRules
 {
+    public ScoreMode Mode => ScoreMode.Cumulative;
+
     public (int Home, int Away) Consolidate(IReadOnlyList<PeriodScore> periods) =>
         (periods.Sum(period => period.Home), periods.Sum(period => period.Away));
 

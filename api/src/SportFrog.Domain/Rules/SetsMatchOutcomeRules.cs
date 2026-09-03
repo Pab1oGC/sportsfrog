@@ -15,6 +15,8 @@ namespace SportFrog.Domain.Rules;
 /// </remarks>
 public sealed class SetsMatchOutcomeRules : IMatchOutcomeRules
 {
+    public ScoreMode Mode => ScoreMode.Sets;
+
     public (int Home, int Away) Consolidate(IReadOnlyList<PeriodScore> periods) =>
         (periods.Count(period => period.Home > period.Away),
          periods.Count(period => period.Away > period.Home));

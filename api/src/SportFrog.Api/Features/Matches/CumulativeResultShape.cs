@@ -1,4 +1,5 @@
 using SportFrog.Domain.Matches;
+using SportFrog.Domain.Rules;
 
 namespace SportFrog.Api.Features.Matches;
 
@@ -13,6 +14,8 @@ namespace SportFrog.Api.Features.Matches;
 /// </remarks>
 internal sealed class CumulativeResultShape : IResultShapeRules
 {
+    public ScoreMode Mode => ScoreMode.Cumulative;
+
     public void Inspect(MatchRules rules, IReadOnlyList<PeriodScore> periods, List<ResultViolation> violations)
     {
         var expected = rules.Configuration.Periods.Count;

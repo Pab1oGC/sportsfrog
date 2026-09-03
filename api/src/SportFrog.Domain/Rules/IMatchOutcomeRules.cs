@@ -29,6 +29,12 @@ namespace SportFrog.Domain.Rules;
 /// </remarks>
 public interface IMatchOutcomeRules
 {
+    /// <summary>
+    /// The score mode this is the rules for — the key
+    /// <see cref="IMatchOutcomeRulesRegistry"/> resolves it by.
+    /// </summary>
+    ScoreMode Mode { get; }
+
     /// <summary>The match score, read the way this mode reads it.</summary>
     (int Home, int Away) Consolidate(IReadOnlyList<PeriodScore> periods);
 

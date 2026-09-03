@@ -71,19 +71,20 @@ public static class RecordResult
         Guid id,
         Request request,
         SportFrogDbContext database,
+        MatchRulesLookup rulesLookup,
         ResultPolicy policy,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
-        var (match, rules, refusal) = await LoadAsync(id, database, policy, cancellationToken);
+        var (match, rules, refusal) = await LoadAsync(id, database, rulesLookup, cancellationToken);
 
         if (refusal is not null)
         {
             return refusal;
         }
 
-        var violations = ResultPolicy.Inspect(rules!, request.PeriodScores);
+        var violations = policy.Inspect(rules!, request.PeriodScores);
 
         if (violations.Count > 0)
         {
@@ -109,12 +110,13 @@ public static class RecordResult
     private static async Task<IResult> HandleFromEventsAsync(
         Guid id,
         SportFrogDbContext database,
+        MatchRulesLookup rulesLookup,
         ResultPolicy policy,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
-        var (match, rules, refusal) = await LoadAsync(id, database, policy, cancellationToken);
+        var (match, rules, refusal) = await LoadAsync(id, database, rulesLookup, cancellationToken);
 
         if (refusal is not null)
         {
@@ -144,7 +146,7 @@ public static class RecordResult
         var periods = LiveScore.ComputePeriods(
             events, rules.Configuration.Periods.Count, match!.HomeTeamId, match.AwayTeamId);
 
-        var violations = ResultPolicy.Inspect(rules, periods);
+        var violations = policy.Inspect(rules, periods);
 
         if (violations.Count > 0)
         {
@@ -165,7 +167,7 @@ public static class RecordResult
     private static async Task<(Match? Match, MatchRules? Rules, IResult? Refusal)> LoadAsync(
         Guid id,
         SportFrogDbContext database,
-        ResultPolicy policy,
+        MatchRulesLookup rulesLookup,
         CancellationToken cancellationToken)
     {
         var match = await database.Matches.SingleOrDefaultAsync(
@@ -190,7 +192,7 @@ public static class RecordResult
                 statusCode: StatusCodes.Status409Conflict));
         }
 
-        if (await policy.FindRulesAsync(match, cancellationToken) is not { } rules)
+        if (await rulesLookup.FindRulesAsync(match, cancellationToken) is not { } rules)
         {
             return (null, null, Results.Problem(
                 detail: "No se pueden leer las reglas de este partido, así que su resultado no se puede juzgar.",

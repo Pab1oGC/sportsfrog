@@ -12,10 +12,9 @@ namespace SportFrog.Domain.Rules;
 /// point for taking a set off the winner needs those spelled out separately.
 ///
 /// The derivation itself now lives in <see cref="IMatchOutcomeRules"/> and
-/// its two implementations, one per mode — this stays as the entry point
-/// every existing caller already uses, keyed by <see cref="ScoreMode"/>
-/// rather than resolved through the interface, so nothing that calls it
-/// today has to change to keep working.
+/// its two implementations, resolved through <see cref="IMatchOutcomeRulesRegistry"/>
+/// — this stays as the entry point every existing caller already uses, so
+/// nothing that calls it today has to change to keep working.
 /// </remarks>
 public static class MatchOutcomes
 {
@@ -23,14 +22,14 @@ public static class MatchOutcomes
     public const string Draw = "draw";
     public const string Loss = "loss";
 
-    private static readonly IMatchOutcomeRules Cumulative = new CumulativeMatchOutcomeRules();
-    private static readonly IMatchOutcomeRules Sets = new SetsMatchOutcomeRules();
+    private static readonly IMatchOutcomeRulesRegistry Registry =
+        new MatchOutcomeRulesRegistry([new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules()]);
 
     /// <summary>
     /// Outcomes a ruleset for this sport must price.
     /// </summary>
     public static IReadOnlyCollection<string> RequiredFor(ScoreMode mode, short periods) =>
-        RulesFor(mode).RequiredOutcomes(periods);
+        Registry.For(mode).RequiredOutcomes(periods);
 
     /// <summary>
     /// Which outcome a finished match was, seen from one side.
@@ -44,13 +43,11 @@ public static class MatchOutcomes
     /// complete and the points would be wrong.
     /// </remarks>
     public static string For(ScoreMode mode, int own, int against) =>
-        RulesFor(mode).OutcomeFor(own, against);
+        Registry.For(mode).OutcomeFor(own, against);
 
     /// <summary>
     /// Outcomes it may price, but need not.
     /// </summary>
     public static IReadOnlyCollection<string> OptionalFor(ScoreMode mode) =>
-        RulesFor(mode).OptionalOutcomes();
-
-    private static IMatchOutcomeRules RulesFor(ScoreMode mode) => mode == ScoreMode.Sets ? Sets : Cumulative;
+        Registry.For(mode).OptionalOutcomes();
 }

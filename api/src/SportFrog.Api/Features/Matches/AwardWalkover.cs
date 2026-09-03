@@ -54,7 +54,7 @@ public static class AwardWalkover
         Guid id,
         Request request,
         SportFrogDbContext database,
-        ResultPolicy policy,
+        MatchRulesLookup rulesLookup,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -85,7 +85,7 @@ public static class AwardWalkover
             });
         }
 
-        if (await policy.FindRulesAsync(match, cancellationToken) is not { } rules)
+        if (await rulesLookup.FindRulesAsync(match, cancellationToken) is not { } rules)
         {
             return Results.Problem(
                 detail: "No se pueden leer las reglas de este partido, así que no se puede anotar un walkover.",

@@ -15,6 +15,12 @@ namespace SportFrog.Api.Tests.Features.Matches;
 /// </summary>
 public sealed class ResultPolicyTests
 {
+    // The real registry, built from the real per-mode implementations — not
+    // a mock. Both are pure and DB-free, so this is exactly the wiring
+    // Program.cs assembles through the container, exercised without one.
+    private static readonly ResultPolicy Policy = new(
+        new ResultShapeRulesRegistry([new CumulativeResultShape(), new SetsResultShape()]));
+
     private static Sport CumulativeSport(string label = "tiempo") => new()
     {
         Code = "football",
@@ -66,7 +72,7 @@ public sealed class ResultPolicyTests
     [Fact]
     public void Inspect_NoPeriodsReported_IsRejected()
     {
-        var violations = ResultPolicy.Inspect(Cumulative(), []);
+        var violations = Policy.Inspect(Cumulative(), []);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -77,7 +83,7 @@ public sealed class ResultPolicyTests
     {
         var periods = new[] { P(1, 1, 0), P(1, 0, 1) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(), periods);
+        var violations = Policy.Inspect(Cumulative(), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -89,7 +95,7 @@ public sealed class ResultPolicyTests
         // Two periods reported, numbered 1 and 3: period 2 is missing.
         var periods = new[] { P(1, 1, 0), P(3, 0, 1) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(), periods);
+        var violations = Policy.Inspect(Cumulative(), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -100,7 +106,7 @@ public sealed class ResultPolicyTests
     {
         var periods = new[] { P(1, -1, 0) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(1), periods);
+        var violations = Policy.Inspect(Cumulative(1), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -114,7 +120,7 @@ public sealed class ResultPolicyTests
         // reported — judging a sequence that is not one is not meaningful.
         var periods = new[] { P(1, 1, 0), P(1, 0, 1), P(1, 2, 0) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(2), periods);
+        var violations = Policy.Inspect(Cumulative(2), periods);
 
         violations.Should().ContainSingle();
     }
@@ -126,7 +132,7 @@ public sealed class ResultPolicyTests
     {
         var periods = new[] { P(1, 1, 0), P(2, 2, 1) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(2), periods);
+        var violations = Policy.Inspect(Cumulative(2), periods);
 
         violations.Should().BeEmpty();
     }
@@ -139,7 +145,7 @@ public sealed class ResultPolicyTests
         // a postponed or cancelled state, not a score.
         var periods = new[] { P(1, 1, 0) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(2), periods);
+        var violations = Policy.Inspect(Cumulative(2), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -150,7 +156,7 @@ public sealed class ResultPolicyTests
     {
         var periods = new[] { P(1, 1, 0), P(2, 0, 1), P(3, 1, 1) };
 
-        var violations = ResultPolicy.Inspect(Cumulative(2), periods);
+        var violations = Policy.Inspect(Cumulative(2), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -164,7 +170,7 @@ public sealed class ResultPolicyTests
         // Nothing decides a tied set — it was not finished.
         var periods = new[] { P(1, 25, 25) };
 
-        var violations = ResultPolicy.Inspect(Sets(5), periods);
+        var violations = Policy.Inspect(Sets(5), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -177,7 +183,7 @@ public sealed class ResultPolicyTests
         // progress, not a result.
         var periods = new[] { P(1, 25, 20), P(2, 20, 25), P(3, 25, 18) };
 
-        var violations = ResultPolicy.Inspect(Sets(5), periods);
+        var violations = Policy.Inspect(Sets(5), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -190,7 +196,7 @@ public sealed class ResultPolicyTests
         // sets is impossible: nothing is played after the third is won.
         var periods = new[] { P(1, 25, 20), P(2, 25, 18), P(3, 25, 22), P(4, 25, 15), P(5, 15, 25) };
 
-        var violations = ResultPolicy.Inspect(Sets(5), periods);
+        var violations = Policy.Inspect(Sets(5), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -207,7 +213,7 @@ public sealed class ResultPolicyTests
             P(1, 25, 20), P(2, 20, 25), P(3, 25, 18), P(4, 18, 25), P(5, 25, 20), P(6, 20, 25),
         };
 
-        var violations = ResultPolicy.Inspect(Sets(5), periods);
+        var violations = Policy.Inspect(Sets(5), periods);
 
         violations.Should().ContainSingle();
         violations[0].Property.Should().Be("PeriodScores");
@@ -218,7 +224,7 @@ public sealed class ResultPolicyTests
     {
         var periods = new[] { P(1, 25, 20), P(2, 22, 25), P(3, 25, 18), P(4, 25, 20) };
 
-        var violations = ResultPolicy.Inspect(Sets(5), periods);
+        var violations = Policy.Inspect(Sets(5), periods);
 
         violations.Should().BeEmpty();
     }
@@ -232,7 +238,7 @@ public sealed class ResultPolicyTests
         // match that ends 3-0 (three periods, not five) is a normal result.
         var periods = new[] { P(1, 25, 10), P(2, 25, 15), P(3, 25, 20) };
 
-        var violations = ResultPolicy.Inspect(Sets(5), periods);
+        var violations = Policy.Inspect(Sets(5), periods);
 
         violations.Should().BeEmpty();
     }

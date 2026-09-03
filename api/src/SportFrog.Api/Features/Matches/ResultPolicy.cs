@@ -1,19 +1,6 @@
-using Microsoft.EntityFrameworkCore;
-using SportFrog.Api.Infrastructure.Persistence;
-using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Domain.Matches;
 
 namespace SportFrog.Api.Features.Matches;
-
-/// <summary>The rules a match is played and read under.</summary>
-/// <param name="Configuration">
-/// The category's own ruleset where it has one, otherwise the competition's.
-/// A category is allowed to vary the rules of its division, so the effective
-/// one is the only one worth asking about.
-/// </param>
-internal sealed record MatchRules(Sport Sport, RulesetConfiguration Configuration);
-
-/// <summary>Something a result says that its sport does not allow.</summary>
-internal sealed record ResultViolation(string Property, string Message);
 
 /// <summary>
 /// Whether a score could have happened in this sport, under these rules.
@@ -24,58 +11,23 @@ internal sealed record ResultViolation(string Property, string Message);
 /// four and a half, or that a football match reports both halves — those
 /// depend on the ruleset, which lives in a jsonb column two joins away.
 ///
+/// Finding those rules is <see cref="MatchRulesLookup"/>'s job, not this
+/// one's: this class never touches the database, and needs nothing more
+/// than a <see cref="MatchRules"/> built by hand to be exercised.
+///
 /// The structural checks — numbering, negative scores — apply to every mode
 /// and stay here. What is mode-specific is delegated to
-/// <see cref="IResultShapeRules"/>, one implementation per score mode, so a
-/// mode this class does not already know is a new implementation of that
-/// interface rather than a third branch added here.
+/// <see cref="IResultShapeRules"/>, resolved through
+/// <see cref="IResultShapeRulesRegistry"/> rather than a mode check, so a
+/// mode this class does not already know is a new registration and not a
+/// new branch.
 /// </remarks>
-internal sealed class ResultPolicy(SportFrogDbContext database)
+internal sealed class ResultPolicy(IResultShapeRulesRegistry shapeRules)
 {
-    private static readonly IResultShapeRules CumulativeShape = new CumulativeResultShape();
-    private static readonly IResultShapeRules SetsShape = new SetsResultShape();
-
-    /// <summary>
-    /// The sport and the effective ruleset behind a fixture.
-    /// </summary>
-    public async Task<MatchRules?> FindRulesAsync(Match match, CancellationToken cancellationToken)
-    {
-        var context = await database.Matches
-            .AsNoTracking()
-            .Where(candidate => candidate.Id == match.Id)
-            .Select(candidate => new
-            {
-                candidate.Competition!.SportCode,
-
-                // The override where the category sets one, and the
-                // competition's otherwise. Resolved in the query so the
-                // fallback is not a rule every caller has to remember.
-                RulesetId = candidate.Category!.RulesetId ?? candidate.Competition.RulesetId,
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (context is null)
-        {
-            return null;
-        }
-
-        var sport = await database.Sports
-            .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Code == context.SportCode, cancellationToken);
-
-        var ruleset = await database.Rulesets
-            .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == context.RulesetId, cancellationToken);
-
-        return sport is null || ruleset is null ? null : new MatchRules(sport, ruleset.Config);
-    }
-
     /// <summary>
     /// Everything wrong with the periods reported, or nothing.
     /// </summary>
-    public static IReadOnlyList<ResultViolation> Inspect(
-        MatchRules rules,
-        IReadOnlyList<PeriodScore> periods)
+    public IReadOnlyList<ResultViolation> Inspect(MatchRules rules, IReadOnlyList<PeriodScore> periods)
     {
         var violations = new List<ResultViolation>();
 
@@ -93,8 +45,7 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
             return violations;
         }
 
-        var shape = rules.Sport.ScoreMode == ScoreMode.Sets ? SetsShape : CumulativeShape;
-        shape.Inspect(rules, periods, violations);
+        shapeRules.For(rules.Sport.ScoreMode).Inspect(rules, periods, violations);
 
         return violations;
     }
@@ -135,6 +86,9 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
     /// is awarded rather than played: what it is worth was decided when the
     /// competition was set up, and letting it be typed in per match would make
     /// two walkovers in one league worth different things.
+    ///
+    /// Static, unlike <see cref="Inspect"/>: nothing here depends on the
+    /// score mode, so there is no rules object to resolve.
     /// </remarks>
     public static (int Winner, int Loser)? WalkoverScore(MatchRules rules) =>
         rules.Configuration.Walkover is { } walkover

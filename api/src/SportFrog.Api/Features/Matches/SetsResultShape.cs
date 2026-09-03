@@ -9,6 +9,8 @@ namespace SportFrog.Api.Features.Matches;
 /// <remarks>Moved out of <see cref="ResultPolicy"/> as-is.</remarks>
 internal sealed class SetsResultShape : IResultShapeRules
 {
+    public ScoreMode Mode => ScoreMode.Sets;
+
     public void Inspect(MatchRules rules, IReadOnlyList<PeriodScore> periods, List<ResultViolation> violations)
     {
         var label = rules.Configuration.Periods.Label;

@@ -184,6 +184,18 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
+
+// Mode-specific rules, resolved through their registries rather than a mode
+// check — a new score mode is a new registration on these four lines, not a
+// change to anything that already depends on them.
+builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRules, SportFrog.Domain.Rules.CumulativeMatchOutcomeRules>();
+builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRules, SportFrog.Domain.Rules.SetsMatchOutcomeRules>();
+builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRulesRegistry, SportFrog.Domain.Rules.MatchOutcomeRulesRegistry>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRules, SportFrog.Api.Features.Matches.CumulativeResultShape>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRules, SportFrog.Api.Features.Matches.SetsResultShape>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRulesRegistry, SportFrog.Api.Features.Matches.ResultShapeRulesRegistry>();
+
+builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRulesLookup>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();

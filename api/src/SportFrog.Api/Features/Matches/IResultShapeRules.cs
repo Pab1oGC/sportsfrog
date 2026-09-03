@@ -1,4 +1,5 @@
 using SportFrog.Domain.Matches;
+using SportFrog.Domain.Rules;
 
 namespace SportFrog.Api.Features.Matches;
 
@@ -18,5 +19,11 @@ namespace SportFrog.Api.Features.Matches;
 /// </remarks>
 internal interface IResultShapeRules
 {
+    /// <summary>
+    /// The score mode this is the rules for — the key
+    /// <see cref="IResultShapeRulesRegistry"/> resolves it by.
+    /// </summary>
+    ScoreMode Mode { get; }
+
     void Inspect(MatchRules rules, IReadOnlyList<PeriodScore> periods, List<ResultViolation> violations);
 }
