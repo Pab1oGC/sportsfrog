@@ -1,3 +1,4 @@
+using SportFrog.Domain.Rules;
 
 namespace SportFrog.Domain.Matches;
 
@@ -16,20 +17,25 @@ namespace SportFrog.Domain.Matches;
 /// table nobody can explain, so it lives in one place with no database
 /// underneath it — the sport goes in, the totals come out, and it can be
 /// reasoned about on its own.
+///
+/// The arithmetic itself now lives in <see cref="IMatchOutcomeRules"/> and
+/// its two implementations — this stays as the entry point every existing
+/// caller already uses, keyed by <see cref="ScoreMode"/> rather than
+/// resolved through the interface, so nothing that calls it today has to
+/// change to keep working.
 /// </remarks>
 public static class ScoreConsolidation
 {
+    private static readonly IMatchOutcomeRules Cumulative = new CumulativeMatchOutcomeRules();
+    private static readonly IMatchOutcomeRules Sets = new SetsMatchOutcomeRules();
+
     /// <summary>
     /// The match score, read the way the sport reads it.
     /// </summary>
     public static (int Home, int Away) Consolidate(
         ScoreMode mode,
         IReadOnlyList<PeriodScore> periods) =>
-        mode == ScoreMode.Sets
-            ? (periods.Count(period => period.Home > period.Away),
-               periods.Count(period => period.Away > period.Home))
-            : (periods.Sum(period => period.Home),
-               periods.Sum(period => period.Away));
+        RulesFor(mode).Consolidate(periods);
 
     /// <summary>
     /// How many periods a side must take to win, where taking periods is how
@@ -40,4 +46,6 @@ public static class ScoreConsolidation
     /// when the ruleset is written, so there is always a deciding one.
     /// </remarks>
     public static int PeriodsToWin(short configuredPeriods) => (configuredPeriods + 1) / 2;
+
+    private static IMatchOutcomeRules RulesFor(ScoreMode mode) => mode == ScoreMode.Sets ? Sets : Cumulative;
 }

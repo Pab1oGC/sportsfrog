@@ -23,9 +23,18 @@ internal sealed record ResultViolation(string Property, string Message);
 /// no way to check that a volleyball match ended in three sets rather than
 /// four and a half, or that a football match reports both halves — those
 /// depend on the ruleset, which lives in a jsonb column two joins away.
+///
+/// The structural checks — numbering, negative scores — apply to every mode
+/// and stay here. What is mode-specific is delegated to
+/// <see cref="IResultShapeRules"/>, one implementation per score mode, so a
+/// mode this class does not already know is a new implementation of that
+/// interface rather than a third branch added here.
 /// </remarks>
 internal sealed class ResultPolicy(SportFrogDbContext database)
 {
+    private static readonly IResultShapeRules CumulativeShape = new CumulativeResultShape();
+    private static readonly IResultShapeRules SetsShape = new SetsResultShape();
+
     /// <summary>
     /// The sport and the effective ruleset behind a fixture.
     /// </summary>
@@ -84,14 +93,8 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
             return violations;
         }
 
-        if (rules.Sport.ScoreMode == ScoreMode.Sets)
-        {
-            InspectSets(rules, periods, violations);
-        }
-        else
-        {
-            InspectCumulative(rules, periods, violations);
-        }
+        var shape = rules.Sport.ScoreMode == ScoreMode.Sets ? SetsShape : CumulativeShape;
+        shape.Inspect(rules, periods, violations);
 
         return violations;
     }
@@ -121,73 +124,6 @@ internal sealed class ResultPolicy(SportFrogDbContext database)
         {
             violations.Add(new ResultViolation(
                 "PeriodScores", "El marcador de un período no puede ser negativo."));
-        }
-    }
-
-    /// <summary>
-    /// Under a cumulative score every period is played, so every period is
-    /// reported.
-    /// </summary>
-    /// <remarks>
-    /// A match abandoned halfway is not a short result: it is postponed or
-    /// cancelled, and those are states rather than scores.
-    /// </remarks>
-    private static void InspectCumulative(
-        MatchRules rules,
-        IReadOnlyList<PeriodScore> periods,
-        List<ResultViolation> violations)
-    {
-        var expected = rules.Configuration.Periods.Count;
-
-        if (periods.Count != expected)
-        {
-            violations.Add(new ResultViolation(
-                "PeriodScores",
-                $"{rules.Sport.Name} se juega en " +
-                $"{PeriodLabel.Count(expected, rules.Configuration.Periods.Label)} bajo estas " +
-                $"reglas, y se reportaron " +
-                $"{PeriodLabel.Count(periods.Count, rules.Configuration.Periods.Label)}."));
-        }
-    }
-
-    /// <summary>
-    /// A match played in sets stops the moment one side has enough of them.
-    /// </summary>
-    private static void InspectSets(
-        MatchRules rules,
-        IReadOnlyList<PeriodScore> periods,
-        List<ResultViolation> violations)
-    {
-        var label = rules.Configuration.Periods.Label;
-
-        if (periods.Any(period => period.Home == period.Away))
-        {
-            // Nothing decides a tied set, so a tied one was not finished.
-            violations.Add(new ResultViolation(
-                "PeriodScores", $"Un {label} no puede terminar empatado."));
-            return;
-        }
-
-        var toWin = ScoreConsolidation.PeriodsToWin(rules.Configuration.Periods.Count);
-        var (home, away) = ScoreConsolidation.Consolidate(ScoreMode.Sets, periods);
-        var winner = Math.Max(home, away);
-        var loser = Math.Min(home, away);
-
-        if (winner != toWin)
-        {
-            violations.Add(new ResultViolation(
-                "PeriodScores",
-                winner < toWin
-                    ? $"Ningún lado llegó a {PeriodLabel.Count(toWin, label)}, así que este " +
-                      "partido no terminó. Aplazálo si se va a reanudar."
-                    : $"Un partido se gana en {PeriodLabel.Count(toWin, label)}, y un lado tiene " +
-                      $"{winner}. No se juega nada después del {label} decisivo."));
-        }
-
-        if (loser >= toWin)
-        {
-            violations.Add(new ResultViolation(
-                "PeriodScores", $"Los dos lados no pueden llegar a {PeriodLabel.Count(toWin, label)}."));
         }
     }
 
