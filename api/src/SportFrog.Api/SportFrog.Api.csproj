@@ -10,6 +10,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Internal types like ResultPolicy carry rules that are worth unit
+         testing directly and not worth making public just to reach them. -->
+    <InternalsVisibleTo Include="SportFrog.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Declared as scaffolding dependencies. None is configured in Program.cs yet. -->
     <PackageReference Include="AWSSDK.S3" Version="4.0.102.1" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
