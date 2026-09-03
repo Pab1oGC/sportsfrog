@@ -36,6 +36,35 @@ const EMPTY_FORM = {
   },
 };
 
+// Mismo calculo que SportFrog.Domain.Rules.SetsMatchOutcomeRules.RequiredOutcomes
+// en el backend: un partido a la mejor de `count` se gana en toWin =
+// ceil(count/2), y cada desenlace posible se nombra desde los dos lados.
+// Se recalcula aca (en vez de pedirselo al backend) porque `count` cambia
+// mientras el organizador todavia esta escribiendo el formulario — lo que
+// terminara guardado siempre pasa por RulesetPolicy en el servidor, asi que
+// una diferencia aca en el peor caso muestra el campo equivocado, nunca
+// guarda un reglamento invalido.
+function desenlacesDeSets(count) {
+  const toWin = Math.ceil((count || 1) / 2);
+  const desenlaces = [];
+  for (let lost = 0; lost < toWin; lost++) {
+    desenlaces.push(`win_${toWin}_${lost}`);
+    desenlaces.push(`loss_${lost}_${toWin}`);
+  }
+  return desenlaces;
+}
+
+// "win_2_0" -> "Pts 2-0 (ganado)"; "loss_0_2" -> "Pts 0-2 (perdido)".
+function etiquetaDesenlace(code) {
+  if (code === 'win') return 'Pts victoria';
+  if (code === 'draw') return 'Pts empate';
+  if (code === 'loss') return 'Pts derrota';
+  const m = /^(win|loss)_(\d+)_(\d+)$/.exec(code);
+  if (!m) return code;
+  const [, resultado, propio, rival] = m;
+  return `Pts ${propio}-${rival} (${resultado === 'win' ? 'ganado' : 'perdido'})`;
+}
+
 export default function RulesetsPage() {
   const { data: sports } = useApi(endpoints.sports);
   const { rows, isLoading, open, editId, form, setForm, error, saving, openCreate, openEdit, close, save, remove } = useCrudDialog({
@@ -75,9 +104,19 @@ export default function RulesetsPage() {
   // hubieran jugado. Ver RulesetPolicy.InspectWalkover en el backend, que
   // rechaza cualquier otro numero para esos deportes.
   const sportInfo = (sports || []).find((s) => s.code === form.sportCode);
-  const esPorSets = sportInfo?.scoreMode === 'sets';
+  const esPorSets = Boolean(sportInfo?.isPlayedInSets);
   const setsParaGanar = Math.ceil((form.config.periods.count || 1) / 2);
   const walkover = form.config.walkover || null;
+
+  // Que desenlaces hay que poner precio: en un deporte de suma son siempre
+  // win/loss (mas el draw opcional), tal cual los expone el catalogo. En uno
+  // por sets dependen de la cantidad de periodos que el organizador esta
+  // escribiendo ahora mismo, asi que no pueden venir fijos del catalogo —
+  // ver desenlacesDeSets arriba.
+  const desenlacesRequeridos = esPorSets
+    ? desenlacesDeSets(form.config.periods.count)
+    : (sportInfo?.requiredOutcomes || ['win', 'loss']);
+  const desenlacesOpcionales = esPorSets ? [] : (sportInfo?.optionalOutcomes || ['draw']);
 
   const habilitarWalkover = (activo) => {
     if (!activo) { updateConfig('walkover', null); return; }
@@ -104,7 +143,31 @@ export default function RulesetsPage() {
           select
           label="Deporte"
           value={form.sportCode}
-          onChange={(e) => setForm({ ...form, sportCode: e.target.value, config: { ...form.config, walkover: null } })}
+          onChange={(e) => {
+            // Los desenlaces que hay que tarifar dependen del deporte
+            // (win/loss no significan nada en un deporte por sets, y
+            // viceversa), asi que un puntaje ya cargado para el anterior no
+            // tiene sentido conservarlo. Periodos tambien vuelve al default
+            // del deporte nuevo — el de antes podria ser par en un deporte
+            // que ahora se juega por sets, donde eso no es valido.
+            const nuevoDeporte = (sports || []).find((s) => s.code === e.target.value);
+            setForm({
+              ...form,
+              sportCode: e.target.value,
+              config: {
+                ...form.config,
+                points: {},
+                walkover: null,
+                periods: nuevoDeporte
+                  ? {
+                      count: nuevoDeporte.defaultPeriods,
+                      label: nuevoDeporte.periodLabel.charAt(0).toUpperCase() + nuevoDeporte.periodLabel.slice(1),
+                      minutes: form.config.periods.minutes,
+                    }
+                  : form.config.periods,
+              },
+            });
+          }}
           fullWidth
         >
           {(sports || []).map((s) => <MenuItem key={s.code} value={s.code}>{s.name}</MenuItem>)}
@@ -118,7 +181,15 @@ export default function RulesetsPage() {
             const nuevoWalkover = esPorSets && walkover
               ? { ...walkover, winnerScore: Math.ceil((count || 1) / 2) }
               : walkover;
-            setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, count }, walkover: nuevoWalkover } });
+            // Bajo sets, cambiar la cantidad de periodos cambia que
+            // desenlaces existen (best-of-3 y best-of-5 no comparten
+            // claves) — lo que ya estaba tarifado para la cantidad anterior
+            // no aplica a la nueva.
+            const nuevosPoints = esPorSets ? {} : form.config.points;
+            setForm({
+              ...form,
+              config: { ...form.config, periods: { ...form.config.periods, count }, points: nuevosPoints, walkover: nuevoWalkover },
+            });
           }}
           fullWidth
         />
@@ -131,9 +202,26 @@ export default function RulesetsPage() {
           fullWidth
           helperText="Dejar vacío en deportes que terminan por sets en vez de reloj (ej. vóley)."
         />
-        <TextField label="Pts victoria" type="number" value={form.config.points.win} onChange={(e) => setForm({ ...form, config: { ...form.config, points: { ...form.config.points, win: +e.target.value } } })} fullWidth />
-        <TextField label="Pts empate" type="number" value={form.config.points.draw} onChange={(e) => setForm({ ...form, config: { ...form.config, points: { ...form.config.points, draw: +e.target.value } } })} fullWidth />
-        <TextField label="Pts derrota" type="number" value={form.config.points.loss} onChange={(e) => setForm({ ...form, config: { ...form.config, points: { ...form.config.points, loss: +e.target.value } } })} fullWidth />
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Puntos por desenlace</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            {esPorSets
+              ? 'Uno por cada marcador de sets con el que un partido puede terminar, visto desde los dos lados.'
+              : 'Cuanto vale cada resultado posible en la tabla de posiciones.'}
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {[...desenlacesRequeridos, ...desenlacesOpcionales].map((code) => (
+              <TextField
+                key={code}
+                label={etiquetaDesenlace(code)}
+                type="number"
+                value={form.config.points[code] ?? ''}
+                onChange={(e) => updateConfig(`points.${code}`, +e.target.value)}
+                fullWidth
+              />
+            ))}
+          </Box>
+        </Box>
 
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Criterios de desempate</Typography>

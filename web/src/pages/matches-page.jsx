@@ -266,10 +266,25 @@ export default function MatchesPage() {
     catch (err) { setError(err.message); } finally { setLoading(false); }
   };
 
+  // Solo se ofrecen en un deporte por sets: uno de suma siempre juega
+  // exactamente los periodos configurados, así que ahí la cantidad de filas
+  // no es algo que el organizador deba tocar.
+  const agregarPeriodo = () => {
+    const siguiente = resForm.periodScores.length + 1;
+    setResForm({ ...resForm, periodScores: [...resForm.periodScores, { period: siguiente, home: 0, away: 0 }] });
+  };
+  const quitarPeriodo = (i) => {
+    if (resForm.periodScores.length <= 1) return;
+    setResForm({
+      ...resForm,
+      periodScores: resForm.periodScores.filter((_, idx) => idx !== i).map((p, idx) => ({ ...p, period: idx + 1 })),
+    });
+  };
+
   // Solo tiene sentido donde el marcador se arma sumando goles (futbol,
   // basquet): en un deporte por sets un punto no mueve el marcador (no hay
   // nada que sumar), asi que ahi sigue haciendo falta cargar el resultado a
-  // mano — ver el boton condicionado a sportInfo?.scoreMode mas abajo.
+  // mano — ver el boton condicionado a sportInfo?.isPlayedInSets mas abajo.
   const doFinishFromEvents = async (m) => {
     const marcador = `${m.liveHomeTotal ?? 0} - ${m.liveAwayTotal ?? 0}`;
     const ok = await confirm(`Finalizar el partido ${marcador}, segun los eventos cargados?`, { confirmLabel: 'Finalizar' });
@@ -377,13 +392,33 @@ export default function MatchesPage() {
           // nada. Un deporte por sets (voley) no tiene forma de derivarlo de
           // los eventos (un punto no mueve el marcador ahi), asi que ese
           // sigue pidiendo el resultado a mano.
-          m.status === 'in_progress' && sportInfo?.scoreMode === 'cumulative' && {
+          // sportInfo && !isPlayedInSets, no solo !isPlayedInSets: mientras
+          // todavia esta cargando (sportInfo undefined) el boton seguro es
+          // el manual, igual que antes de tener este campo.
+          m.status === 'in_progress' && sportInfo && !sportInfo.isPlayedInSets && {
             icon: 'eva:checkmark-circle-fill', label: 'Finalizar con el marcador de los eventos', color: 'success.main',
             onClick: () => doFinishFromEvents(m),
           },
-          m.status === 'in_progress' && sportInfo?.scoreMode !== 'cumulative' && {
+          m.status === 'in_progress' && (!sportInfo || sportInfo.isPlayedInSets) && {
             icon: 'eva:checkmark-circle-fill', label: 'Resultado', color: 'success.main',
-            onClick: () => { setSelMatch(m); setResForm({ periodScores: m.periodScores?.length ? m.periodScores.map((p) => ({ period: p.period, home: p.home, away: p.away })) : [{ period: 1, home: 0, away: 0 }, { period: 2, home: 0, away: 0 }], notes: m.notes || '' }); setError(''); setResOpen(true); },
+            onClick: () => {
+              setSelMatch(m);
+              // Un deporte de suma (futbol, basquet) siempre juega todos
+              // sus periodos configurados: la cantidad del deporte es la
+              // cantidad correcta. Uno por sets rara vez llega al maximo
+              // (una mejor-de-cinco que termina 3-0 solo jugo tres), asi
+              // que ahi se arranca en uno y el diálogo deja agregar los que
+              // hagan falta — ver agregarPeriodo mas abajo.
+              const cantidadPeriodos = sportInfo?.isPlayedInSets ? 1 : (sportInfo?.defaultPeriods || 2);
+              setResForm({
+                periodScores: m.periodScores?.length
+                  ? m.periodScores.map((p) => ({ period: p.period, home: p.home, away: p.away }))
+                  : Array.from({ length: cantidadPeriodos }, (_, i) => ({ period: i + 1, home: 0, away: 0 })),
+                notes: m.notes || '',
+              });
+              setError('');
+              setResOpen(true);
+            },
           },
           m.status === 'scheduled' && {
             icon: 'eva:alert-triangle-fill', label: 'Walkover', color: 'warning.main',
@@ -606,10 +641,31 @@ export default function MatchesPage() {
               <TextField label="Loc" type="number" value={ps.home} onChange={(e) => { const s = [...resForm.periodScores]; s[i] = { ...s[i], home: Number(e.target.value) }; setResForm({ ...resForm, periodScores: s }); }} size="small" sx={{ flex: 1 }} />
               <Typography>-</Typography>
               <TextField label="Vis" type="number" value={ps.away} onChange={(e) => { const s = [...resForm.periodScores]; s[i] = { ...s[i], away: Number(e.target.value) }; setResForm({ ...resForm, periodScores: s }); }} size="small" sx={{ flex: 1 }} />
+              {sportInfo?.isPlayedInSets && (
+                <IconButton size="small" disabled={resForm.periodScores.length <= 1} onClick={() => quitarPeriodo(i)}>
+                  <Iconify icon="eva:trash-2-outline" sx={{ color: 'error.main' }} />
+                </IconButton>
+              )}
             </Box>
           ))}
+          {sportInfo?.isPlayedInSets && (
+            // Uno de suma juega siempre la misma cantidad de periodos, asi
+            // que ahi no hay "agregar" que ofrecer — ver el comentario en
+            // agregarPeriodo.
+            <Button size="small" onClick={agregarPeriodo} startIcon={<Iconify icon="eva:plus-fill" />} sx={{ alignSelf: 'flex-start' }}>
+              Agregar {(sportInfo.periodLabel || 'período').toLowerCase()}
+            </Button>
+          )}
           <Divider />
-          <Typography fontWeight={600}>Total: {resForm.periodScores.reduce((s, p) => s + p.home, 0)} - {resForm.periodScores.reduce((s, p) => s + p.away, 0)}</Typography>
+          {/* Bajo sets el marcador del partido es la cantidad de periodos
+              ganados por cada lado (ver ScoreConsolidation en el backend),
+              no la suma de los puntos de cada set — sumar 25-20, 22-25,
+              25-18 no da un numero que signifique algo. */}
+          <Typography fontWeight={600}>
+            Total: {sportInfo?.isPlayedInSets
+              ? `${resForm.periodScores.filter((p) => p.home > p.away).length} - ${resForm.periodScores.filter((p) => p.away > p.home).length}`
+              : `${resForm.periodScores.reduce((s, p) => s + p.home, 0)} - ${resForm.periodScores.reduce((s, p) => s + p.away, 0)}`}
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setResOpen(false)}>Cancelar</Button>
