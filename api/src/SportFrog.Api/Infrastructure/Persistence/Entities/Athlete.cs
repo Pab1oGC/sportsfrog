@@ -47,6 +47,13 @@ public sealed class Athlete
 
     public string? GuardianPhone { get; set; }
 
+    /// <summary>
+    /// Most recent weigh-in on record, in kilograms. Null until one is
+    /// recorded; this is what a weight-classed category's eligibility check
+    /// reads.
+    /// </summary>
+    public decimal? WeightKg { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTimeOffset CreatedAt { get; set; }

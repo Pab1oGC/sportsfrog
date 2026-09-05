@@ -34,6 +34,8 @@ internal sealed class SportConfiguration : IEntityTypeConfiguration<Sport>
             .HasConversion(ScoreModeConverter)
             .IsRequired();
 
+        builder.Property(x => x.IsIndividual).HasColumnName("is_individual");
+
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasDefaultValueSql("now()")

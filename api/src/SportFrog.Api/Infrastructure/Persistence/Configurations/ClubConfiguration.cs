@@ -19,6 +19,7 @@ internal sealed class ClubConfiguration : IEntityTypeConfiguration<Club>
         builder.Property(x => x.ShortName).HasColumnName("short_name");
         builder.Property(x => x.LogoUrl).HasColumnName("logo_url");
         builder.Property(x => x.IsActive).HasColumnName("is_active");
+        builder.Property(x => x.IsUnaffiliated).HasColumnName("is_unaffiliated");
         builder.Property(x => x.DeletedAt).HasColumnName("deleted_at");
 
         builder.Property(x => x.CreatedAt)

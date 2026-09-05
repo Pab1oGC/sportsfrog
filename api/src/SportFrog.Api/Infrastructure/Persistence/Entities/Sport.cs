@@ -34,6 +34,14 @@ public sealed class Sport
 
     public ScoreMode ScoreMode { get; set; }
 
+    /// <summary>
+    /// True for a sport whose entrant is one athlete rather than a squad — a
+    /// team of one, still fielded through the same <see cref="Team"/>/
+    /// <see cref="RosterEntry"/> tables, with its delegation carried by the
+    /// team's club.
+    /// </summary>
+    public bool IsIndividual { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

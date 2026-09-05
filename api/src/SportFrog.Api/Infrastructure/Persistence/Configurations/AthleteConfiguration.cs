@@ -23,6 +23,7 @@ internal sealed class AthleteConfiguration : IEntityTypeConfiguration<Athlete>
         builder.Property(x => x.PhotoKey).HasColumnName("photo_key");
         builder.Property(x => x.GuardianName).HasColumnName("guardian_name");
         builder.Property(x => x.GuardianPhone).HasColumnName("guardian_phone");
+        builder.Property(x => x.WeightKg).HasColumnName("weight_kg").HasColumnType("numeric(5,2)");
         builder.Property(x => x.IsActive).HasColumnName("is_active");
         builder.Property(x => x.DeletedAt).HasColumnName("deleted_at");
 

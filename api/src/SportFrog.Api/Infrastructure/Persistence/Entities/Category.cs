@@ -61,6 +61,12 @@ public sealed class Category
     /// </summary>
     public short? MaxRosterSize { get; set; }
 
+    /// <summary>Lightest athlete this category admits, in kilograms. Null leaves it open at the bottom.</summary>
+    public decimal? MinWeightKg { get; set; }
+
+    /// <summary>Heaviest athlete this category admits, in kilograms. Null leaves it open at the top.</summary>
+    public decimal? MaxWeightKg { get; set; }
+
     /// <summary>
     /// Where this category sits when they are listed together.
     /// </summary>

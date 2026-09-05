@@ -24,6 +24,13 @@ public sealed class Club
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// The one club, per organization, that an athlete with no delegation of
+    /// their own enrolls under. Not a real club, so it is excluded from
+    /// listings and pickers meant for clubs a delegate manages.
+    /// </summary>
+    public bool IsUnaffiliated { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
