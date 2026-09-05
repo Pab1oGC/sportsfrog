@@ -43,6 +43,20 @@ public static class LiveScore
 {
     public readonly record struct Totals(int Home, int Away);
 
+    /// <summary>
+    /// Whether a live score is a concept this score mode has at all.
+    /// </summary>
+    /// <remarks>
+    /// Only true for <see cref="ScoreMode.Cumulative"/>. <see cref="Compute"/>
+    /// only ever tallies events whose metric affects the score, and under
+    /// <see cref="ScoreMode.Sets"/> none of them do — so it always returns
+    /// zero for a sets-mode match, indistinguishable from a match that is
+    /// genuinely level so far. A caller has to ask this first: a "live"
+    /// score frozen at 0-0 for the length of the match is not a missing
+    /// number, it looks like a real one.
+    /// </remarks>
+    public static bool AppliesTo(ScoreMode mode) => mode == ScoreMode.Cumulative;
+
     public static Totals Compute(
         IEnumerable<ScoringEvent> events,
         Guid homeTeamId,

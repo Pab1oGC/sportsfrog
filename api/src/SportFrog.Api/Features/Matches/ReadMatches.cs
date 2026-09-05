@@ -167,10 +167,28 @@ public static class ReadMatches
         List<Summary> matches,
         CancellationToken cancellationToken)
     {
-        var liveIds = matches
+        var inProgressIds = matches
             .Where(match => match.Status == MatchState.InProgress)
             .Select(match => match.Id)
             .ToList();
+
+        if (inProgressIds.Count == 0)
+        {
+            return matches;
+        }
+
+        // A live score only exists for a sport that derives one from events
+        // at all — see LiveScore.AppliesTo, which states the same rule this
+        // mirrors. Not called directly: EF Core cannot translate a call into
+        // it, and asking for the rest would not crash anyway — Compute would
+        // return zero for every one of them, which is not a live score, it
+        // is what "nothing to tally" looks like.
+        var liveIds = await database.Matches
+            .AsNoTracking()
+            .Where(match => inProgressIds.Contains(match.Id))
+            .Where(match => match.Competition!.Sport!.ScoreMode == ScoreMode.Cumulative)
+            .Select(match => match.Id)
+            .ToListAsync(cancellationToken);
 
         if (liveIds.Count == 0)
         {
@@ -194,7 +212,7 @@ public static class ReadMatches
 
         return [.. matches.Select(match =>
         {
-            if (match.Status != MatchState.InProgress)
+            if (!liveIds.Contains(match.Id))
             {
                 return match;
             }

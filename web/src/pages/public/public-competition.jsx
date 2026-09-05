@@ -26,18 +26,12 @@ import { Iconify } from 'src/components/iconify';
 import { ColorModeToggle } from 'src/components/color-mode-toggle';
 import { FASES } from 'src/lib/phase-labels';
 import { PENDIENTE } from 'src/lib/match-status';
+import { etiquetasDesempate, columnasMarcador } from 'src/lib/tiebreaker-labels';
 
 var publicFetcher = function(url) { return publicAxios.get(url).then(function(r) { return r.data; }); };
 var SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
 var SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado', walkover: 'Walkover', postponed: 'Aplazado' };
 var SL2 = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };
-var TIEBREAKER_LABELS = {
-  score_difference: 'Diferencia de gol',
-  score_for: 'Goles a favor',
-  score_against: 'Goles en contra',
-  wins: 'Partidos ganados',
-  head_to_head: 'Enfrentamiento directo',
-};
 
 export default function PublicCompetitionPage() {
   var params = useParams();
@@ -172,7 +166,7 @@ export default function PublicCompetitionPage() {
           <Tab label="Calendario" />
         </Tabs>
         {effectiveTab === standingsTabIdx && showStandings && (
-          <StandingsView data={standingsData} loading={loadingStandings} selectedCatId={selectedCatId} />
+          <StandingsView data={standingsData} loading={loadingStandings} selectedCatId={selectedCatId} sportInfo={comp} />
         )}
         {effectiveTab === leadersTabIdx && showLeaders && (
           <LeadersView data={leadersData} loading={loadingLeaders} selectedCatId={selectedCatId} />
@@ -232,6 +226,7 @@ function StandingsView(props) {
   var data = props.data;
   var loading = props.loading;
   var selectedCatId = props.selectedCatId;
+  var sportInfo = props.sportInfo;
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>;
   if (!data || !data.categories || data.categories.length === 0) return <Alert severity="info">Sin datos de posiciones.</Alert>;
@@ -239,35 +234,54 @@ function StandingsView(props) {
   var catsToShow = data.categories;
   if (selectedCatId) catsToShow = catsToShow.filter(function(c) { return c.categoryId === selectedCatId; });
 
+  // GF/GC en un deporte de suma, SG/SP ("sets ganados"/"sets perdidos") en
+  // uno por sets — la misma unidad que arma las etiquetas de desempate abajo,
+  // asi que las dos siempre coinciden.
+  var columnasScore = columnasMarcador(sportInfo);
+
+  // Las columnas dependen del reglamento de cada categoria (allowsDraw viene
+  // por categoria, no por deporte: dos categorias del mismo deporte pueden
+  // jugar con reglamentos distintos), asi que se arman por categoria y no una
+  // sola vez para toda la vista.
+  //
   // sortable: false en cada columna — una tabla de posiciones publica no es
   // una planilla: el orden lo decide el reglamento (puntos, luego los
   // criterios de desempate ya aplicados del lado del servidor), asi que
   // dejar que cualquiera la reordene con un clic mostraria una tabla que
   // "miente" sobre quien va primero.
-  var cols = [
-    { field: 'position', headerName: '#', width: 50, sortable: false },
-    { field: 'teamName', headerName: 'Equipo', flex: 1, minWidth: 180, sortable: false, renderCell: function(p) {
-      return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, height: '100%' }}>
-          <Avatar src={p.row.clubLogoUrl || undefined} variant="rounded" sx={{ width: 24, height: 24, bgcolor: 'action.hover', '& img': { objectFit: 'contain' } }}>
-            {!p.row.clubLogoUrl && <Iconify icon="mdi:office-building-outline" width={14} sx={{ color: 'text.disabled' }} />}
-          </Avatar>
-          <Typography variant="body2" noWrap>{p.value}</Typography>
-        </Box>
-      );
-    } },
-    { field: 'played', headerName: 'PJ', width: 50, sortable: false },
-    { field: 'won', headerName: 'PG', width: 50, sortable: false },
-    { field: 'drawn', headerName: 'PE', width: 50, sortable: false },
-    { field: 'lost', headerName: 'PP', width: 50, sortable: false },
-    { field: 'scoreFor', headerName: 'GF', width: 50, sortable: false },
-    { field: 'scoreAgainst', headerName: 'GC', width: 50, sortable: false },
-    { field: 'scoreDifference', headerName: 'DF', width: 50, sortable: false },
-    { field: 'points', headerName: 'Pts', width: 60, sortable: false }
-  ];
+  function columnasDe(cat) {
+    return [
+      { field: 'position', headerName: '#', width: 50, sortable: false },
+      { field: 'teamName', headerName: 'Equipo', flex: 1, minWidth: 180, sortable: false, renderCell: function(p) {
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, height: '100%' }}>
+            <Avatar src={p.row.clubLogoUrl || undefined} variant="rounded" sx={{ width: 24, height: 24, bgcolor: 'action.hover', '& img': { objectFit: 'contain' } }}>
+              {!p.row.clubLogoUrl && <Iconify icon="mdi:office-building-outline" width={14} sx={{ color: 'text.disabled' }} />}
+            </Avatar>
+            <Typography variant="body2" noWrap>{p.value}</Typography>
+          </Box>
+        );
+      } },
+      { field: 'played', headerName: 'PJ', width: 50, sortable: false },
+      { field: 'won', headerName: 'PG', width: 50, sortable: false },
+      // No es que la columna siempre de cero: es que este reglamento no
+      // tiene un empate que precie — bajo sets porque el modo no lo tiene,
+      // en un deporte de suma porque estos organizadores no le pusieron
+      // puntaje. La pregunta directamente no aplica.
+      cat.allowsDraw && { field: 'drawn', headerName: 'PE', width: 50, sortable: false },
+      { field: 'lost', headerName: 'PP', width: 50, sortable: false },
+      { field: 'scoreFor', headerName: columnasScore.favor, width: 50, sortable: false },
+      { field: 'scoreAgainst', headerName: columnasScore.contra, width: 50, sortable: false },
+      { field: 'scoreDifference', headerName: 'DF', width: 50, sortable: false },
+      { field: 'points', headerName: 'Pts', width: 60, sortable: false }
+    ].filter(Boolean);
+  }
+
+  var etiquetas = etiquetasDesempate(sportInfo);
 
   return catsToShow.map(function(cat) {
     var qualifies = cat.qualifiersPerGroup || 0;
+    var cols = columnasDe(cat);
     return (
       <Box key={cat.categoryId} sx={{ mb: 3 }}>
         {(cat.groups || []).map(function(grp, gi) {
@@ -316,7 +330,7 @@ function StandingsView(props) {
         )}
         {cat.tiebreakers && cat.tiebreakers.length > 0 && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Criterios de desempate: {cat.tiebreakers.map(function(code) { return TIEBREAKER_LABELS[code] || code; }).join(', ')}
+            Criterios de desempate: {cat.tiebreakers.map(function(code) { return etiquetas[code] || code; }).join(', ')}
           </Typography>
         )}
       </Box>
@@ -357,7 +371,7 @@ function LeadersView(props) {
   if (conDatos.length === 0) return (
     <Alert severity="info">
       Todavía no se registraron estadísticas individuales en esta competencia.
-      Los tableros aparecen a medida que se cargan los goles y las tarjetas de cada partido.
+      Los tableros aparecen a medida que se cargan los eventos de cada partido.
     </Alert>
   );
 
@@ -377,7 +391,10 @@ function LeadersView(props) {
           }}
         >
           {cat.boards.map(function(board) {
-            return <Tablero key={board.metricId} board={board} />;
+            // metricCode, no metricId: el tablero combinado de puntos no
+            // tiene un metricId propio (junta varios), pero su código
+            // sintético "points" es igual de único y estable.
+            return <Tablero key={board.metricCode} board={board} />;
           })}
         </Box>
       </Box>

@@ -37,6 +37,22 @@ public static class ReadPublicCompetition
         string Season,
         string SportCode,
         string SportName,
+
+        /// <summary>What one unit of score is called: "gol", "punto".</summary>
+        string ScoringUnit,
+
+        /// <summary>What one division of a match is called: "tiempo", "set".</summary>
+        string PeriodLabel,
+
+        /// <summary>
+        /// Whether this sport is decided by periods won rather than a total
+        /// score — the one fact the public page actually branches on, so a
+        /// standings column or a tiebreaker label never has to guess it from
+        /// the sport's name. See <see cref="Rulebook.ReadSports.Summary"/>,
+        /// which exposes the same fact to the organization's own pages.
+        /// </summary>
+        bool IsPlayedInSets,
+
         string Format,
         CompetitionState Status,
         DateOnly? StartsOn,
@@ -103,6 +119,9 @@ public static class ReadPublicCompetition
                         candidate.Season,
                         candidate.SportCode,
                         SportName = candidate.Sport!.Name,
+                        ScoringUnit = candidate.Sport.ScoringUnit,
+                        PeriodLabel = candidate.Sport.PeriodLabel,
+                        IsPlayedInSets = candidate.Sport.ScoreMode == ScoreMode.Sets,
                         candidate.Format,
                         candidate.Status,
                         candidate.StartsOn,
@@ -163,6 +182,9 @@ public static class ReadPublicCompetition
                     competition.Season,
                     competition.SportCode,
                     competition.SportName,
+                    competition.ScoringUnit,
+                    competition.PeriodLabel,
+                    competition.IsPlayedInSets,
                     competition.Format,
                     competition.Status,
                     competition.StartsOn,

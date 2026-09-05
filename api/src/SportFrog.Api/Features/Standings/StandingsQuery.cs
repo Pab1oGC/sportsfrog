@@ -23,6 +23,22 @@ internal sealed record StandingsResult(
     string SportCode,
     Guid RulesetId,
     string RulesetName,
+
+    /// <summary>
+    /// Whether this ruleset prices a drawn match at all.
+    /// </summary>
+    /// <remarks>
+    /// False for every sport played in sets — the mode has no draw to price,
+    /// and <c>RulesetPolicy</c> would refuse one that tried. False too for a
+    /// cumulative sport whose organizers simply chose not to award one, which
+    /// <see cref="MatchOutcomes.OptionalFor"/> allows precisely because
+    /// whether a match can end level is the competition's call, not the
+    /// sport's. Either way, a table with nobody drawn and nothing priced for
+    /// it is not publishing a column that always reads zero — the question
+    /// does not apply here.
+    /// </remarks>
+    bool AllowsDraw,
+
     IReadOnlyList<string> Tiebreakers,
     IReadOnlyList<StandingsGroup> Groups,
     IReadOnlyDictionary<Guid, string?> LogoKeys,
@@ -130,6 +146,7 @@ internal static class StandingsQuery
             category.SportCode,
             ruleset.Id,
             ruleset.Name,
+            ruleset.Config.Points.ContainsKey(MatchOutcomes.Draw),
             ruleset.Config.Tiebreakers,
             StandingsCalculator.Build(contenders, played, sport.ScoreMode, ruleset.Config),
             logoKeys,

@@ -267,19 +267,38 @@ export default function LandingPage() {
                     className="vivo-card"
                     onClick={function() { navigate('/public/' + c.organizationSlug + '/' + c.competitionSlug); }}
                     sx={{
-                      height: '100%', borderRadius: 3, cursor: 'pointer', border: '1px solid', borderColor: 'divider',
+                      height: '100%', display: 'flex', flexDirection: 'column',
+                      borderRadius: 3, cursor: 'pointer', border: '1px solid', borderColor: 'divider',
                       transition: 'transform .2s, box-shadow .2s, border-color .2s',
                       '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 12px 32px rgba(27,138,46,0.14)', borderColor: 'primary.main' }
                     }}
                   >
-                    <CardContent sx={{ p: 2.5 }}>
+                    <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
                         <Chip label={SL[c.status] || c.status} color={SC[c.status] || 'default'} size="small" />
                         <Chip label={c.sportName} size="small" variant="outlined" />
                       </Box>
-                      <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3, mb: 0.5 }}>{c.competitionName}</Typography>
+                      {/* Alto reservado para dos lineas siempre, tenga el
+                          nombre una o dos: si no, una tarjeta con titulo
+                          corto queda mas baja que la de al lado y la fila de
+                          "equipos / categorias / temporada" no coincide
+                          entre tarjetas de la misma fila. */}
+                      <Typography
+                        variant="h6"
+                        fontWeight={700}
+                        sx={{
+                          lineHeight: 1.3, mb: 0.5, minHeight: '2.6em',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                        }}
+                      >
+                        {c.competitionName}
+                      </Typography>
                       <Typography variant="body2" color="text.secondary" noWrap>{c.organizationName}</Typography>
-                      <Box sx={{ display: 'flex', gap: 2, mt: 2, color: 'text.secondary' }}>
+                      {/* mt: 'auto' en vez de un mt fijo: ahora que CardContent
+                          es una columna flex, esto ancla la fila de datos al
+                          pie de la tarjeta pase lo que pase arriba, en vez de
+                          quedar a la altura que el contenido de arriba deje. */}
+                      <Box sx={{ display: 'flex', gap: 2, mt: 'auto', pt: 2, color: 'text.secondary' }}>
                         <Typography variant="caption">{c.teams} equipos</Typography>
                         <Typography variant="caption">{c.categories} {c.categories === 1 ? 'categoria' : 'categorias'}</Typography>
                         <Typography variant="caption">{c.season}</Typography>

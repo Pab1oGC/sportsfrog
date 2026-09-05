@@ -145,8 +145,15 @@ public static class ReadPublicCalendar
 
                 foreach (var match in matches)
                 {
-                    LiveScore.Totals? live = match.Status == MatchState.InProgress
-                        ? liveTotals.GetValueOrDefault(match.Id)
+                    // TryGetValue, not GetValueOrDefault: Totals is a value
+                    // type, so a missing key's default(Totals) is (0, 0) —
+                    // GetValueOrDefault would hand that back as a Totals?
+                    // that HasValue, indistinguishable from a real 0-0.
+                    // liveTotals only carries an entry for a match whose
+                    // sport derives a live score at all (see LiveTotalsAsync),
+                    // so a genuinely missing key has to stay null here.
+                    LiveScore.Totals? live = liveTotals.TryGetValue(match.Id, out var totals)
+                        ? totals
                         : null;
 
                     fixtures.Add(new Fixture(
@@ -200,7 +207,27 @@ public static class ReadPublicCalendar
             return [];
         }
 
-        var liveIds = liveMatches.Select(match => match.MatchId).ToList();
+        var candidateIds = liveMatches.Select(match => match.MatchId).ToList();
+
+        // A live score only exists for a sport that derives one from events
+        // at all — see LiveScore.AppliesTo, which states the same rule this
+        // mirrors. Not called directly: EF Core cannot translate a call into
+        // it, and asking for the rest would not crash anyway — Compute would
+        // return zero for every one of them, which is not a live score, it
+        // is what "nothing to tally" looks like, and showing it as EN VIVO
+        // 0-0 for the length of a set-scored match says something that never
+        // happened.
+        var liveIds = await database.Matches
+            .AsNoTracking()
+            .Where(match => candidateIds.Contains(match.Id))
+            .Where(match => match.Competition!.Sport!.ScoreMode == ScoreMode.Cumulative)
+            .Select(match => match.Id)
+            .ToListAsync(cancellationToken);
+
+        if (liveIds.Count == 0)
+        {
+            return [];
+        }
 
         var events = await database.PlayerEvents
             .AsNoTracking()
@@ -216,14 +243,17 @@ public static class ReadPublicCalendar
             .ToListAsync(cancellationToken);
 
         var byMatch = events.ToLookup(recorded => recorded.MatchId);
+        var liveIdSet = liveIds.ToHashSet();
 
-        return liveMatches.ToDictionary(
-            match => match.MatchId,
-            match => LiveScore.Compute(
-                byMatch[match.MatchId].Select(recorded => new ScoringEvent(
-                    recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
-                match.HomeTeamId,
-                match.AwayTeamId));
+        return liveMatches
+            .Where(match => liveIdSet.Contains(match.MatchId))
+            .ToDictionary(
+                match => match.MatchId,
+                match => LiveScore.Compute(
+                    byMatch[match.MatchId].Select(recorded => new ScoringEvent(
+                        recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
+                    match.HomeTeamId,
+                    match.AwayTeamId));
     }
 
     /// <summary>A club's crest, signed — or null, for a club that never uploaded one.</summary>

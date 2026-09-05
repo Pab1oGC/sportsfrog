@@ -13,18 +13,7 @@ import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
-
-// Mismos codigos que SportFrog.Domain.Rules.Tiebreaker, en el orden en que
-// se ofrecen para agregar. El orden en que quedan aplicados es el que el
-// organizador les da en la lista, no este.
-const TIEBREAKER_LABELS = {
-  score_difference: 'Diferencia de gol',
-  score_for: 'Goles a favor',
-  score_against: 'Goles en contra',
-  wins: 'Partidos ganados',
-  head_to_head: 'Enfrentamiento directo',
-};
-const TIEBREAKER_CODES = Object.keys(TIEBREAKER_LABELS);
+import { TIEBREAKER_CODES, etiquetasDesempate } from 'src/lib/tiebreaker-labels';
 
 const EMPTY_FORM = {
   name: '',
@@ -117,6 +106,7 @@ export default function RulesetsPage() {
     ? desenlacesDeSets(form.config.periods.count)
     : (sportInfo?.requiredOutcomes || ['win', 'loss']);
   const desenlacesOpcionales = esPorSets ? [] : (sportInfo?.optionalOutcomes || ['draw']);
+  const etiquetas = etiquetasDesempate(sportInfo);
 
   const habilitarWalkover = (activo) => {
     if (!activo) { updateConfig('walkover', null); return; }
@@ -230,7 +220,7 @@ export default function RulesetsPage() {
           </Typography>
           {tiebreakers.map((code, i) => (
             <Box key={code} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
-              <Typography variant="body2" sx={{ flexGrow: 1 }}>{i + 1}. {TIEBREAKER_LABELS[code] || code}</Typography>
+              <Typography variant="body2" sx={{ flexGrow: 1 }}>{i + 1}. {etiquetas[code] || code}</Typography>
               <IconButton size="small" disabled={i === 0} onClick={() => moverDesempate(i, -1)}><Iconify icon="eva:chevron-up-fill" /></IconButton>
               <IconButton size="small" disabled={i === tiebreakers.length - 1} onClick={() => moverDesempate(i, 1)}><Iconify icon="eva:chevron-down-fill" /></IconButton>
               <IconButton size="small" disabled={tiebreakers.length <= 1} onClick={() => quitarDesempate(i)}><Iconify icon="eva:trash-2-outline" sx={{ color: 'error.main' }} /></IconButton>
@@ -246,7 +236,7 @@ export default function RulesetsPage() {
               size="small"
               sx={{ mt: 1 }}
             >
-              {tiebreakersDisponibles.map((code) => <MenuItem key={code} value={code}>{TIEBREAKER_LABELS[code]}</MenuItem>)}
+              {tiebreakersDisponibles.map((code) => <MenuItem key={code} value={code}>{etiquetas[code]}</MenuItem>)}
             </TextField>
           )}
         </Box>

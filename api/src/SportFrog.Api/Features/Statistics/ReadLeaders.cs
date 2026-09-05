@@ -31,13 +31,19 @@ public static class ReadLeaders
         string TeamName,
         int Total);
 
+    /// <param name="MetricId">
+    /// Null for the points board once it combines more than one scoring
+    /// metric — nothing single identifies free throws, field goals and
+    /// three-pointers added up together. <see cref="MetricCode"/> is
+    /// <c>"points"</c> there, and is what a client should key on instead.
+    /// </param>
     /// <param name="AffectsScore">
     /// Whether this metric moves the match score. Carried so a client can
     /// tell the scoring boards from the disciplinary ones without keeping its
     /// own list of codes.
     /// </param>
     public sealed record Board(
-        Guid MetricId,
+        Guid? MetricId,
         string MetricCode,
         string MetricLabel,
         bool AffectsScore,

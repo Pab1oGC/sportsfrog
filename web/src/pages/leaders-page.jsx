@@ -30,7 +30,10 @@ export default function LeadersPage() {
           ...l, id: l.rosterEntryId, playerName: `${l.firstName} ${l.lastName}`, position: i + 1,
         }));
         return (
-          <Box key={board.metricId} sx={{ mb: 3 }}>
+          // metricCode, no metricId: el tablero combinado de puntos no tiene
+          // un metricId propio (junta varios), pero su código sintético
+          // "points" es igual de único y estable.
+          <Box key={board.metricCode} sx={{ mb: 3 }}>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>{board.metricLabel}</Typography>
             <DataGrid rows={rows} columns={COLS} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
           </Box>

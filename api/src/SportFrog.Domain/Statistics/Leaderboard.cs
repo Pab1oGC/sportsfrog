@@ -1,8 +1,14 @@
 namespace SportFrog.Domain.Statistics;
 
-/// <summary>One player's total of one metric, before anything is ranked.</summary>
+/// <summary>
+/// One player's total, before anything is ranked.
+/// </summary>
+/// <param name="MetricId">
+/// Which metric this is a total of — null for a total that combines several,
+/// the way every scoring metric of a sport collapses into one points board.
+/// </param>
 public sealed record Tally(
-    Guid MetricId,
+    Guid? MetricId,
     Guid RosterEntryId,
     Guid AthleteId,
     string FirstName,

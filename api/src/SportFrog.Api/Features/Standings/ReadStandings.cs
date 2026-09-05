@@ -43,6 +43,13 @@ public static class ReadStandings
 
     public sealed record Group(string? Label, IReadOnlyList<Row> Rows);
 
+    /// <param name="AllowsDraw">
+    /// Whether this ruleset prices a drawn match at all — false for every
+    /// sport played in sets, and false for a cumulative one whose organizers
+    /// chose not to award a draw. Carried so a table knows whether its own
+    /// "empatados" column has anything to say, without a client having to
+    /// re-derive the rule from the score mode.
+    /// </param>
     /// <param name="Tiebreakers">
     /// The criteria applied, in the order they were applied. Returned so a
     /// table can explain itself: "why is Sur above Norte" is the most asked
@@ -59,6 +66,7 @@ public static class ReadStandings
         string SportCode,
         Guid RulesetId,
         string RulesetName,
+        bool AllowsDraw,
         IReadOnlyList<string> Tiebreakers,
         IReadOnlyList<Group> Groups,
         short? QualifiersPerGroup);
@@ -148,6 +156,7 @@ public static class ReadStandings
             table.SportCode,
             table.RulesetId,
             table.RulesetName,
+            table.AllowsDraw,
             table.Tiebreakers,
             groups,
             table.QualifiersPerGroup);

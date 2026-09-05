@@ -6,25 +6,33 @@ import { useCascade } from 'src/hooks/use-cascade';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { SelectionCompetition, SelectionCategory } from 'src/components/selectors';
-
-const COLS = [
-  { field: 'position', headerName: '#', width: 50 },
-  { field: 'teamName', headerName: 'Equipo', flex: 1, minWidth: 200 },
-  { field: 'played', headerName: 'PJ', width: 50 },
-  { field: 'won', headerName: 'PG', width: 50 },
-  { field: 'drawn', headerName: 'PE', width: 50 },
-  { field: 'lost', headerName: 'PP', width: 50 },
-  { field: 'scoreFor', headerName: 'GF', width: 50 },
-  { field: 'scoreAgainst', headerName: 'GC', width: 50 },
-  { field: 'scoreDifference', headerName: 'DF', width: 50 },
-  { field: 'points', headerName: 'Pts', width: 60 },
-];
+import { columnasMarcador } from 'src/lib/tiebreaker-labels';
 
 export default function StandingsPage() {
   const cascade = useCascade();
   const { data, isLoading } = useApi(cascade.catId ? endpoints.standings(cascade.catId) : null);
+  const { data: sports } = useApi(endpoints.sports);
 
   const groups = data?.groups || [];
+  const sportInfo = (sports || []).find((s) => s.code === data?.sportCode);
+  const columnasScore = columnasMarcador(sportInfo);
+
+  const cols = [
+    { field: 'position', headerName: '#', width: 50 },
+    { field: 'teamName', headerName: 'Equipo', flex: 1, minWidth: 200 },
+    { field: 'played', headerName: 'PJ', width: 50 },
+    { field: 'won', headerName: 'PG', width: 50 },
+    // No es que la columna siempre de cero: es que este reglamento no tiene
+    // un empate que precie -- bajo sets porque el modo no lo tiene, en un
+    // deporte de suma porque estos organizadores no le pusieron puntaje. La
+    // pregunta directamente no aplica.
+    data?.allowsDraw && { field: 'drawn', headerName: 'PE', width: 50 },
+    { field: 'lost', headerName: 'PP', width: 50 },
+    { field: 'scoreFor', headerName: columnasScore.favor, width: 50 },
+    { field: 'scoreAgainst', headerName: columnasScore.contra, width: 50 },
+    { field: 'scoreDifference', headerName: 'DF', width: 50 },
+    { field: 'points', headerName: 'Pts', width: 60 },
+  ].filter(Boolean);
 
   return (
     <Box>
@@ -47,7 +55,7 @@ export default function StandingsPage() {
                 Grupo {g.label || i + 1}
               </Typography>
             )}
-            <DataGrid rows={rows} columns={COLS} loading={isLoading} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
+            <DataGrid rows={rows} columns={cols} loading={isLoading} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
           </Box>
         );
       })}

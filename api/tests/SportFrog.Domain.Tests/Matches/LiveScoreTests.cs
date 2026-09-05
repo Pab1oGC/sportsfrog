@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using SportFrog.Domain.Matches;
+using SportFrog.Domain.Rules;
 
 namespace SportFrog.Domain.Tests.Matches;
 
@@ -9,6 +10,24 @@ namespace SportFrog.Domain.Tests.Matches;
 /// </summary>
 public sealed class LiveScoreTests
 {
+    [Fact]
+    public void AppliesTo_Cumulative_IsTrue()
+    {
+        // A goal moves the scoreboard the instant it is recorded — a live
+        // score is exactly what that adds up to.
+        LiveScore.AppliesTo(ScoreMode.Cumulative).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AppliesTo_Sets_IsFalse()
+    {
+        // Nothing recorded during a set moves the match score — it comes
+        // from periods won, decided only once the periods are reported —
+        // so there is no running total for a live score to be.
+        LiveScore.AppliesTo(ScoreMode.Sets).Should().BeFalse();
+    }
+
+
     private static readonly Guid Home = Guid.NewGuid();
     private static readonly Guid Away = Guid.NewGuid();
 
