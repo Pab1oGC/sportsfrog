@@ -1,21 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import TextField from '@mui/material/TextField';
-import Autocomplete from '@mui/material/Autocomplete';
-import MenuItem from '@mui/material/MenuItem';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
 import Alert from '@mui/material/Alert';
-import Divider from '@mui/material/Divider';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
@@ -25,15 +13,40 @@ import { nombreFase } from 'src/lib/phase-labels';
 import { fechaHora } from 'src/lib/format-date';
 import { PENDIENTE } from 'src/lib/match-status';
 import { PageHeader } from 'src/components/page-header';
-import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionSpace } from 'src/components/selectors';
+import { CascadeFilters } from 'src/components/cascade-filters';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { toast } from 'sonner';
+import { DrawDialog } from 'src/pages/matches/draw-dialog';
+import { PromoteDialog } from 'src/pages/matches/promote-dialog';
+import { ScheduleDialog } from 'src/pages/matches/schedule-dialog';
+import { EditDialog } from 'src/pages/matches/edit-dialog';
+import { ResultDialog } from 'src/pages/matches/result-dialog';
+import { WalkoverDialog } from 'src/pages/matches/walkover-dialog';
+import { PenaltiesDialog } from 'src/pages/matches/penalties-dialog';
+import { EventsDialog } from 'src/pages/matches/events-dialog';
 
 const SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
 const SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado', walkover: 'Walkover', postponed: 'Aplazado' };
-const FORMATO_LABEL = { league: 'Todos vs todos', knockout: 'Eliminacion directa', groups: 'Fase de grupos' };
 
+/**
+ * Coordina la lista de partidos de una categoria y sus ocho diálogos —
+ * programar, reprogramar, resultado, walkover, penales, eventos, sorteo y
+ * promoción a eliminatoria. Cada diálogo vive en su propio archivo bajo
+ * `matches/`, con su propio formulario; lo que sigue viviendo acá es lo que
+ * de verdad es de la página entera:
+ *
+ *   - `selMatch`: que fila esta operando la fila seleccionada, porque cinco
+ *     diálogos distintos (reprogramar, resultado, walkover, penales,
+ *     eventos) necesitan saber sobre que partido — no tiene un dueño natural
+ *     mas chico que la página.
+ *   - `error`/`loading`: compartidos porque el aviso de error de arriba se
+ *     esconde mientras cualquier diálogo está abierto (ver el filtro larguísimo
+ *     mas abajo), y ese es un comportamiento de la página, no de un diálogo.
+ *   - `drawOpen`/`drawResult`: porque "Siguiente ronda" (una acción sin
+ *     diálogo propio) muestra su resultado reusando el mismo diálogo que
+ *     "Sortear" — ver DrawDialog.
+ */
 export default function MatchesPage() {
   const confirm = useConfirm();
   const cascade = useCascade();
@@ -42,29 +55,18 @@ export default function MatchesPage() {
   const { data: teams, mutate: mutateTeams } = useApi(cascade.catId ? endpoints.teams(cascade.catId) : null);
 
   const [selMatch, setSelMatch] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const [schedOpen, setSchedOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [resOpen, setResOpen] = useState(false);
   const [woOpen, setWoOpen] = useState(false);
   const [poOpen, setPoOpen] = useState(false);
   const [evOpen, setEvOpen] = useState(false);
-  const [schedForm, setSchedForm] = useState({ homeTeamId: '', awayTeamId: '', venueSpaceId: '', scheduledAt: '', roundNumber: '', notes: '' });
-  const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ venueSpaceId: '', scheduledAt: '', roundNumber: '', notes: '' });
-  const [resForm, setResForm] = useState({ periodScores: [{ period: 1, home: 0, away: 0 }, { period: 2, home: 0, away: 0 }], notes: '' });
-  const [woForm, setWoForm] = useState({ winnerTeamId: '', notes: '' });
-  const [poForm, setPoForm] = useState({ homeScore: 0, awayScore: 0 });
-  const [evForm, setEvForm] = useState({ rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 });
-  const playerFieldRef = useRef(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
-  const [drawLegs, setDrawLegs] = useState(1);
-  const [drawGroupCount, setDrawGroupCount] = useState('');
-  const [drawAllowSamePot, setDrawAllowSamePot] = useState(false);
   const [drawResult, setDrawResult] = useState(null);
   const [promoteOpen, setPromoteOpen] = useState(false);
-  const [promoteForm, setPromoteForm] = useState({ qualifiersPerGroup: 2, bestThirdPlaced: 0 });
-  const [promoteResult, setPromoteResult] = useState(null);
 
   // El grupo no es un dato del partido, es un dato del equipo — asi que se
   // arma aca, por equipo local, para que la grilla no mezcle sin avisar los
@@ -132,64 +134,6 @@ export default function MatchesPage() {
   const motivoSinSorteo = !comp ? null : !sorteable
     ? 'La competencia ya esta en curso.'
     : yaJugados > 0 ? `Ya hay ${yaJugados} partidos jugados.` : null;
-  // Fase de grupos sin ningun equipo todavia sorteado en un grupo: "Sortear"
-  // tiene que empezar por ahi, no fallar pidiendo algo que el propio sorteo
-  // deberia resolver.
-  const sinGrupos = formato === 'groups' && (teams || []).length > 0 && !(teams || []).some((t) => t.groupLabel);
-
-  // Los bombos se cargan en Equipos, en otro momento — y por eso es facil
-  // que un numero quede viejo o suelto. Se muestran aca, junto a la cantidad
-  // de grupos, para que sea una sola decision y no dos separadas por dias.
-  const bombos = {};
-  (teams || []).forEach((t) => {
-    const clave = t.seed != null ? t.seed : 'sin';
-    (bombos[clave] = bombos[clave] || []).push(t.name);
-  });
-  const bombosNumerados = Object.keys(bombos).filter((k) => k !== 'sin').map(Number).sort((a, b) => a - b);
-  const gruposElegidos = Number(drawGroupCount) || 0;
-  // Si se permite que un mismo bombo se enfrente, esa restriccion deja de
-  // aplicar del todo: no hay promesa que un bombo grande pueda incumplir.
-  const bomboExcedido = !drawAllowSamePot && gruposElegidos > 0 && bombosNumerados.some((b) => bombos[b].length > gruposElegidos);
-
-  const { data: events, mutate: mEv } = useApi(evOpen && selMatch ? endpoints.matchEvents(selMatch.id) : null);
-  const { data: roster1 } = useApi(evOpen && selMatch ? endpoints.roster(selMatch.homeTeamId) : null);
-  const { data: roster2 } = useApi(evOpen && selMatch ? endpoints.roster(selMatch.awayTeamId) : null);
-  // Por posicion y despues por dorsal: buscar "el defensor numero 4" a ojo
-  // en una lista sin ningun orden tactico era lo que hacia lenta la carga.
-  // Sin posicion cargada queda al final, no mezclado en cualquier lado.
-  const porPosicionYDorsal = (a, b) => {
-    const posA = a.position || '';
-    const posB = b.position || '';
-    if (posA !== posB) {
-      if (!posA) return 1;
-      if (!posB) return -1;
-      return posA.localeCompare(posB, 'es');
-    }
-    return (a.jerseyNumber ?? 999) - (b.jerseyNumber ?? 999);
-  };
-  // Dos listas, una por equipo, en vez de una sola con todos mezclados: con
-  // los dos planteles completos era facil elegir sin querer a alguien del
-  // equipo que no jugo el evento.
-  const rosterHome = (roster1 || []).slice().sort(porPosicionYDorsal);
-  const rosterAway = (roster2 || []).slice().sort(porPosicionYDorsal);
-
-  const doDraw = async () => {
-    if (!cascade.catId) return; setLoading(true); setError('');
-    try {
-      // Una fase de grupos sin nadie sorteado en un grupo todavia: el
-      // sorteo tiene dos partes y esta es la primera. Un solo click hace
-      // las dos, que es lo que alguien espera de un "sorteo".
-      if (sinGrupos) {
-        await apiPost(endpoints.categoryDrawGroups(cascade.catId), {
-          groupCount: Number(drawGroupCount),
-          respectPots: !drawAllowSamePot,
-        });
-        await mutateTeams();
-      }
-      const r = await apiPost(endpoints.categoryDraw(cascade.catId), { legs: formato === 'knockout' ? 1 : drawLegs });
-      mutate(); setDrawResult(r);
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
 
   const doAdvance = async () => {
     if (!cascade.catId) return;
@@ -200,86 +144,7 @@ export default function MatchesPage() {
     catch (err) { setError(err.message); } finally { setLoading(false); }
   };
 
-  const doPromote = async () => {
-    if (!cascade.catId) return; setLoading(true); setError('');
-    try {
-      const r = await apiPost(endpoints.categoryPromoteGroupStage(cascade.catId), {
-        qualifiersPerGroup: Number(promoteForm.qualifiersPerGroup),
-        bestThirdPlaced: Number(promoteForm.bestThirdPlaced),
-      });
-      mutate(); setPromoteResult(r);
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  const doSchedule = async () => {
-    if (!cascade.catId) return; setLoading(true); setError('');
-    try {
-      await apiPost(endpoints.categoryMatches(cascade.catId), {
-        homeTeamId: schedForm.homeTeamId, awayTeamId: schedForm.awayTeamId,
-        venueSpaceId: schedForm.venueSpaceId || null,
-        // El input da la hora local sin zona; el backend guarda un instante
-        // real, asi que hay que decirle cual es antes de mandarlo.
-        scheduledAt: schedForm.scheduledAt ? new Date(schedForm.scheduledAt).toISOString() : null,
-        roundNumber: schedForm.roundNumber ? Number(schedForm.roundNumber) : null,
-      });
-      setSchedOpen(false); mutate();
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  // El input datetime-local quiere hora local sin zona ("2026-05-01T16:00"),
-  // y lo que guarda el partido es una fecha con zona ("...Z" o "+00:00").
-  // Formatear a mano evita el redondeo raro que a veces da toISOString con
-  // la hora local.
-  const aInputFecha = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const openEdit = (m) => {
-    setSelMatch(m);
-    setEditForm({ venueSpaceId: m.venueSpaceId || '', scheduledAt: aInputFecha(m.scheduledAt), roundNumber: m.roundNumber ?? '', notes: m.notes || '' });
-    setError('');
-    setEditOpen(true);
-  };
-
-  const doEdit = async () => {
-    if (!selMatch) return; setLoading(true); setError('');
-    try {
-      await apiPut(endpoints.match(selMatch.id), {
-        homeTeamId: selMatch.homeTeamId,
-        awayTeamId: selMatch.awayTeamId,
-        venueSpaceId: editForm.venueSpaceId || null,
-        scheduledAt: editForm.scheduledAt ? new Date(editForm.scheduledAt).toISOString() : null,
-        roundNumber: editForm.roundNumber !== '' ? Number(editForm.roundNumber) : null,
-        phase: selMatch.phase || null,
-        notes: editForm.notes || null,
-      });
-      setEditOpen(false); mutate(); toast.success('Partido reprogramado.');
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  const doResult = async () => {
-    if (!selMatch) return; setLoading(true); setError('');
-    try { await apiPut(endpoints.matchResult(selMatch.id), resForm); setResOpen(false); mutate(); toast.success('Resultado registrado.'); }
-    catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  // Solo se ofrecen en un deporte por sets: uno de suma siempre juega
-  // exactamente los periodos configurados, así que ahí la cantidad de filas
-  // no es algo que el organizador deba tocar.
-  const agregarPeriodo = () => {
-    const siguiente = resForm.periodScores.length + 1;
-    setResForm({ ...resForm, periodScores: [...resForm.periodScores, { period: siguiente, home: 0, away: 0 }] });
-  };
-  const quitarPeriodo = (i) => {
-    if (resForm.periodScores.length <= 1) return;
-    setResForm({
-      ...resForm,
-      periodScores: resForm.periodScores.filter((_, idx) => idx !== i).map((p, idx) => ({ ...p, period: idx + 1 })),
-    });
-  };
+  const openEdit = (m) => { setSelMatch(m); setError(''); setEditOpen(true); };
 
   // Solo tiene sentido donde el marcador se arma sumando goles (futbol,
   // basquet): en un deporte por sets un punto no mueve el marcador (no hay
@@ -293,46 +158,10 @@ export default function MatchesPage() {
     catch (err) { toast.error(err.message); }
   };
 
-  const doWalkover = async () => {
-    if (!selMatch) return; setLoading(true); setError('');
-    try { await apiPut(endpoints.matchWalkover(selMatch.id), woForm); setWoOpen(false); mutate(); toast.success('Walkover registrado.'); }
-    catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  const doPenalties = async () => {
-    if (!selMatch) return; setLoading(true); setError('');
-    try {
-      await apiPut(endpoints.matchPenalties(selMatch.id), { homeScore: Number(poForm.homeScore), awayScore: Number(poForm.awayScore) });
-      setPoOpen(false); mutate(); toast.success('Desempate por penales registrado.');
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
   const doStatus = async (id, st) => {
     const ok = await confirm(`Cambiar estado a "${SL[st] || st}"?`, { confirmLabel: 'Cambiar' });
     if (!ok) return;
     try { await apiPut(endpoints.matchStatus(id), { status: st }); mutate(); } catch (err) { toast.error(err.message); }
-  };
-
-  const doEvent = async () => {
-    if (!selMatch) return; setLoading(true); setError('');
-    try {
-      await apiPost(endpoints.matchEvents(selMatch.id), { ...evForm, periodNumber: evForm.periodNumber ? Number(evForm.periodNumber) : null, minute: evForm.minute ? Number(evForm.minute) : null, quantity: Number(evForm.quantity) || 1 });
-      // Solo se limpia el jugador y el minuto: durante un partido en vivo el
-      // tipo de evento y el periodo suelen repetirse de una carga a la otra
-      // (varias tarjetas, varios goles seguidos en el mismo tiempo), asi que
-      // no hace falta volver a elegirlos cada vez. El foco vuelve al buscador
-      // de jugador para poder cargar el siguiente sin tocar el mouse.
-      setEvForm({ ...evForm, rosterEntryId: '', minute: '' });
-      mEv();
-      playerFieldRef.current?.focus();
-    }
-    catch (err) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  const delEvent = async (id) => {
-    const ok = await confirm('Eliminar evento?', { confirmLabel: 'Eliminar', danger: true });
-    if (!ok) return;
-    try { await apiDelete(endpoints.event(id)); mEv(); } catch (err) { toast.error(err.message); }
   };
 
   const delMatch = async (id) => {
@@ -401,28 +230,11 @@ export default function MatchesPage() {
           },
           m.status === 'in_progress' && (!sportInfo || sportInfo.isPlayedInSets) && {
             icon: 'eva:checkmark-circle-fill', label: 'Resultado', color: 'success.main',
-            onClick: () => {
-              setSelMatch(m);
-              // Un deporte de suma (futbol, basquet) siempre juega todos
-              // sus periodos configurados: la cantidad del deporte es la
-              // cantidad correcta. Uno por sets rara vez llega al maximo
-              // (una mejor-de-cinco que termina 3-0 solo jugo tres), asi
-              // que ahi se arranca en uno y el diálogo deja agregar los que
-              // hagan falta — ver agregarPeriodo mas abajo.
-              const cantidadPeriodos = sportInfo?.isPlayedInSets ? 1 : (sportInfo?.defaultPeriods || 2);
-              setResForm({
-                periodScores: m.periodScores?.length
-                  ? m.periodScores.map((p) => ({ period: p.period, home: p.home, away: p.away }))
-                  : Array.from({ length: cantidadPeriodos }, (_, i) => ({ period: i + 1, home: 0, away: 0 })),
-                notes: m.notes || '',
-              });
-              setError('');
-              setResOpen(true);
-            },
+            onClick: () => { setSelMatch(m); setError(''); setResOpen(true); },
           },
           m.status === 'scheduled' && {
             icon: 'eva:alert-triangle-fill', label: 'Walkover', color: 'warning.main',
-            onClick: () => { setSelMatch(m); setWoForm({ winnerTeamId: m.homeTeamId, notes: '' }); setError(''); setWoOpen(true); },
+            onClick: () => { setSelMatch(m); setError(''); setWoOpen(true); },
           },
 
           // Solo tiene sentido en una eliminatoria (fase != null) y con el
@@ -430,11 +242,11 @@ export default function MatchesPage() {
           // valido y no hay nada que desempatar.
           m.status === 'finished' && m.phase && m.homeTotal === m.awayTotal && {
             icon: 'eva:radio-button-on-outline', label: 'Desempate por penales', color: 'secondary.main',
-            onClick: () => { setSelMatch(m); setPoForm({ homeScore: m.penaltyHomeScore ?? 0, awayScore: m.penaltyAwayScore ?? 0 }); setError(''); setPoOpen(true); },
+            onClick: () => { setSelMatch(m); setError(''); setPoOpen(true); },
           },
           (m.status === 'finished' || m.status === 'in_progress') && {
             icon: 'eva:film-outline', label: 'Eventos', color: 'info.main',
-            onClick: () => { setSelMatch(m); setEvForm({ rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 }); setError(''); setEvOpen(true); },
+            onClick: () => { setSelMatch(m); setError(''); setEvOpen(true); },
           },
           m.status === 'in_progress' && { icon: 'eva:close-circle-fill', label: 'Cancelar', color: 'error.main', onClick: () => doStatus(m.id, 'cancelled') },
           ['cancelled', 'walkover', 'postponed'].includes(m.status) && {
@@ -449,348 +261,59 @@ export default function MatchesPage() {
   return (
     <Box>
       <PageHeader title="Fixtures / Partidos">
-        {cascade.catId && <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-fill" />} onClick={() => { setDrawLegs(1); setDrawGroupCount(''); setDrawAllowSamePot(false); setDrawResult(null); setError(''); setDrawOpen(true); }} disabled={loading}>Sortear</Button>}
+        {cascade.catId && <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-fill" />} onClick={() => { setDrawResult(null); setError(''); setDrawOpen(true); }} disabled={loading}>Sortear</Button>}
         {cascade.catId && formato === 'groups' && (
-          <Button variant="outlined" startIcon={<Iconify icon="eva:trending-up-outline" />} onClick={() => { setPromoteForm({ qualifiersPerGroup: 2, bestThirdPlaced: 0 }); setPromoteResult(null); setError(''); setPromoteOpen(true); }} disabled={loading}>
+          <Button variant="outlined" startIcon={<Iconify icon="eva:trending-up-outline" />} onClick={() => { setError(''); setPromoteOpen(true); }} disabled={loading}>
             Promover a eliminatoria
           </Button>
         )}
         {cascade.catId && (formato === 'knockout' || formato === 'groups') && <Button variant="outlined" startIcon={<Iconify icon="eva:arrow-forward-outline" />} onClick={doAdvance} disabled={loading}>Siguiente ronda</Button>}
-        <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={() => { setSchedForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', roundNumber: '', notes: '' }); setError(''); setSchedOpen(true); }} disabled={!cascade.catId}>Programar</Button>
+        <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={() => { setError(''); setSchedOpen(true); }} disabled={!cascade.catId}>Programar</Button>
       </PageHeader>
       {error && !evOpen && !resOpen && !woOpen && !poOpen && !drawOpen && !promoteOpen && !editOpen && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
-        <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
-        <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
-      </Box>
+      <CascadeFilters cascade={cascade} />
       <DataGrid rows={filtered} columns={columns} loading={isLoading} autoHeight rowHeight={56} disableRowSelectionOnClick getRowId={(r) => r.id} />
 
-      {/* Draw dialog */}
-      <Dialog open={drawOpen} onClose={() => setDrawOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{drawResult ? 'Sorteo realizado' : 'Sortear fixture'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          {drawResult ? (
-            <>
-              {drawResult.champion ? <Alert severity="success"><strong>{drawResult.championName}</strong> es el campeon.</Alert>
-                : <Alert severity="success">{drawResult.created} partidos creados{drawResult.rounds ? ` en ${drawResult.rounds} jornadas` : ''}{drawResult.round ? ` (ronda ${drawResult.round})` : ''}.</Alert>}
-              {drawResult.replaced > 0 && <Alert severity="warning">Se reemplazaron {drawResult.replaced} partidos.</Alert>}
-              {drawResult.byes > 0 && <Alert severity="info">{drawResult.byes} equipo(s) pasa(n) sin jugar.</Alert>}
-            </>
-          ) : (
-            <>
-              {error && <Alert severity="error">{error}</Alert>}
-              {motivoSinSorteo && <Alert severity="error">{motivoSinSorteo}</Alert>}
-              <Typography variant="body2">Formato: <strong>{FORMATO_LABEL[formato] || formato}</strong></Typography>
-              {sinGrupos && (
-                <>
-                  <Alert severity="info">
-                    Todavia ningun equipo tiene grupo asignado. Este sorteo primero los reparte en grupos al azar, y despues arma el fixture de cada uno.
-                  </Alert>
-                  <TextField
-                    label="Numero de grupos"
-                    type="number"
-                    value={drawGroupCount}
-                    onChange={(e) => setDrawGroupCount(e.target.value)}
-                    fullWidth
-                    required
-                    helperText="Si algun equipo tiene bombo asignado, el sorteo respeta que ninguno se repita en un mismo grupo."
-                    slotProps={{ htmlInput: { min: 2, max: 26 } }}
-                  />
-                  {bombosNumerados.length > 0 && (
-                    <FormControlLabel
-                      control={<Checkbox checked={drawAllowSamePot} onChange={(e) => setDrawAllowSamePot(e.target.checked)} />}
-                      label="Permitir que equipos del mismo bombo se enfrenten (formato tipo liga de Champions)"
-                    />
-                  )}
-                  {bombosNumerados.length > 0 && (
-                    <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                        Bombos cargados en Equipos
-                      </Typography>
-                      {bombosNumerados.map((b) => {
-                        const equipos = bombos[b];
-                        const excede = !drawAllowSamePot && gruposElegidos > 0 && equipos.length > gruposElegidos;
-                        return (
-                          <Typography key={b} variant="body2" sx={{ color: excede ? 'error.main' : undefined, fontWeight: excede ? 700 : 400 }}>
-                            Bombo {b} ({equipos.length}): {equipos.join(', ')}
-                            {excede ? ' — supera la cantidad de grupos' : ''}
-                          </Typography>
-                        );
-                      })}
-                      {bombos.sin && (
-                        <Typography variant="body2" color="text.secondary">
-                          Sin bombo ({bombos.sin.length}): {bombos.sin.join(', ')}
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                </>
-              )}
-              {formato !== 'knockout' && (
-                <TextField select label="Vueltas" value={drawLegs} onChange={(e) => setDrawLegs(Number(e.target.value))} fullWidth>
-                  <MenuItem value={1}>Una vuelta</MenuItem><MenuItem value={2}>Ida y vuelta</MenuItem>
-                </TextField>
-              )}
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDrawOpen(false)}>{drawResult ? 'Listo' : 'Cancelar'}</Button>
-          {!drawResult && <Button variant="contained" onClick={doDraw} disabled={loading || !!motivoSinSorteo || (sinGrupos && (!drawGroupCount || bomboExcedido))}>{loading ? 'Sorteando...' : 'Sortear'}</Button>}
-        </DialogActions>
-      </Dialog>
+      <DrawDialog
+        open={drawOpen} onClose={() => setDrawOpen(false)} result={drawResult} setResult={setDrawResult}
+        cascade={cascade} formato={formato} teams={teams} mutate={mutate} mutateTeams={mutateTeams}
+        motivoSinSorteo={motivoSinSorteo} loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
 
-      {/* Promote group stage to knockout dialog */}
-      <Dialog open={promoteOpen} onClose={() => setPromoteOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{promoteResult ? 'Eliminatoria sorteada' : 'Promover a eliminatoria'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          {promoteResult ? (
-            <>
-              <Alert severity="success">
-                {promoteResult.created} partido(s) creados — {promoteResult.direct} clasificado(s) directo(s)
-                {promoteResult.wildcards > 0 ? ` + ${promoteResult.wildcards} mejor(es) ubicado(s)` : ''}.
-              </Alert>
-              {promoteResult.byes > 0 && <Alert severity="info">{promoteResult.byes} equipo(s) pasa(n) sin jugar la primera ronda.</Alert>}
-              {promoteResult.replaced > 0 && <Alert severity="warning">Se reemplazo una eliminatoria sorteada antes ({promoteResult.replaced} partidos).</Alert>}
-              {promoteResult.repeatedMatchups > 0 && (
-                <Alert severity="warning">
-                  {promoteResult.repeatedMatchups} cruce(s) repite(n) un partido de la fase de grupos: los numeros no daban para evitarlo.
-                </Alert>
-              )}
-            </>
-          ) : (
-            <>
-              {error && <Alert severity="error">{error}</Alert>}
-              <Typography variant="body2" color="text.secondary">
-                Arma la llave con los mejores de cada grupo, una vez que todos los partidos de grupos tengan resultado.
-              </Typography>
-              <TextField
-                label="Clasifican por grupo"
-                type="number"
-                value={promoteForm.qualifiersPerGroup}
-                onChange={(e) => setPromoteForm({ ...promoteForm, qualifiersPerGroup: e.target.value })}
-                fullWidth
-                slotProps={{ htmlInput: { min: 1, max: 8 } }}
-              />
-              <TextField
-                label="Mejores ubicados adicionales (mejores terceros, etc.)"
-                type="number"
-                value={promoteForm.bestThirdPlaced}
-                onChange={(e) => setPromoteForm({ ...promoteForm, bestThirdPlaced: e.target.value })}
-                fullWidth
-                helperText="Opcional: cupos extra para los mejores equipos que no clasificaron directo, comparados entre grupos."
-                slotProps={{ htmlInput: { min: 0, max: 16 } }}
-              />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPromoteOpen(false)}>{promoteResult ? 'Listo' : 'Cancelar'}</Button>
-          {!promoteResult && <Button variant="contained" onClick={doPromote} disabled={loading}>{loading ? 'Sorteando...' : 'Sortear eliminatoria'}</Button>}
-        </DialogActions>
-      </Dialog>
+      <PromoteDialog
+        open={promoteOpen} onClose={() => setPromoteOpen(false)} cascade={cascade} mutate={mutate}
+        loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
 
-      {/* Schedule dialog */}
-      <Dialog open={schedOpen} onClose={() => setSchedOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Programar Partido</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          <SelectionTeam categoryId={cascade.catId} value={schedForm.homeTeamId} onChange={(e) => setSchedForm({ ...schedForm, homeTeamId: e.target.value })} label="Local" required />
-          <SelectionTeam categoryId={cascade.catId} value={schedForm.awayTeamId} onChange={(e) => setSchedForm({ ...schedForm, awayTeamId: e.target.value })} label="Visitante" required />
-          <SelectionSpace value={schedForm.venueSpaceId} onChange={(e) => setSchedForm({ ...schedForm, venueSpaceId: e.target.value })} />
-          <TextField label="Fecha y hora" type="datetime-local" value={schedForm.scheduledAt} onChange={(e) => setSchedForm({ ...schedForm, scheduledAt: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField label="Ronda" type="number" value={schedForm.roundNumber} onChange={(e) => setSchedForm({ ...schedForm, roundNumber: e.target.value })} fullWidth />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSchedOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={doSchedule} disabled={loading}>Guardar</Button>
-        </DialogActions>
-      </Dialog>
+      <ScheduleDialog
+        open={schedOpen} onClose={() => setSchedOpen(false)} cascade={cascade} mutate={mutate}
+        loading={loading} setLoading={setLoading} setError={setError}
+      />
 
-      {/* Edit / reschedule dialog */}
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Reprogramar Partido</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          {error && <Alert severity="error">{error}</Alert>}
-          {selMatch && <Alert severity="info">{selMatch.homeTeamName} vs {selMatch.awayTeamName}</Alert>}
-          <SelectionSpace value={editForm.venueSpaceId} onChange={(e) => setEditForm({ ...editForm, venueSpaceId: e.target.value })} />
-          <TextField label="Fecha y hora" type="datetime-local" value={editForm.scheduledAt} onChange={(e) => setEditForm({ ...editForm, scheduledAt: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField
-            label="Ronda"
-            type="number"
-            value={editForm.roundNumber}
-            onChange={(e) => setEditForm({ ...editForm, roundNumber: e.target.value })}
-            fullWidth
-            helperText="Cambiar la ronda es lo que reordena en que jornada se juega este partido."
-          />
-          <TextField label="Notas" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} fullWidth multiline minRows={2} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={doEdit} disabled={loading}>Guardar</Button>
-        </DialogActions>
-      </Dialog>
+      <EditDialog
+        open={editOpen} onClose={() => setEditOpen(false)} selMatch={selMatch} mutate={mutate}
+        loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
 
-      {/* Result dialog */}
-      <Dialog open={resOpen} onClose={() => setResOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Registrar Resultado</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          {selMatch && <Alert severity="info">{selMatch.homeTeamName} vs {selMatch.awayTeamName}</Alert>}
-          {resForm.periodScores.map((ps, i) => (
-            <Box key={i} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Typography variant="body2" sx={{ minWidth: 70 }}>P{ps.period}</Typography>
-              <TextField label="Loc" type="number" value={ps.home} onChange={(e) => { const s = [...resForm.periodScores]; s[i] = { ...s[i], home: Number(e.target.value) }; setResForm({ ...resForm, periodScores: s }); }} size="small" sx={{ flex: 1 }} />
-              <Typography>-</Typography>
-              <TextField label="Vis" type="number" value={ps.away} onChange={(e) => { const s = [...resForm.periodScores]; s[i] = { ...s[i], away: Number(e.target.value) }; setResForm({ ...resForm, periodScores: s }); }} size="small" sx={{ flex: 1 }} />
-              {sportInfo?.isPlayedInSets && (
-                <IconButton size="small" disabled={resForm.periodScores.length <= 1} onClick={() => quitarPeriodo(i)}>
-                  <Iconify icon="eva:trash-2-outline" sx={{ color: 'error.main' }} />
-                </IconButton>
-              )}
-            </Box>
-          ))}
-          {sportInfo?.isPlayedInSets && (
-            // Uno de suma juega siempre la misma cantidad de periodos, asi
-            // que ahi no hay "agregar" que ofrecer — ver el comentario en
-            // agregarPeriodo.
-            <Button size="small" onClick={agregarPeriodo} startIcon={<Iconify icon="eva:plus-fill" />} sx={{ alignSelf: 'flex-start' }}>
-              Agregar {(sportInfo.periodLabel || 'período').toLowerCase()}
-            </Button>
-          )}
-          <Divider />
-          {/* Bajo sets el marcador del partido es la cantidad de periodos
-              ganados por cada lado (ver ScoreConsolidation en el backend),
-              no la suma de los puntos de cada set — sumar 25-20, 22-25,
-              25-18 no da un numero que signifique algo. */}
-          <Typography fontWeight={600}>
-            Total: {sportInfo?.isPlayedInSets
-              ? `${resForm.periodScores.filter((p) => p.home > p.away).length} - ${resForm.periodScores.filter((p) => p.away > p.home).length}`
-              : `${resForm.periodScores.reduce((s, p) => s + p.home, 0)} - ${resForm.periodScores.reduce((s, p) => s + p.away, 0)}`}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setResOpen(false)}>Cancelar</Button>
-          <Button variant="contained" color="success" onClick={doResult} disabled={loading}>Registrar</Button>
-        </DialogActions>
-      </Dialog>
+      <ResultDialog
+        open={resOpen} onClose={() => setResOpen(false)} selMatch={selMatch} sportInfo={sportInfo} mutate={mutate}
+        loading={loading} setLoading={setLoading} setError={setError}
+      />
 
-      {/* Walkover dialog */}
-      <Dialog open={woOpen} onClose={() => setWoOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Walkover</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          {selMatch && <Alert severity="warning">Se asignara el partido.</Alert>}
-          <TextField select label="Ganador" value={woForm.winnerTeamId} onChange={(e) => setWoForm({ ...woForm, winnerTeamId: e.target.value })} fullWidth>
-            {selMatch && [<MenuItem key="h" value={selMatch.homeTeamId}>{selMatch.homeTeamName} (Local)</MenuItem>, <MenuItem key="a" value={selMatch.awayTeamId}>{selMatch.awayTeamName} (Visitante)</MenuItem>]}
-          </TextField>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setWoOpen(false)}>Cancelar</Button>
-          <Button variant="contained" color="warning" onClick={doWalkover} disabled={loading}>Confirmar</Button>
-        </DialogActions>
-      </Dialog>
+      <WalkoverDialog
+        open={woOpen} onClose={() => setWoOpen(false)} selMatch={selMatch} mutate={mutate}
+        loading={loading} setLoading={setLoading} setError={setError}
+      />
 
-      {/* Penalties dialog */}
-      <Dialog open={poOpen} onClose={() => setPoOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Desempate por penales</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
-          {error && <Alert severity="error">{error}</Alert>}
-          {selMatch && (
-            <Alert severity="info">
-              {selMatch.homeTeamName} {selMatch.homeTotal} - {selMatch.awayTotal} {selMatch.awayTeamName}: se juega la
-              siguiente ronda con quien gane los penales.
-            </Alert>
-          )}
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <TextField label={selMatch?.homeTeamName || 'Local'} type="number" value={poForm.homeScore} onChange={(e) => setPoForm({ ...poForm, homeScore: e.target.value })} fullWidth />
-            <Typography>-</Typography>
-            <TextField label={selMatch?.awayTeamName || 'Visitante'} type="number" value={poForm.awayScore} onChange={(e) => setPoForm({ ...poForm, awayScore: e.target.value })} fullWidth />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPoOpen(false)}>Cancelar</Button>
-          <Button variant="contained" color="secondary" onClick={doPenalties} disabled={loading}>Confirmar</Button>
-        </DialogActions>
-      </Dialog>
+      <PenaltiesDialog
+        open={poOpen} onClose={() => setPoOpen(false)} selMatch={selMatch} mutate={mutate}
+        loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
 
-      {/* Events dialog: cargar y ver la lista en el mismo lugar, sin abrir un
-          segundo dialogo por cada evento — eso era la mitad de la demora al
-          cargar varios goles o tarjetas seguidos durante un partido en vivo. */}
-      <Dialog open={evOpen} onClose={() => setEvOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>Eventos{selMatch ? ` - ${selMatch.homeTeamName} vs ${selMatch.awayTeamName}` : ''}</DialogTitle>
-        <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap', mb: 2, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-            <Autocomplete
-              openOnFocus
-              options={rosterHome}
-              getOptionLabel={(o) => `#${o.jerseyNumber ?? '?'} ${o.lastName}, ${o.firstName}${o.position ? ' — ' + o.position : ''}`}
-              isOptionEqualToValue={(o, v) => o.id === v.id}
-              value={rosterHome.find((r) => r.id === evForm.rosterEntryId) || null}
-              onChange={(_, v) => setEvForm({ ...evForm, rosterEntryId: v?.id || '' })}
-              sx={{ width: 230 }}
-              renderInput={(params) => <TextField {...params} inputRef={playerFieldRef} label={selMatch?.homeTeamName || 'Local'} placeholder="Nombre, dorsal o posicion" autoFocus />}
-            />
-            <Autocomplete
-              openOnFocus
-              options={rosterAway}
-              getOptionLabel={(o) => `#${o.jerseyNumber ?? '?'} ${o.lastName}, ${o.firstName}${o.position ? ' — ' + o.position : ''}`}
-              isOptionEqualToValue={(o, v) => o.id === v.id}
-              value={rosterAway.find((r) => r.id === evForm.rosterEntryId) || null}
-              onChange={(_, v) => setEvForm({ ...evForm, rosterEntryId: v?.id || '' })}
-              sx={{ width: 230 }}
-              renderInput={(params) => <TextField {...params} label={selMatch?.awayTeamName || 'Visitante'} placeholder="Nombre, dorsal o posicion" />}
-            />
-            <TextField select label="Evento" value={evForm.metricId} onChange={(e) => setEvForm({ ...evForm, metricId: e.target.value })} sx={{ width: 160 }}>
-              <MenuItem value="">Seleccionar</MenuItem>
-              {(sportInfo?.metrics || []).map((m) => <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>)}
-            </TextField>
-            <TextField select label="Periodo" value={evForm.periodNumber} onChange={(e) => setEvForm({ ...evForm, periodNumber: e.target.value })} sx={{ width: 130 }}>
-              <MenuItem value="">--</MenuItem>
-              {Array.from({ length: sportInfo?.defaultPeriods || 0 }, (_, i) => i + 1).map((n) => (
-                <MenuItem key={n} value={n}>{sportInfo.periodLabel} {n}</MenuItem>
-              ))}
-            </TextField>
-            <TextField label="Minuto" type="number" value={evForm.minute} onChange={(e) => setEvForm({ ...evForm, minute: e.target.value })} sx={{ width: 90 }} />
-            <TextField label="Cant." type="number" value={evForm.quantity} onChange={(e) => setEvForm({ ...evForm, quantity: e.target.value })} sx={{ width: 80 }} />
-            {/* Habilitado solo con los cinco datos cargados — jugador,
-                evento, periodo y minuto incluidos, no solo jugador y evento
-                — para que no se pueda cargar un evento a medio llenar. */}
-            <Button
-              variant="contained"
-              startIcon={<Iconify icon="eva:plus-fill" />}
-              onClick={doEvent}
-              disabled={loading || !evForm.rosterEntryId || !evForm.metricId || !evForm.periodNumber || !evForm.minute}
-              sx={{ height: 56 }}
-            >
-              Agregar
-            </Button>
-          </Box>
-          <DataGrid rows={events || []} columns={[
-            { field: 'minute', headerName: 'Min', width: 60, renderCell: ({ value }) => value != null ? `${value}'` : '--' },
-            { field: 'periodNumber', headerName: 'Per', width: 50 },
-            { field: 'firstName', headerName: 'Jugador', flex: 1, renderCell: ({ row }) => (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <span>{row.firstName || ''} {row.lastName || ''}</span>
-                {row.countsForOpponent && <Chip label="AG" size="small" color="error" variant="outlined" sx={{ height: 18, '& .MuiChip-label': { px: 0.6, fontSize: 10, fontWeight: 700 } }} />}
-              </Box>
-            ) },
-            { field: 'jerseyNumber', headerName: 'Dorsal', width: 65 },
-            // Un autogol lo carga un jugador del equipo contrario al que se
-            // le atribuye: se muestra el equipo al que le sirvio (igual que
-            // el marcador en vivo ya lo cuenta), no el plantel del jugador —
-            // la etiqueta AG de al lado aclara quien lo metio realmente.
-            { field: 'teamName', headerName: 'Equipo', width: 120, renderCell: ({ row }) => {
-              if (!row.countsForOpponent || !selMatch) return row.teamName;
-              return row.teamId === selMatch.homeTeamId ? selMatch.awayTeamName : selMatch.homeTeamName;
-            } },
-            { field: 'metricLabel', headerName: 'Evento', width: 120 },
-            { field: 'quantity', headerName: 'Cant.', width: 60 },
-            { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => <IconButton size="small" onClick={() => delEvent(row.id)}><Iconify icon="eva:trash-2-outline" width={16} sx={{ color: 'error.main' }} /></IconButton> },
-          ]} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEvOpen(false)}>Cerrar</Button>
-        </DialogActions>
-      </Dialog>
+      <EventsDialog
+        open={evOpen} onClose={() => setEvOpen(false)} selMatch={selMatch} sportInfo={sportInfo}
+        loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
     </Box>
   );
 }

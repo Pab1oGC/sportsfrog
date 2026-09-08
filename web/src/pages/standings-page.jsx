@@ -5,7 +5,7 @@ import { useApi } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
-import { SelectionCompetition, SelectionCategory } from 'src/components/selectors';
+import { CascadeFilters } from 'src/components/cascade-filters';
 import { columnasMarcador } from 'src/lib/tiebreaker-labels';
 
 export default function StandingsPage() {
@@ -59,15 +59,6 @@ export default function StandingsPage() {
           </Box>
         );
       })}
-    </Box>
-  );
-}
-
-function CascadeFilters({ cascade }) {
-  return (
-    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
-      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
-      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
     </Box>
   );
 }

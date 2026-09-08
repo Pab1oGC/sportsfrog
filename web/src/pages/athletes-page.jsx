@@ -7,13 +7,11 @@ import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
+import { useCrudDialog } from 'src/hooks/use-crud';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
-import { useConfirm } from 'src/components/confirm-dialog';
-import { toast } from 'sonner';
 
 // Cuantos años cumplidos tiene hoy, para que a simple vista se note quien
 // necesita datos de apoderado sin tener que hacer la cuenta a mano.
@@ -28,55 +26,36 @@ function edad(birthDate) {
   return años;
 }
 
-export default function AthletesPage() {
-  const confirm = useConfirm();
-  const { data, mutate, isLoading } = useApi(endpoints.athletes);
+const emptyForm = () => ({ firstName: '', lastName: '', documentId: '', birthDate: '', gender: '', guardianName: '', guardianPhone: '', isActive: true });
 
-  const [open, setOpen] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ firstName: '', lastName: '', documentId: '', birthDate: '', gender: '', guardianName: '', guardianPhone: '', isActive: true });
-  const [error, setError] = useState('');
+export default function AthletesPage() {
+  const {
+    rows: data, isLoading, open, editId, form, setForm, error, openCreate, openEdit, close, save, remove,
+  } = useCrudDialog({
+    resourceUrl: endpoints.athletes,
+    emptyForm,
+    entityName: 'deportista',
+    savedMessage: 'Deportista guardado.',
+    buildUrl: (base, id) => endpoints.athlete(id),
+    mapToForm: (row) => ({ firstName: row.firstName, lastName: row.lastName, documentId: row.documentId, birthDate: row.birthDate || '', gender: row.gender || '', guardianName: row.guardianName || '', guardianPhone: row.guardianPhone || '', isActive: row.isActive !== false }),
+    // Los opcionales viajan en null, no en '': el backend acepta "sin
+    // definir" pero no una cadena vacia, que para el validador es un valor
+    // invalido en vez de una ausencia. isActive tambien viaja siempre: al
+    // editar es obligatorio para el backend y sin valor por defecto — si no
+    // se manda, el deportista queda inactivo en silencio con cualquier
+    // edicion, y un deportista inactivo no se puede inscribir en ningun equipo.
+    mapToSend: (f) => ({
+      ...f,
+      gender: f.gender || null,
+      guardianName: f.guardianName || null,
+      guardianPhone: f.guardianPhone || null,
+    }),
+  });
 
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoResult, setPhotoResult] = useState(null);
-
-  const openDialog = (row) => {
-    setEditId(row?.id || null);
-    setForm(row
-      ? { firstName: row.firstName, lastName: row.lastName, documentId: row.documentId, birthDate: row.birthDate || '', gender: row.gender || '', guardianName: row.guardianName || '', guardianPhone: row.guardianPhone || '', isActive: row.isActive !== false }
-      : { firstName: '', lastName: '', documentId: '', birthDate: '', gender: '', guardianName: '', guardianPhone: '', isActive: true });
-    setError(''); setOpen(true);
-  };
-
-  const save = async () => {
-    setError('');
-    try {
-      const url = editId ? endpoints.athlete(editId) : endpoints.athletes;
-      // Los opcionales viajan en null, no en '': el backend acepta "sin
-      // definir" pero no una cadena vacia, que para el validador es un
-      // valor invalido en vez de una ausencia. isActive tambien viaja
-      // siempre (viene de form): al editar es obligatorio para el backend y
-      // sin valor por defecto — si no se manda, el deportista queda inactivo
-      // en silencio con cualquier edicion, y un deportista inactivo no se
-      // puede inscribir en ningun equipo.
-      const body = {
-        ...form,
-        gender: form.gender || null,
-        guardianName: form.guardianName || null,
-        guardianPhone: form.guardianPhone || null,
-      };
-      editId ? await apiPut(url, body) : await apiPost(url, body);
-      setOpen(false); mutate(); toast.success('Deportista guardado.');
-    } catch (err) { setError(err.message); }
-  };
-
-  const remove = async (id) => {
-    const ok = await confirm('Eliminar deportista?', { confirmLabel: 'Eliminar', danger: true });
-    if (!ok) return;
-    await apiDelete(endpoints.athlete(id)); mutate(); toast.success('Deportista eliminado.');
-  };
 
   const uploadPhotos = async () => {
     if (!photoFile) return;
@@ -102,18 +81,18 @@ export default function AthletesPage() {
     { field: 'guardianName', headerName: 'Apoderado', width: 150, renderCell: ({ value }) => value || '--' },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
-      <EditDeleteActions onEdit={() => openDialog(row)} onDelete={() => remove(row.id)} />
+      <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
   ];
 
   return (
     <div>
-      <PageHeader title="Deportistas" actionLabel="Nuevo" onAction={() => openDialog(null)}>
+      <PageHeader title="Deportistas" actionLabel="Nuevo" onAction={openCreate}>
         <Button variant="outlined" startIcon={<Iconify icon="eva:image-outline" />} onClick={() => { setPhotoFile(null); setPhotoResult(null); setPhotoOpen(true); }}>Importar fotos</Button>
       </PageHeader>
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick />
 
-      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={() => setOpen(false)} onSave={save}>
+      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={save}>
         <TextField label="Nombres" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
         <TextField label="Apellidos" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
         <TextField label="Documento" value={form.documentId} onChange={(e) => setForm({ ...form, documentId: e.target.value })} fullWidth />

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import { useCrudDialog } from 'src/hooks/use-crud';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -18,7 +19,7 @@ import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
+import { useApi, apiPost, apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
@@ -65,30 +66,36 @@ function vistaPreviaImagen(key, currentUrl) {
 export default function CompetitionsPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const { data, mutate, isLoading } = useApi(endpoints.competitions);
   const { data: rulesets } = useApi(endpoints.rulesets);
   const { data: sports } = useApi(endpoints.sports);
   const nombreDeporte = (code) => sports?.find((s) => s.code === code)?.name || code;
 
-  const [open, setOpen] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState(emptyForm());
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
 
-  const slugError = form.slug || slugTouched ? problemaDeSlug(form.slug) : null;
-  const slugHelp = `/${slugDeOrganizacion()}/${normalizarSlug(form.slug) || '...'}`;
-
-  const openDialog = useCallback((row) => {
-    setError(null);
-    if (row) {
-      setEditId(row.id); setSlugTouched(true);
+  const {
+    rows: data, isLoading, mutate, open, editId, form, setForm, error, setError, saving, openCreate: openCreateBase,
+    openEdit: openEditBase, close, save: saveBase, remove,
+  } = useCrudDialog({
+    resourceUrl: endpoints.competitions,
+    emptyForm,
+    entityName: 'competencia',
+    entityGender: 'f',
+    buildUrl: (base, id) => endpoints.competition(id),
+    savedMessage: (result, wasEdit) => (wasEdit
+      ? 'Competencia guardada.'
+      : 'Competencia creada. Ahora agregale al menos una categoria.'),
+    // Sin categorias no hay nada que sortear ni programar (RF backend), asi
+    // que el siguiente paso siempre es este — llevar directo ahi en vez de
+    // devolver a una lista donde hay que volver a elegirla.
+    onSaved: (result, wasEdit) => {
+      if (!wasEdit) navigate(`/dashboard/categories?competition=${result.id}`);
+    },
+    mapToForm: (row) => {
       const pub = (row.settings && row.settings.public) || {};
       const preview = row.publicPreview || {};
       const previewByKey = {};
       (preview.sponsors || []).forEach((s) => { previewByKey[s.logoKey] = s.logoUrl; });
-      setForm({
+      return {
         name: row.name, slug: row.slug, season: row.season, format: row.format,
         rulesetId: row.rulesetId || '', captureLevel: row.captureLevel,
         schedule: (row.settings && row.settings.schedule) || null,
@@ -105,12 +112,48 @@ export default function CompetitionsPage() {
           logoKey: s.logoKey, name: s.name || '', url: s.url || '',
           currentLogoUrl: previewByKey[s.logoKey] || null,
         })),
-      });
-    } else {
-      setEditId(null); setSlugTouched(false); setForm(emptyForm());
-    }
-    setOpen(true);
-  }, []);
+      };
+    },
+    mapToSend: (f) => ({
+      name: f.name, slug: normalizarSlug(f.slug), season: f.season,
+      format: f.format, rulesetId: f.rulesetId, captureLevel: f.captureLevel,
+      settings: {
+        schedule: f.schedule,
+        public: {
+          showStandings: f.showStandings,
+          showLeaders: f.showLeaders,
+          showRosters: f.showRosters,
+          bannerKey: f.bannerKey || null,
+          accentColor: f.accentColor || null,
+          description: f.description || null,
+          instagram: f.instagram || null,
+          facebook: f.facebook || null,
+          whatsApp: f.whatsApp || null,
+          website: f.website || null,
+          sponsors: f.sponsors.length
+            ? f.sponsors.map((s) => ({ logoKey: s.logoKey, name: s.name || null, url: s.url || null }))
+            : null,
+        },
+      },
+    }),
+  });
+
+  const slugError = form.slug || slugTouched ? problemaDeSlug(form.slug) : null;
+  const slugHelp = `/${slugDeOrganizacion()}/${normalizarSlug(form.slug) || '...'}`;
+
+  const openDialog = useCallback((row) => {
+    setSlugTouched(!!row);
+    (row ? openEditBase : openCreateBase)(row);
+  }, [openEditBase, openCreateBase]);
+
+  // El slug no es un campo mas: hay que validarlo antes de que el pedido
+  // salga, y marcarlo "tocado" para que su error se muestre si todavia no lo
+  // estaba (por ejemplo, guardando sin haber escrito nunca el nombre).
+  const save = async () => {
+    const problem = problemaDeSlug(form.slug);
+    if (problem) { setSlugTouched(true); setError(problem); return; }
+    await saveBase();
+  };
 
   const elegirBanner = async (e) => {
     const file = e.target.files[0];
@@ -146,55 +189,6 @@ export default function CompetitionsPage() {
   const handleSlugChange = (e) => {
     setSlugTouched(true);
     setForm((f) => ({ ...f, slug: normalizarSlug(e.target.value) }));
-  };
-
-  const save = async () => {
-    const problem = problemaDeSlug(form.slug);
-    if (problem) { setSlugTouched(true); setError(problem); return; }
-    setSaving(true); setError('');
-    try {
-      const body = {
-        name: form.name, slug: normalizarSlug(form.slug), season: form.season,
-        format: form.format, rulesetId: form.rulesetId, captureLevel: form.captureLevel,
-        settings: {
-          schedule: form.schedule,
-          public: {
-            showStandings: form.showStandings,
-            showLeaders: form.showLeaders,
-            showRosters: form.showRosters,
-            bannerKey: form.bannerKey || null,
-            accentColor: form.accentColor || null,
-            description: form.description || null,
-            instagram: form.instagram || null,
-            facebook: form.facebook || null,
-            whatsApp: form.whatsApp || null,
-            website: form.website || null,
-            sponsors: form.sponsors.length
-              ? form.sponsors.map((s) => ({ logoKey: s.logoKey, name: s.name || null, url: s.url || null }))
-              : null,
-          },
-        },
-      };
-      if (editId) {
-        await apiPut(endpoints.competition(editId), body);
-        setOpen(false); mutate(); toast.success('Competencia guardada.');
-      } else {
-        const created = await apiPost(endpoints.competitions, body);
-        setOpen(false); mutate();
-        toast.success('Competencia creada. Ahora agregale al menos una categoria.');
-        // Sin categorias no hay nada que sortear ni programar (RF backend),
-        // asi que el siguiente paso siempre es este — llevar directo ahi en
-        // vez de devolver a una lista donde hay que volver a elegirla.
-        navigate(`/dashboard/categories?competition=${created.id}`);
-      }
-    } catch (err) { setError(err.message || 'Error al guardar.'); }
-    finally { setSaving(false); }
-  };
-
-  const remove = async (id) => {
-    const ok = await confirm('Eliminar competicion?', { confirmLabel: 'Eliminar', danger: true });
-    if (!ok) return;
-    await apiDelete(endpoints.competition(id)); mutate(); toast.success('Competencia eliminada.');
   };
 
   const changeStatus = async (id, st) => {
@@ -269,7 +263,7 @@ export default function CompetitionsPage() {
     <Box>
       <PageHeader title="Competiciones" actionLabel="Nueva" onAction={() => openDialog(null)} />
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
-      <CrudDialog open={open} editId={editId} entityName="Competicion" error={error} saving={saving} onClose={() => setOpen(false)} onSave={save} maxWidth="md">
+      <CrudDialog open={open} editId={editId} entityName="Competicion" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
         <TextField label="Nombre" value={form.name} onChange={handleNameChange} fullWidth required />
         {/* La direccion queda fija desde que se crea: cambiarla romperia
             cualquier enlace ya compartido, y el backend la rechaza (ver

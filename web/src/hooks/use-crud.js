@@ -12,18 +12,29 @@ import { toast } from 'sonner';
  *
  * @param {object} opts
  * @param {string} opts.resourceUrl - Endpoint de la colección (endpoints.clubs)
- * @param {object} opts.emptyForm - Estado inicial del formulario
- * @param {string} opts.entityName - Nombre legible ("club", "deportista") para diálogos
+ * @param {object|function} opts.emptyForm - Estado inicial del formulario, o una
+ *   función que lo devuelve (para no compartir el mismo objeto entre aperturas)
+ * @param {string} opts.entityName - Nombre legible ("club", "reglamento") para
+ *   diálogos de confirmación y mensajes — en minúscula y género masculino;
+ *   ver entityGender para sustantivos femeninos ("sede", "categoria")
+ * @param {'m'|'f'} [opts.entityGender] - Género gramatical de entityName, solo
+ *   para el participio del mensaje de borrado: "eliminado" vs "eliminada".
+ *   Por defecto masculino.
+ * @param {string|function} [opts.savedMessage] - Mensaje de éxito al guardar,
+ *   o una función (result, wasEdit) => mensaje. Sin esto, guardar no muestra
+ *   toast — el diálogo cerrándose ya es la confirmación.
  * @param {function} [opts.buildUrl] - Custom URL builder: (base, editId) => string
  * @param {function} [opts.mapToForm] - Transforma row del DataGrid a objeto form
  * @param {function} [opts.mapToSend] - Transforma form antes de enviarlo a la API
- * @param {function} [opts.onSaved] - Callback después de guardar exitosamente
+ * @param {function} [opts.onSaved] - Callback (result, wasEdit) después de guardar
  */
 export function useCrudDialog(opts) {
   const {
     resourceUrl,
     emptyForm,
     entityName = 'registro',
+    entityGender = 'm',
+    savedMessage,
     buildUrl,
     mapToForm = (row) => row,
     mapToSend = (form) => form,
@@ -67,34 +78,40 @@ export function useCrudDialog(opts) {
     setError('');
     try {
       const body = mapToSend(form);
-      if (editId) {
-        await apiPut(getUrl(editId), body);
-      } else {
-        await apiPost(resourceUrl, body);
-      }
+      const wasEdit = Boolean(editId);
+      const result = wasEdit ? await apiPut(getUrl(editId), body) : await apiPost(resourceUrl, body);
       setOpen(false);
       mutate();
-      onSaved?.();
+      if (savedMessage) {
+        toast.success(typeof savedMessage === 'function' ? savedMessage(result, wasEdit) : savedMessage);
+      }
+      onSaved?.(result, wasEdit);
     } catch (err) {
       setError(err.message || 'No se pudo guardar.');
     } finally {
       setSaving(false);
     }
-  }, [editId, form, getUrl, resourceUrl, mutate, mapToSend, onSaved]);
+  }, [editId, form, getUrl, resourceUrl, mutate, mapToSend, savedMessage, onSaved]);
+
+  // "eliminado"/"eliminada": el único lugar donde entityName necesita
+  // concordancia de género, porque es el único mensaje con participio.
+  const participio = entityGender === 'f' ? 'eliminada' : 'eliminado';
 
   const remove = useCallback(
     async (id) => {
       const ok = await confirm(`Eliminar ${entityName}?`, { confirmLabel: 'Eliminar', danger: true });
-      if (!ok) return;
+      if (!ok) return false;
       try {
         await apiDelete(getUrl(id));
         mutate();
-        toast.success(`${entityName} eliminado.`);
+        toast.success(`${entityName} ${participio}.`);
+        return true;
       } catch (err) {
         toast.error(err.message || 'Error al eliminar.');
+        return false;
       }
     },
-    [confirm, entityName, getUrl, mutate],
+    [confirm, entityName, participio, getUrl, mutate],
   );
 
   return {

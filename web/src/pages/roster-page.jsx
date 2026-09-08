@@ -13,8 +13,9 @@ import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
+import { useApi, apiPut, apiDelete } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
+import { useCrudDialog } from 'src/hooks/use-crud';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
@@ -22,6 +23,8 @@ import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
+
+const emptyForm = () => ({ athleteId: '', jerseyNumber: '', position: '' });
 
 const PREVIEW_COLS = [
   { field: 'number', headerName: '#', width: 50 },
@@ -41,10 +44,18 @@ export default function RosterPage() {
   const { data: roster, mutate, isLoading } = useApi(cascade.teamId ? endpoints.roster(cascade.teamId) : null);
   const { data: athletes } = useApi(endpoints.athletes);
 
-  const [open, setOpen] = useState(false);
-  const [editEntry, setEditEntry] = useState(null);
-  const [form, setForm] = useState({ athleteId: '', jerseyNumber: '', position: '' });
-  const [error, setError] = useState('');
+  // El alta/edicion de un registro de nomina es un CRUD comun; retirar y
+  // anular no lo son (ver sus propios comentarios mas abajo), asi que solo
+  // el primero pasa por useCrudDialog. Comparte la misma clave de useApi que
+  // `roster` de arriba, asi que mutar desde aca tambien actualiza esa lista.
+  const { open, editId, form, setForm, error, openCreate, openEdit, close, save } = useCrudDialog({
+    resourceUrl: cascade.teamId ? endpoints.roster(cascade.teamId) : null,
+    emptyForm,
+    entityName: 'jugador',
+    buildUrl: (base, id) => endpoints.rosterEntry(id),
+    mapToForm: (entry) => ({ athleteId: entry.athleteId, jerseyNumber: entry.jerseyNumber || '', position: entry.position || '' }),
+    mapToSend: (f) => ({ jerseyNumber: f.jerseyNumber ? Number(f.jerseyNumber) : null, position: f.position || null, athleteId: f.athleteId }),
+  });
 
   const [impOpen, setImpOpen] = useState(false);
   const [impStep, setImpStep] = useState(0);
@@ -53,18 +64,6 @@ export default function RosterPage() {
   const [impLoading, setImpLoading] = useState(false);
 
   const active = (roster || []).filter((e) => !e.withdrawnAt);
-
-  const openRegister = () => { setEditEntry(null); setForm({ athleteId: '', jerseyNumber: '', position: '' }); setError(''); setOpen(true); };
-  const openEdit = (entry) => { setEditEntry(entry); setForm({ athleteId: entry.athleteId, jerseyNumber: entry.jerseyNumber || '', position: entry.position || '' }); setError(''); setOpen(true); };
-
-  const save = async () => {
-    if (!cascade.teamId) return; setError('');
-    try {
-      const body = { jerseyNumber: form.jerseyNumber ? Number(form.jerseyNumber) : null, position: form.position || null };
-      editEntry ? await apiPut(endpoints.rosterEntry(editEntry.id), body) : await apiPost(endpoints.roster(cascade.teamId), { ...body, athleteId: form.athleteId });
-      setOpen(false); mutate();
-    } catch (err) { setError(err.message); }
-  };
 
   const withdraw = async (entry, w) => {
     try { await apiPut(endpoints.rosterWithdrawal(entry.id), { withdrawn: w }); mutate(); }
@@ -133,7 +132,7 @@ export default function RosterPage() {
       <PageHeader title="Nomina de jugadores">
         <Button variant="outlined" startIcon={<Iconify icon="eva:download-outline" />} onClick={downloadTemplate} disabled={!cascade.teamId}>Plantilla</Button>
         <Button variant="outlined" startIcon={<Iconify icon="eva:upload-outline" />} onClick={() => { setImpFile(null); setImpResult(null); setImpStep(0); setImpOpen(true); }} disabled={!cascade.teamId}>Importar Excel</Button>
-        <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={openRegister} disabled={!cascade.teamId}>Registrar</Button>
+        <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={openCreate} disabled={!cascade.teamId}>Registrar</Button>
       </PageHeader>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
@@ -144,8 +143,8 @@ export default function RosterPage() {
       {cascade.teamId && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{active.length} activo(s) / {(roster || []).length} total</Typography>}
       <DataGrid rows={roster || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
 
-      <CrudDialog open={open} editId={editEntry?.id} entityName="Jugador" error={error} onClose={() => setOpen(false)} onSave={save}>
-        {!editEntry && (
+      <CrudDialog open={open} editId={editId} entityName="Jugador" error={error} onClose={close} onSave={save}>
+        {!editId && (
           <TextField select label="Deportista" value={form.athleteId} onChange={(e) => setForm({ ...form, athleteId: e.target.value })} fullWidth required>
             <MenuItem value="">Seleccionar</MenuItem>
             {(athletes || []).map((a) => <MenuItem key={a.id} value={a.id}>{a.lastName}, {a.firstName}</MenuItem>)}

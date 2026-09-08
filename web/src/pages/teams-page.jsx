@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -6,50 +5,33 @@ import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
+import { useCrudDialog } from 'src/hooks/use-crud';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
-import { SelectionCompetition, SelectionCategory, SelectionClub } from 'src/components/selectors';
-import { useConfirm } from 'src/components/confirm-dialog';
-import { toast } from 'sonner';
+import { CascadeFilters } from 'src/components/cascade-filters';
+import { SelectionClub } from 'src/components/selectors';
+
+const emptyForm = () => ({ clubId: '', name: '', groupLabel: '', seed: '', isActive: true });
 
 export default function TeamsPage() {
-  const confirm = useConfirm();
   const cascade = useCascade();
-  const { data: teams, mutate, isLoading } = useApi(cascade.catId ? endpoints.teams(cascade.catId) : null);
 
-  const [open, setOpen] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ clubId: '', name: '', groupLabel: '', seed: '', isActive: true });
-  const [error, setError] = useState('');
-
-  const openRow = (row) => {
-    setEditId(row?.id || null);
-    setForm(row
-      ? { clubId: row.clubId || '', name: row.name || '', groupLabel: row.groupLabel || '', seed: row.seed ?? '', isActive: row.isActive !== false }
-      : { clubId: '', name: '', groupLabel: '', seed: '', isActive: true });
-    setError(''); setOpen(true);
-  };
-
-  const save = async () => {
-    if (!cascade.catId) return; setError('');
-    try {
-      // isActive solo lo pide UpdateTeam (al crear siempre arranca activo),
-      // pero mandarlo tambien en la creacion no molesta.
-      const body = { clubId: form.clubId, name: form.name || null, groupLabel: form.groupLabel || null, seed: form.seed !== '' ? Number(form.seed) : null, isActive: form.isActive };
-      editId ? await apiPut(endpoints.team(editId), body) : await apiPost(endpoints.teams(cascade.catId), body);
-      setOpen(false); mutate(); toast.success('Equipo guardado.');
-    } catch (err) { setError(err.message); }
-  };
-
-  const remove = async (id) => {
-    const ok = await confirm('Eliminar equipo?', { confirmLabel: 'Eliminar', danger: true });
-    if (!ok) return;
-    await apiDelete(endpoints.team(id)); mutate(); toast.success('Equipo eliminado.');
-  };
+  const {
+    rows: teams, isLoading, open, editId, form, setForm, error, openCreate, openEdit, close, save, remove,
+  } = useCrudDialog({
+    resourceUrl: cascade.catId ? endpoints.teams(cascade.catId) : null,
+    emptyForm,
+    entityName: 'equipo',
+    savedMessage: 'Equipo guardado.',
+    buildUrl: (base, id) => endpoints.team(id),
+    mapToForm: (row) => ({ clubId: row.clubId || '', name: row.name || '', groupLabel: row.groupLabel || '', seed: row.seed ?? '', isActive: row.isActive !== false }),
+    // isActive solo lo pide UpdateTeam (al crear siempre arranca activo),
+    // pero mandarlo tambien en la creacion no molesta.
+    mapToSend: (f) => ({ clubId: f.clubId, name: f.name || null, groupLabel: f.groupLabel || null, seed: f.seed !== '' ? Number(f.seed) : null, isActive: f.isActive }),
+  });
 
   const columns = [
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
@@ -58,16 +40,16 @@ export default function TeamsPage() {
     { field: 'seed', headerName: 'Bombo', width: 90, renderCell: ({ value }) => value != null ? value : '--' },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Chip label={value ? 'Si' : 'No'} color={value ? 'success' : 'default'} size="small" variant="outlined" /> },
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
-      <EditDeleteActions onEdit={() => openRow(row)} onDelete={() => remove(row.id)} />
+      <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
   ];
 
   return (
     <Box>
-      <PageHeader title="Equipos" actionLabel="Nuevo equipo" onAction={() => openRow(null)} actionDisabled={!cascade.catId} />
+      <PageHeader title="Equipos" actionLabel="Nuevo equipo" onAction={openCreate} actionDisabled={!cascade.catId} />
       <CascadeFilters cascade={cascade} />
       <DataGrid rows={teams || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
-      <CrudDialog open={open} editId={editId} entityName="Equipo" error={error} onClose={() => setOpen(false)} onSave={save}>
+      <CrudDialog open={open} editId={editId} entityName="Equipo" error={error} onClose={close} onSave={save}>
         <SelectionClub value={form.clubId} onChange={(e) => setForm({ ...form, clubId: e.target.value })} required />
         <TextField label="Nombre del equipo (vacio = nombre del club)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth helperText="Dejar vacio para usar el nombre del club" />
         {/* El grupo ya no se tipea a mano: lo completa el sorteo de grupos
@@ -87,19 +69,6 @@ export default function TeamsPage() {
         />
         {editId && <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Activo" />}
       </CrudDialog>
-    </Box>
-  );
-}
-
-function CascadeFilters({ cascade }) {
-  return (
-    <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
-      <Box sx={{ flex: 1, minWidth: 200 }}>
-        <SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required />
-      </Box>
-      <Box sx={{ flex: 1, minWidth: 200 }}>
-        <SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required />
-      </Box>
     </Box>
   );
 }
