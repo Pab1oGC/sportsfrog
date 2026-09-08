@@ -7,6 +7,7 @@ export var navData = [
     { title: "Categorias", path: "/dashboard/categories", icon: "mdi:tag-outline" },
     { title: "Equipos", path: "/dashboard/teams", icon: "mdi:account-group-outline" },
     { title: "Nomina", path: "/dashboard/roster", icon: "mdi:account-multiple-check-outline" },
+    { title: "Clasificación", path: "/dashboard/performances", icon: "mdi:podium-gold" },
     { title: "Fixtures/Partidos", path: "/dashboard/matches", icon: "mdi:calendar-clock-outline" },
     { title: "Tabla posiciones", path: "/dashboard/standings", icon: "mdi:format-list-numbered" },
     { title: "Lideres", path: "/dashboard/leaders", icon: "mdi:star-outline" },

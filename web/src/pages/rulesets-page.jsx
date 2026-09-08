@@ -14,6 +14,7 @@ import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { TIEBREAKER_CODES, etiquetasDesempate } from 'src/lib/tiebreaker-labels';
+import { esJuzgado } from 'src/lib/sport-shape';
 
 const EMPTY_FORM = {
   name: '',
@@ -94,6 +95,7 @@ export default function RulesetsPage() {
   // rechaza cualquier otro numero para esos deportes.
   const sportInfo = (sports || []).find((s) => s.code === form.sportCode);
   const esPorSets = Boolean(sportInfo?.isPlayedInSets);
+  const juzgado = esJuzgado(sportInfo);
   const setsParaGanar = Math.ceil((form.config.periods.count || 1) / 2);
   const walkover = form.config.walkover || null;
 
@@ -101,7 +103,9 @@ export default function RulesetsPage() {
   // win/loss (mas el draw opcional), tal cual los expone el catalogo. En uno
   // por sets dependen de la cantidad de periodos que el organizador esta
   // escribiendo ahora mismo, asi que no pueden venir fijos del catalogo —
-  // ver desenlacesDeSets arriba.
+  // ver desenlacesDeSets arriba. Un deporte juzgado (poomsae) tambien cae
+  // en esta rama: el catalogo ya expone win/loss sin empate para el
+  // (JudgedMatchOutcomeRules), asi que no hace falta una tercera rama aca.
   const desenlacesRequeridos = esPorSets
     ? desenlacesDeSets(form.config.periods.count)
     : (sportInfo?.requiredOutcomes || ['win', 'loss']);
@@ -166,6 +170,12 @@ export default function RulesetsPage() {
           label="Periodos"
           type="number"
           value={form.config.periods.count}
+          // Un deporte juzgado se decide en una sola actuacion por lado —
+          // JudgedRulesetShape.InspectPeriods rechaza cualquier otro numero
+          // al guardar. Bloqueado aca en vez de dejar que el organizador lo
+          // escriba y se entere recien al guardar.
+          disabled={juzgado}
+          helperText={juzgado ? `${sportInfo.name} se decide en una sola actuación por lado.` : undefined}
           onChange={(e) => {
             const count = +e.target.value;
             const nuevoWalkover = esPorSets && walkover
@@ -197,7 +207,14 @@ export default function RulesetsPage() {
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
             {esPorSets
               ? 'Uno por cada marcador de sets con el que un partido puede terminar, visto desde los dos lados.'
-              : 'Cuanto vale cada resultado posible en la tabla de posiciones.'}
+              : juzgado
+                // Ganar o perder sigue decidiendo quien avanza en la
+                // eliminatoria, aunque este deporte no arme una tabla de
+                // posiciones con esto (ver ClassificationRanking en el
+                // backend) — RulesetPolicy pide un valor igual, para
+                // cualquier deporte.
+                ? 'Cuanto vale ganar o perder un cruce. Poomsae no arma tabla de posiciones con esto, pero el reglamento le pide un valor a cada desenlace igual.'
+                : 'Cuanto vale cada resultado posible en la tabla de posiciones.'}
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {[...desenlacesRequeridos, ...desenlacesOpcionales].map((code) => (
