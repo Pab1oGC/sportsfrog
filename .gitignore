@@ -18,3 +18,5 @@ api/tests/**/obj/
 .vscode/
 *.user
 *.suo
+
+graphify-out/

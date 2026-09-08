@@ -81,15 +81,30 @@ public sealed record ScheduleSpace
 /// The two are not redundant — a competition can be public while its rosters
 /// are not, and that combination is the common one where minors play (RNF-16).
 ///
-/// Standings and leaders default to shown, because a published competition
-/// with neither has nothing to publish. Rosters default to hidden: naming the
-/// children on a team is a decision someone has to make on purpose.
+/// Standings, leaders and classification default to shown, because a
+/// published competition with none of them has nothing to publish. Rosters
+/// default to hidden: naming the children on a team is a decision someone
+/// has to make on purpose.
 /// </remarks>
 public sealed record PublicSettings
 {
     public bool ShowStandings { get; init; } = true;
 
     public bool ShowLeaders { get; init; } = true;
+
+    /// <summary>
+    /// Whether a judged category's classification stage — poomsae's ranking
+    /// by score, before its knockout is drawn — appears on the public page.
+    /// </summary>
+    /// <remarks>
+    /// Its own switch rather than folded into <see cref="ShowStandings"/>:
+    /// the two never coexist on the same category (one sport is scored by
+    /// table, the other by judges), but a competition can run both kinds of
+    /// category at once, and an organizer publishing one division's table
+    /// should not be assumed to also want another division's judges' scores
+    /// public before they are final.
+    /// </remarks>
+    public bool ShowClassification { get; init; } = true;
 
     public bool ShowRosters { get; init; }
 

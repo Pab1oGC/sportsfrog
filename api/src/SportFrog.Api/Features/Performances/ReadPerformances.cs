@@ -37,16 +37,7 @@ public static class ReadPerformances
         SportFrogDbContext database,
         CancellationToken cancellationToken)
     {
-        var entries = await database.Performances
-            .AsNoTracking()
-            .Where(performance => performance.CategoryId == categoryId)
-            .Select(performance => new PerformanceEntry(
-                performance.Id,
-                performance.TeamId,
-                performance.Team!.Name,
-                performance.Status,
-                performance.Score))
-            .ToListAsync(cancellationToken);
+        var entries = await PerformancesQuery.ForCategoryAsync(database, categoryId, cancellationToken);
 
         if (entries.Count == 0
             && !await database.Categories.AnyAsync(category => category.Id == categoryId, cancellationToken))

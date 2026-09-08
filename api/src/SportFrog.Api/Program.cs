@@ -24,6 +24,7 @@ using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Features.Venues;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Jobs;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -154,6 +155,11 @@ builder.Services.AddSportFrogStorage(builder.Configuration);
 // all.
 builder.Services.AddSportFrogJobs(connectionString);
 builder.Services.AddScoped<AttachAthletePhotosJob>();
+
+// Short-lived, in-process cache for the handful of public-portal reads that
+// are expensive to build and cheap to serve slightly stale — see
+// IPublicQueryCache for the freshness contract.
+builder.Services.AddSportFrogPublicCaching();
 
 // The public view reads with its own database user, which holds no write
 // permission: its read-only condition is enforced by the engine and not by
@@ -384,6 +390,7 @@ api.MapPromoteClassification();
 api.MapReadPublicCompetitions();
 api.MapReadPublicCompetition();
 api.MapReadPublicTables();
+api.MapReadPublicClassification();
 api.MapReadPublicCalendar();
 api.MapReadPublicRoster();
 api.MapReadPublicMatchEvents();

@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Competitions;
+using SportFrog.Api.Features.Performances;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -94,16 +95,7 @@ public static class PromoteClassification
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        var performances = await database.Performances
-            .AsNoTracking()
-            .Where(performance => performance.CategoryId == categoryId)
-            .Select(performance => new PerformanceEntry(
-                performance.Id,
-                performance.TeamId,
-                performance.Team!.Name,
-                performance.Status,
-                performance.Score))
-            .ToListAsync(cancellationToken);
+        var performances = await PerformancesQuery.ForCategoryAsync(database, categoryId, cancellationToken);
 
         var existing = await database.Matches
             .Where(match => match.CategoryId == categoryId)

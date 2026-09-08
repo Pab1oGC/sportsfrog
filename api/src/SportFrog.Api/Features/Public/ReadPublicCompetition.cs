@@ -46,12 +46,21 @@ public static class ReadPublicCompetition
 
         /// <summary>
         /// Whether this sport is decided by periods won rather than a total
-        /// score — the one fact the public page actually branches on, so a
-        /// standings column or a tiebreaker label never has to guess it from
-        /// the sport's name. See <see cref="Rulebook.ReadSports.Summary"/>,
-        /// which exposes the same fact to the organization's own pages.
+        /// score, so a standings column or a tiebreaker label never has to
+        /// guess it from the sport's name. See
+        /// <see cref="Rulebook.ReadSports.Summary"/>, which exposes the same
+        /// fact to the organization's own pages.
         /// </summary>
         bool IsPlayedInSets,
+
+        /// <summary>
+        /// Whether this sport is decided by a score judges hand down rather
+        /// than a table — poomsae, not yet any other sport in the catalog.
+        /// The other branch a public page needs alongside
+        /// <see cref="IsPlayedInSets"/>: a judged category has a
+        /// classification to rank, not a standings table to show.
+        /// </summary>
+        bool IsJudged,
 
         string Format,
         CompetitionState Status,
@@ -61,7 +70,7 @@ public static class ReadPublicCompetition
         IReadOnlyList<CategorySummary> Categories,
         Portal Portal);
 
-    public sealed record Sections(bool Standings, bool Leaders, bool Rosters);
+    public sealed record Sections(bool Standings, bool Leaders, bool Rosters, bool Classification);
 
     public sealed record CategorySummary(
         Guid Id,
@@ -122,6 +131,7 @@ public static class ReadPublicCompetition
                         ScoringUnit = candidate.Sport.ScoringUnit,
                         PeriodLabel = candidate.Sport.PeriodLabel,
                         IsPlayedInSets = candidate.Sport.ScoreMode == ScoreMode.Sets,
+                        IsJudged = candidate.Sport.ScoreMode == ScoreMode.Judged,
                         candidate.Format,
                         candidate.Status,
                         candidate.StartsOn,
@@ -185,19 +195,22 @@ public static class ReadPublicCompetition
                     competition.ScoringUnit,
                     competition.PeriodLabel,
                     competition.IsPlayedInSets,
+                    competition.IsJudged,
                     competition.Format,
                     competition.Status,
                     competition.StartsOn,
                     competition.EndsOn,
 
                     // Absent settings mean the defaults the record declares:
-                    // standings and leaders shown, rosters not. A competition
-                    // published without ever opening its settings still has a
-                    // page worth reading, and its rosters still stay private.
+                    // standings, leaders and classification shown, rosters
+                    // not. A competition published without ever opening its
+                    // settings still has a page worth reading, and its
+                    // rosters still stay private.
                     new Sections(
                         shows?.ShowStandings ?? true,
                         shows?.ShowLeaders ?? true,
-                        shows?.ShowRosters ?? false),
+                        shows?.ShowRosters ?? false,
+                        shows?.ShowClassification ?? true),
                     categories,
                     new Portal(
                         bannerUrl,

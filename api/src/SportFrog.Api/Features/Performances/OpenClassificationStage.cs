@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -43,6 +44,7 @@ public static class OpenClassificationStage
         SportFrogDbContext database,
         OrganizationContext organization,
         TimeProvider clock,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var category = await database.Categories
@@ -124,6 +126,11 @@ public static class OpenClassificationStage
         }));
 
         await database.SaveChangesAsync(cancellationToken);
+
+        // The public classification page, if anyone published one for this
+        // competition, described a stage that no longer exists the instant
+        // this commits.
+        publicCache.Invalidate(PublicCacheKey.Classification(competition.Id));
 
         return Results.Ok(new Response(teamIds.Count, existing.Count));
     }

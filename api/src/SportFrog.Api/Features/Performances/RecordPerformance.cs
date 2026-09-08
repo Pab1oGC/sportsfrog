@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -59,6 +60,7 @@ public static class RecordPerformance
         SportFrogDbContext database,
         OrganizationContext organization,
         TimeProvider clock,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var performance = await database.Performances
@@ -97,6 +99,12 @@ public static class RecordPerformance
         }
 
         await database.SaveChangesAsync(cancellationToken);
+
+        // A public classification page reads this same score. Whether
+        // anyone published one for this competition, or ever will, is not
+        // this handler's business to know — invalidating a key nobody
+        // cached is a no-op.
+        publicCache.Invalidate(PublicCacheKey.Classification(competition.Id));
 
         return Results.Ok(new Response(performance.Score.Value));
     }
