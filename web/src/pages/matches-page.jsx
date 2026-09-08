@@ -297,7 +297,7 @@ export default function MatchesPage() {
 
       <ResultDialog
         open={resOpen} onClose={() => setResOpen(false)} selMatch={selMatch} sportInfo={sportInfo} mutate={mutate}
-        loading={loading} setLoading={setLoading} setError={setError}
+        loading={loading} setLoading={setLoading} error={error} setError={setError}
       />
 
       <WalkoverDialog
