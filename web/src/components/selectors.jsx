@@ -7,6 +7,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import InputLabel from '@mui/material/InputLabel';
 import FormControl from '@mui/material/FormControl';
 import FormHelperText from '@mui/material/FormHelperText';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
 import { useApi } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 
@@ -42,6 +44,51 @@ function SelectionTeam({ categoryId, value, onChange, ...props }) {
   return <SelectionField label="Equipo" value={value} onChange={onChange} options={options} isLoading={isLoading} disabled={!categoryId} {...props} />;
 }
 
+// Un multi-select, no un SelectionField mas: entrar a alguien a un deporte
+// individual es elegir uno, una pareja o un trio de una lista que puede ser
+// larga, y buscar por nombre a medida que se tipea es lo que ya usa el
+// buscador de jugador de EventsDialog para el mismo problema (elegir una
+// persona entre muchas). Reinventar esa busqueda dentro de un <Select>
+// hubiera sido peor UX y una segunda implementacion del mismo patron.
+//
+// Igual que SelectionClub, no filtra por activo: RosterPolicy ya rechaza un
+// deportista inactivo con su propio mensaje (ver EnrollIndividual), y
+// esconderlo aca duplicaria esa regla en dos lugares que podrian
+// desalinearse.
+function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText, disabled }) {
+  const { data, isLoading } = useApi(endpoints.athletes);
+  const athletes = data || [];
+  const seleccionados = value.map((id) => athletes.find((a) => a.id === id)).filter(Boolean);
+
+  return (
+    <Autocomplete
+      multiple
+      options={athletes}
+      loading={isLoading}
+      disabled={disabled}
+      getOptionLabel={(a) => `${a.lastName}, ${a.firstName}`}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      value={seleccionados}
+      onChange={(_, seleccion) => onChange(seleccion.map((a) => a.id))}
+      sx={{ mb: 2 }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label={label}
+          placeholder="Nombre o apellido"
+          helperText={helperText}
+          slotProps={{ input: { ...params.InputProps, endAdornment: (
+            <>
+              {isLoading ? <CircularProgress size={18} sx={{ mr: 1 }} /> : null}
+              {params.InputProps.endAdornment}
+            </>
+          ) } }}
+        />
+      )}
+    />
+  );
+}
+
 function SelectionClub({ value, onChange, ...props }) {
   const { data, isLoading } = useApi(endpoints.clubs);
   const options = (data || []).map((c) => ({ value: c.id, label: c.name }));
@@ -73,4 +120,4 @@ function SelectionSpace({ value, onChange, ...props }) {
   return <SelectionField label="Cancha / espacio" value={value} onChange={onChange} options={options} isLoading={isLoading} helperText={helperText} {...props} />;
 }
 
-export { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub, SelectionVenue, SelectionSpace };
+export { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam, SelectionAthletes, SelectionClub, SelectionVenue, SelectionSpace };

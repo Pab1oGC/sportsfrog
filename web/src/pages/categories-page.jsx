@@ -12,8 +12,9 @@ import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { SelectionCompetition, SelectionField } from 'src/components/selectors';
+import { esIndividual } from 'src/lib/sport-shape';
 
-const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '' });
+const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '', minWeightKg: '', maxWeightKg: '' });
 
 export default function CategoriesPage() {
   const [searchParams] = useSearchParams();
@@ -35,8 +36,14 @@ export default function CategoriesPage() {
     entityGender: 'f',
     savedMessage: 'Categoria guardada.',
     buildUrl: (base, id) => endpoints.category(compId, id),
-    mapToForm: (row) => ({ name: row.name || '', gender: row.gender || '', birthDateFrom: row.birthDateFrom || '', birthDateTo: row.birthDateTo || '', maxRosterSize: row.maxRosterSize || '', displayOrder: row.displayOrder || 0, rulesetId: row.rulesetId || '', qualifiersPerGroup: row.qualifiersPerGroup || '' }),
-    mapToSend: (f) => ({ name: f.name, gender: f.gender || null, birthDateFrom: f.birthDateFrom || null, birthDateTo: f.birthDateTo || null, maxRosterSize: f.maxRosterSize ? Number(f.maxRosterSize) : null, displayOrder: Number(f.displayOrder), rulesetId: f.rulesetId || null, qualifiersPerGroup: f.qualifiersPerGroup ? Number(f.qualifiersPerGroup) : null }),
+    mapToForm: (row) => ({ name: row.name || '', gender: row.gender || '', birthDateFrom: row.birthDateFrom || '', birthDateTo: row.birthDateTo || '', maxRosterSize: row.maxRosterSize || '', displayOrder: row.displayOrder || 0, rulesetId: row.rulesetId || '', qualifiersPerGroup: row.qualifiersPerGroup || '', minWeightKg: row.minWeightKg ?? '', maxWeightKg: row.maxWeightKg ?? '' }),
+    mapToSend: (f) => ({
+      name: f.name, gender: f.gender || null, birthDateFrom: f.birthDateFrom || null, birthDateTo: f.birthDateTo || null,
+      maxRosterSize: f.maxRosterSize ? Number(f.maxRosterSize) : null, displayOrder: Number(f.displayOrder),
+      rulesetId: f.rulesetId || null, qualifiersPerGroup: f.qualifiersPerGroup ? Number(f.qualifiersPerGroup) : null,
+      minWeightKg: f.minWeightKg !== '' ? Number(f.minWeightKg) : null,
+      maxWeightKg: f.maxWeightKg !== '' ? Number(f.maxWeightKg) : null,
+    }),
   });
 
   const comp = comps?.find((c) => c.id === compId);
@@ -77,6 +84,30 @@ export default function CategoriesPage() {
             helperText="Cuantos equipos de cada grupo pasan a la siguiente ronda. Se deja vacio para no resaltar nada en el portal publico."
             fullWidth
           />
+        )}
+        {esIndividual(sport) && (
+          // Solo tiene sentido donde el que se inscribe es un deportista, no
+          // un club: RosterPolicy compara el peso del deportista contra esta
+          // ventana al inscribirlo. Ambos extremos quedan abiertos si se
+          // dejan vacios, igual que la ventana de fecha de nacimiento de arriba.
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="Peso minimo (kg)"
+              type="number"
+              value={form.minWeightKg}
+              onChange={(e) => setForm({ ...form, minWeightKg: e.target.value })}
+              fullWidth
+              slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+            />
+            <TextField
+              label="Peso maximo (kg)"
+              type="number"
+              value={form.maxWeightKg}
+              onChange={(e) => setForm({ ...form, maxWeightKg: e.target.value })}
+              fullWidth
+              slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+            />
+          </Box>
         )}
         <TextField select label="Reglamento propio" value={form.rulesetId} onChange={(e) => setForm({ ...form, rulesetId: e.target.value })} fullWidth disabled={possibleRulesets.length === 0}>
           <MenuItem value="">Usar el de la competencia</MenuItem>

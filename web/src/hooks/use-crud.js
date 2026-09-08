@@ -11,7 +11,13 @@ import { toast } from 'sonner';
  * + handleDelete ahora llama a useCrudDialog y le queda un componente limpio.
  *
  * @param {object} opts
- * @param {string} opts.resourceUrl - Endpoint de la colección (endpoints.clubs)
+ * @param {string} opts.resourceUrl - Endpoint de la colección (endpoints.clubs).
+ *   Tambien de donde se lee la lista (GET) y, salvo que se pase createUrl, a
+ *   donde se manda el alta (POST).
+ * @param {string} [opts.createUrl] - Endpoint del alta, si es distinto de
+ *   resourceUrl -- caso real: EnrollIndividual vive en una direccion propia
+ *   (/categories/{id}/individuals), no en la misma coleccion que su lectura
+ *   (/categories/{id}/teams). Por defecto, resourceUrl.
  * @param {object|function} opts.emptyForm - Estado inicial del formulario, o una
  *   función que lo devuelve (para no compartir el mismo objeto entre aperturas)
  * @param {string} opts.entityName - Nombre legible ("club", "reglamento") para
@@ -25,12 +31,15 @@ import { toast } from 'sonner';
  *   toast — el diálogo cerrándose ya es la confirmación.
  * @param {function} [opts.buildUrl] - Custom URL builder: (base, editId) => string
  * @param {function} [opts.mapToForm] - Transforma row del DataGrid a objeto form
- * @param {function} [opts.mapToSend] - Transforma form antes de enviarlo a la API
+ * @param {function} [opts.mapToSend] - (form, wasEdit) => body a enviar. wasEdit
+ *   solo importa cuando alta y edicion piden contratos distintos -- ver
+ *   createUrl arriba para el mismo problema del lado de la direccion.
  * @param {function} [opts.onSaved] - Callback (result, wasEdit) después de guardar
  */
 export function useCrudDialog(opts) {
   const {
     resourceUrl,
+    createUrl = resourceUrl,
     emptyForm,
     entityName = 'registro',
     entityGender = 'm',
@@ -77,9 +86,9 @@ export function useCrudDialog(opts) {
     setSaving(true);
     setError('');
     try {
-      const body = mapToSend(form);
       const wasEdit = Boolean(editId);
-      const result = wasEdit ? await apiPut(getUrl(editId), body) : await apiPost(resourceUrl, body);
+      const body = mapToSend(form, wasEdit);
+      const result = wasEdit ? await apiPut(getUrl(editId), body) : await apiPost(createUrl, body);
       setOpen(false);
       mutate();
       if (savedMessage) {
@@ -91,7 +100,7 @@ export function useCrudDialog(opts) {
     } finally {
       setSaving(false);
     }
-  }, [editId, form, getUrl, resourceUrl, mutate, mapToSend, savedMessage, onSaved]);
+  }, [editId, form, getUrl, createUrl, mutate, mapToSend, savedMessage, onSaved]);
 
   // "eliminado"/"eliminada": el único lugar donde entityName necesita
   // concordancia de género, porque es el único mensaje con participio.

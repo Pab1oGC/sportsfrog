@@ -26,7 +26,7 @@ function edad(birthDate) {
   return años;
 }
 
-const emptyForm = () => ({ firstName: '', lastName: '', documentId: '', birthDate: '', gender: '', guardianName: '', guardianPhone: '', isActive: true });
+const emptyForm = () => ({ firstName: '', lastName: '', documentId: '', birthDate: '', gender: '', guardianName: '', guardianPhone: '', weightKg: '', isActive: true });
 
 export default function AthletesPage() {
   const {
@@ -37,7 +37,7 @@ export default function AthletesPage() {
     entityName: 'deportista',
     savedMessage: 'Deportista guardado.',
     buildUrl: (base, id) => endpoints.athlete(id),
-    mapToForm: (row) => ({ firstName: row.firstName, lastName: row.lastName, documentId: row.documentId, birthDate: row.birthDate || '', gender: row.gender || '', guardianName: row.guardianName || '', guardianPhone: row.guardianPhone || '', isActive: row.isActive !== false }),
+    mapToForm: (row) => ({ firstName: row.firstName, lastName: row.lastName, documentId: row.documentId, birthDate: row.birthDate || '', gender: row.gender || '', guardianName: row.guardianName || '', guardianPhone: row.guardianPhone || '', weightKg: row.weightKg ?? '', isActive: row.isActive !== false }),
     // Los opcionales viajan en null, no en '': el backend acepta "sin
     // definir" pero no una cadena vacia, que para el validador es un valor
     // invalido en vez de una ausencia. isActive tambien viaja siempre: al
@@ -49,6 +49,7 @@ export default function AthletesPage() {
       gender: f.gender || null,
       guardianName: f.guardianName || null,
       guardianPhone: f.guardianPhone || null,
+      weightKg: f.weightKg !== '' ? Number(f.weightKg) : null,
     }),
   });
 
@@ -78,6 +79,7 @@ export default function AthletesPage() {
       value != null ? <span style={{ color: value < 18 ? 'var(--mui-palette-warning-main, #b26a00)' : undefined, fontWeight: value < 18 ? 700 : 400 }}>{value}</span> : '--'
     ) },
     { field: 'gender', headerName: 'Genero', width: 80 },
+    { field: 'weightKg', headerName: 'Peso (kg)', width: 90, renderCell: ({ value }) => value ?? '--' },
     { field: 'guardianName', headerName: 'Apoderado', width: 150, renderCell: ({ value }) => value || '--' },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
@@ -98,6 +100,15 @@ export default function AthletesPage() {
         <TextField label="Documento" value={form.documentId} onChange={(e) => setForm({ ...form, documentId: e.target.value })} fullWidth />
         <TextField label="Fecha nacimiento" type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Genero" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} fullWidth />
+        <TextField
+          label="Peso (kg)"
+          type="number"
+          value={form.weightKg}
+          onChange={(e) => setForm({ ...form, weightKg: e.target.value })}
+          fullWidth
+          helperText="Ultimo pesaje registrado. Lo lee la categoria con limite de peso, si la hay."
+          slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+        />
         {edad(form.birthDate) != null && edad(form.birthDate) < 18 && (
           <Alert severity="warning">
             Es menor de edad ({edad(form.birthDate)} años): conviene completar los datos del apoderado.
