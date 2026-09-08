@@ -165,6 +165,17 @@ export const endpoints = {
   categoryAdvanceBracket: (catId) => `${api}/categories/${catId}/draw/next-round`,
   categoryPromoteGroupStage: (catId) => `${api}/categories/${catId}/draw/knockout`,
 
+  // Un deporte individual (sports.isIndividual) inscribe por deportista, no
+  // por club -- ver EnrollIndividual en el backend. Las tres restantes son
+  // la etapa de clasificacion de un deporte juzgado (sports.scoreMode ===
+  // 'judged'): abrirla, leerla, y promover a los que clasifican a la
+  // eliminatoria -- el equivalente de categoryDraw/categoryPromoteGroupStage
+  // de arriba para un deporte que no se decide por tabla.
+  categoryIndividuals: (catId) => `${api}/categories/${catId}/individuals`,
+  categoryPerformances: (catId) => `${api}/categories/${catId}/performances`,
+  categoryPerformancesOpen: (catId) => `${api}/categories/${catId}/performances/open`,
+  categoryPromoteClassification: (catId) => `${api}/categories/${catId}/performances/promote`,
+
   // Teams & Roster
   teams: (catId) => `${api}/categories/${catId}/teams`,
   team: (id) => `${api}/teams/${id}`,
@@ -196,6 +207,11 @@ export const endpoints = {
   standings: (catId) => `${api}/categories/${catId}/standings`,
   leaders: (catId) => `${api}/categories/${catId}/leaders`,
 
+  // Cargar el puntaje de una actuacion puntual -- performanceId, no catId,
+  // por eso vive aparte de las categoryPerformances* de arriba, igual que
+  // matchResult vive aparte de categoryMatches.
+  performanceScore: (id) => `${api}/performances/${id}/score`,
+
   // Documents
   templates: `${api}/documents/templates`,
   template: (id) => `${api}/documents/templates/${id}`,
@@ -213,6 +229,7 @@ export const endpoints = {
   publicMatches: (orgSlug, compSlug) => `${api}/public/${orgSlug}/${compSlug}/matches`,
   publicStandings: (orgSlug, compSlug) => `${api}/public/${orgSlug}/${compSlug}/standings`,
   publicLeaders: (orgSlug, compSlug) => `${api}/public/${orgSlug}/${compSlug}/leaders`,
+  publicClassification: (orgSlug, compSlug) => `${api}/public/${orgSlug}/${compSlug}/classification`,
   publicRoster: (orgSlug, compSlug, teamId) => `${api}/public/${orgSlug}/${compSlug}/teams/${teamId}/roster`,
   publicVerify: (orgSlug, serial) => `${api}/public/verify/${orgSlug}/${serial}`,
 };
