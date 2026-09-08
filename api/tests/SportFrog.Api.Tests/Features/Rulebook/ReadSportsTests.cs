@@ -16,7 +16,8 @@ namespace SportFrog.Api.Tests.Features.Rulebook;
 public sealed class ReadSportsTests
 {
     private static readonly IMatchOutcomeRulesRegistry OutcomeRules =
-        new MatchOutcomeRulesRegistry([new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules()]);
+        new MatchOutcomeRulesRegistry(
+            [new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules(), new JudgedMatchOutcomeRules()]);
 
     private static Sport Football() => new()
     {
@@ -69,6 +70,46 @@ public sealed class ReadSportsTests
         summary.IsPlayedInSets.Should().BeTrue();
         summary.RequiredOutcomes.Should().BeEquivalentTo(["win_2_0", "loss_0_2", "win_2_1", "loss_1_2"]);
         summary.OptionalOutcomes.Should().BeEmpty();
+    }
+
+    private static Sport Poomsae() => new()
+    {
+        Code = "taekwondo_poomsae",
+        Name = "Taekwondo (Poomsae)",
+        PeriodLabel = "actuación",
+        DefaultPeriods = 1,
+        ScoringUnit = "punto",
+        ScoreMode = ScoreMode.Judged,
+        IsIndividual = true,
+    };
+
+    [Fact]
+    public void Project_JudgedSport_ExposesWinLossAsRequiredAndNoOptionalOutcome()
+    {
+        // Unlike a cumulative sport, which offers a draw as optional, a
+        // judged bout never can: the judges resolve a tie before a result
+        // reaches here at all.
+        var summary = ReadSports.Project(Poomsae(), OutcomeRules);
+
+        summary.ScoreMode.Should().Be("judged");
+        summary.IsPlayedInSets.Should().BeFalse();
+        summary.RequiredOutcomes.Should().BeEquivalentTo(["win", "loss"]);
+        summary.OptionalOutcomes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Project_TeamSport_IsNotIndividual()
+    {
+        ReadSports.Project(Football(), OutcomeRules).IsIndividual.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Project_IndividualSport_ExposesIt()
+    {
+        var kyorugi = Wally();
+        kyorugi.IsIndividual = true;
+
+        ReadSports.Project(kyorugi, OutcomeRules).IsIndividual.Should().BeTrue();
     }
 
     [Fact]

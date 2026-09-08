@@ -50,6 +50,14 @@ public static class ReadSports
         bool IsPlayedInSets,
 
         /// <summary>
+        /// Whether the entrant is one athlete rather than a squad — a team of
+        /// one, still fielded through the same teams/roster endpoints. The
+        /// fact a client branches on to offer "enroll an individual" instead
+        /// of "enter a club" for this sport's categories.
+        /// </summary>
+        bool IsIndividual,
+
+        /// <summary>
         /// The outcomes a ruleset for this sport must price, at its default
         /// period count — win/loss for a cumulative sport, every scoreline a
         /// best-of-<see cref="DefaultPeriods"/> match can finish on for one
@@ -134,8 +142,9 @@ public static class ReadSports
             sport.PeriodLabel,
             sport.DefaultPeriods,
             sport.ScoringUnit,
-            sport.ScoreMode == ScoreMode.Sets ? "sets" : "cumulative",
+            ScoreModeCode(sport.ScoreMode),
             sport.ScoreMode == ScoreMode.Sets,
+            sport.IsIndividual,
             rules.RequiredOutcomes(sport.DefaultPeriods),
             rules.OptionalOutcomes(),
             sport.Metrics
@@ -147,4 +156,17 @@ public static class ReadSports
                     metric.IsRankable))
                 .ToList());
     }
+
+    /// <summary>
+    /// The wire value for a score mode — the same strings
+    /// <c>SportConfiguration.ScoreModeConverter</c> reads and writes, kept as
+    /// its own small mapping here rather than a two-way check so a mode this
+    /// misses reports itself wrong instead of quietly matching "cumulative".
+    /// </summary>
+    private static string ScoreModeCode(ScoreMode mode) => mode switch
+    {
+        ScoreMode.Sets => "sets",
+        ScoreMode.Judged => "judged",
+        _ => "cumulative",
+    };
 }

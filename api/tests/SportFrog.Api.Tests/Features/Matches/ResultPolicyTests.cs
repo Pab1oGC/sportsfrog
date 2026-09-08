@@ -19,10 +19,12 @@ public sealed class ResultPolicyTests
     // not mocks. All are pure and DB-free, so this is exactly the wiring
     // Program.cs assembles through the container, exercised without one.
     private static readonly IMatchOutcomeRulesRegistry OutcomeRules =
-        new MatchOutcomeRulesRegistry([new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules()]);
+        new MatchOutcomeRulesRegistry(
+            [new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules(), new JudgedMatchOutcomeRules()]);
 
     private static readonly ResultPolicy Policy = new(
-        new ResultShapeRulesRegistry([new CumulativeResultShape(), new SetsResultShape(OutcomeRules)]));
+        new ResultShapeRulesRegistry(
+            [new CumulativeResultShape(), new SetsResultShape(OutcomeRules), new JudgedResultShape()]));
 
     private static Sport CumulativeSport(string label = "tiempo") => new()
     {
@@ -64,6 +66,26 @@ public sealed class ResultPolicyTests
                 ["win_3_1"] = 3, ["loss_1_3"] = 0,
                 ["win_3_2"] = 3, ["loss_2_3"] = 1,
             },
+            Tiebreakers = [],
+        });
+
+    private static Sport JudgedSport(string label = "actuación") => new()
+    {
+        Code = "taekwondo_poomsae",
+        Name = "Taekwondo (Poomsae)",
+        PeriodLabel = label,
+        DefaultPeriods = 1,
+        ScoringUnit = "punto",
+        ScoreMode = ScoreMode.Judged,
+        IsIndividual = true,
+    };
+
+    private static MatchRules Judged(short configuredPeriods = 1) => new(
+        JudgedSport(),
+        new RulesetConfiguration
+        {
+            Periods = new PeriodRules { Count = configuredPeriods, Label = "actuación", Minutes = null },
+            Points = new Dictionary<string, int> { ["win"] = 3, ["loss"] = 0 },
             Tiebreakers = [],
         });
 
@@ -242,6 +264,97 @@ public sealed class ResultPolicyTests
         var periods = new[] { P(1, 25, 10), P(2, 25, 15), P(3, 25, 20) };
 
         var violations = Policy.Inspect(Sets(5), periods);
+
+        violations.Should().BeEmpty();
+    }
+
+    // ---- Sets, best of three (kyorugi's shape) --------------------------
+    //
+    // Every existing sets-mode test above runs best of five (toWin = 3) —
+    // wally and volleyball's shape. Kyorugi is decided in three asaltos
+    // (toWin = 2): a different deciding-set count is what actually proves
+    // SetsResultShape derives it from the ruleset rather than assuming five.
+    // Points is left in its best-of-five shape from Sets(): ResultPolicy
+    // never reads Points, only Periods.Count, so it is irrelevant here.
+
+    [Fact]
+    public void Inspect_Sets_BestOfThree_NobodyReachedTheDecidingSet_IsRejected()
+    {
+        // Best of three is won at two. One set is a match still in progress.
+        var periods = new[] { P(1, 25, 20) };
+
+        var violations = Policy.Inspect(Sets(3), periods);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("PeriodScores");
+    }
+
+    [Fact]
+    public void Inspect_Sets_BestOfThree_WinnerReportedBeyondTheDecidingSet_IsRejected()
+    {
+        // Decided at two asaltos; nothing is played after the second is won,
+        // so a third one credited to the same side is impossible.
+        var periods = new[] { P(1, 25, 20), P(2, 25, 18), P(3, 25, 22) };
+
+        var violations = Policy.Inspect(Sets(3), periods);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("PeriodScores");
+    }
+
+    [Fact]
+    public void Inspect_Sets_BestOfThree_AValidMatchFinishingTwoToOne_IsAccepted()
+    {
+        var periods = new[] { P(1, 25, 20), P(2, 20, 25), P(3, 25, 18) };
+
+        var violations = Policy.Inspect(Sets(3), periods);
+
+        violations.Should().BeEmpty();
+    }
+
+    // ---- Judged ------------------------------------------------------
+
+    [Fact]
+    public void Inspect_Judged_ATiedScore_IsRejected()
+    {
+        // Nothing decides a tie between two judges' scores the way a
+        // deciding point does — it was never a finished result.
+        var periods = new[] { P(1, 765, 765) };
+
+        var violations = Policy.Inspect(Judged(), periods);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("PeriodScores");
+    }
+
+    [Fact]
+    public void Inspect_Judged_FewerPeriodsThanConfigured_IsRejected()
+    {
+        var violations = Policy.Inspect(Judged(), []);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("PeriodScores");
+    }
+
+    [Fact]
+    public void Inspect_Judged_MorePeriodsThanConfigured_IsRejected()
+    {
+        // A judged bout is one performance a side: a second one is not a
+        // continuation of the same result.
+        var periods = new[] { P(1, 765, 742), P(2, 700, 690) };
+
+        var violations = Policy.Inspect(Judged(), periods);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("PeriodScores");
+    }
+
+    [Fact]
+    public void Inspect_Judged_AValidDistinctScore_IsAccepted()
+    {
+        var periods = new[] { P(1, 765, 742) };
+
+        var violations = Policy.Inspect(Judged(), periods);
 
         violations.Should().BeEmpty();
     }

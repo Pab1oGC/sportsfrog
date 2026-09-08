@@ -30,6 +30,7 @@ public static class SportFrogDataSource
         builder.MapEnum<DocumentKind>("document_kind");
         builder.MapEnum<DocumentState>("document_state");
         builder.MapEnum<DocumentBatchState>("document_batch_state");
+        builder.MapEnum<PerformanceStatus>("performance_status");
 
         return builder.Build();
     }
@@ -48,5 +49,6 @@ public static class SportFrogDataSource
         builder.MapEnum<DocumentKind>("document_kind");
         builder.MapEnum<DocumentState>("document_state");
         builder.MapEnum<DocumentBatchState>("document_batch_state");
+        builder.MapEnum<PerformanceStatus>("performance_status");
     }
 }

@@ -21,8 +21,10 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
     // one; only the database read for the sport itself is real.
     private RulesetPolicy Policy() => new(
         fixture.CreateAppContext(),
-        new MatchOutcomeRulesRegistry([new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules()]),
-        new RulesetShapeRulesRegistry([new CumulativeRulesetShape(), new SetsRulesetShape()]));
+        new MatchOutcomeRulesRegistry(
+            [new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules(), new JudgedMatchOutcomeRules()]),
+        new RulesetShapeRulesRegistry(
+            [new CumulativeRulesetShape(), new SetsRulesetShape(), new JudgedRulesetShape()]));
 
     // Best of three: won at two.
     private static RulesetConfiguration ValidWally() => new()
@@ -34,6 +36,31 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
             ["win_2_1"] = 3, ["loss_1_2"] = 1,
         },
         Tiebreakers = ["score_difference"],
+    };
+
+    // Best of three asaltos: won at two. Kyorugi's real catalog row, seeded
+    // by AddTaekwondoCatalogFoundations — unlike ValidWally, which exercises
+    // the sets mechanism against a hand-built shape, this proves that row's
+    // own data (score_mode, the point/penalty metrics) integrates correctly.
+    private static RulesetConfiguration ValidKyorugi() => new()
+    {
+        Periods = new PeriodRules { Count = 3, Label = "asalto", Minutes = null },
+        Points = new Dictionary<string, int>
+        {
+            ["win_2_0"] = 3, ["loss_0_2"] = 0,
+            ["win_2_1"] = 3, ["loss_1_2"] = 1,
+        },
+        Tiebreakers = ["score_difference"],
+    };
+
+    // One performance a side, decided by judges: won at whatever score is
+    // higher, never level. Against the real taekwondo_poomsae catalog row
+    // seeded by SeedPoomsaeCatalog.
+    private static RulesetConfiguration ValidPoomsae() => new()
+    {
+        Periods = new PeriodRules { Count = 1, Label = "actuación", Minutes = null },
+        Points = new Dictionary<string, int> { ["win"] = 3, ["loss"] = 0 },
+        Tiebreakers = [],
     };
 
     private static RulesetConfiguration ValidFootball() => new()
@@ -65,6 +92,122 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
     public async Task InspectAsync_ValidSetsRuleset_IsAccepted()
     {
         var violations = await Policy().InspectAsync("wally", ValidWally(), CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    // ---- Kyorugi (real catalog sport, best of three) --------------------
+
+    [Fact]
+    public async Task InspectAsync_ValidKyorugiRuleset_IsAccepted()
+    {
+        var violations = await Policy().InspectAsync(
+            "taekwondo_kyorugi", ValidKyorugi(), CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_KyorugiWalkoverWinnerScoreNotEqualToTheDecidingAsalto_IsRejected()
+    {
+        // Won at two asaltos, same as any other best-of-three sets sport —
+        // three is impossible.
+        var wrongWinnerScore = ValidKyorugi() with
+        {
+            Walkover = new WalkoverRules { WinnerScore = 3, LoserScore = 0 },
+        };
+
+        var violations = await Policy().InspectAsync(
+            "taekwondo_kyorugi", wrongWinnerScore, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Walkover.WinnerScore");
+    }
+
+    [Fact]
+    public async Task InspectAsync_KyorugiUnknownMetric_IsRejectedAgainstTheCatalogsOwnPointAndPenalty()
+    {
+        var unknownMetric = ValidKyorugi() with { Metrics = ["point", "not_a_real_metric"] };
+
+        var violations = await Policy().InspectAsync(
+            "taekwondo_kyorugi", unknownMetric, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Metrics");
+    }
+
+    [Fact]
+    public async Task InspectAsync_KyorugiHasNoScoringMetricToRequire()
+    {
+        // Same as every sets-mode sport: the result comes from asaltos won,
+        // and the catalog prices neither point nor penalty as affecting the
+        // score, so leaving both out is a valid selection.
+        var noMetricsAtAll = ValidKyorugi() with { Metrics = [] };
+
+        var violations = await Policy().InspectAsync(
+            "taekwondo_kyorugi", noMetricsAtAll, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    // ---- Poomsae (real catalog sport, one judged performance) -----------
+
+    [Fact]
+    public async Task InspectAsync_ValidPoomsaeRuleset_IsAccepted()
+    {
+        var violations = await Policy().InspectAsync(
+            "taekwondo_poomsae", ValidPoomsae(), CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_PoomsaeWithMoreThanOnePeriod_IsRejected()
+    {
+        // A judged bout is one performance a side, not a best-of-anything —
+        // this is the constraint SetsRulesetShape has no equivalent for.
+        var twoPeriods = ValidPoomsae() with
+        {
+            Periods = new PeriodRules { Count = 2, Label = "actuación", Minutes = null },
+        };
+
+        var violations = await Policy().InspectAsync(
+            "taekwondo_poomsae", twoPeriods, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Periods.Count");
+    }
+
+    [Fact]
+    public async Task InspectAsync_PoomsaePricingADraw_IsRejected()
+    {
+        // Unlike a cumulative sport, a judged bout never offers a draw even
+        // as optional — the judges resolve a tie before a result is ever
+        // recorded, so a ruleset cannot price a result that can't happen.
+        var withDraw = ValidPoomsae() with
+        {
+            Points = new Dictionary<string, int> { ["win"] = 3, ["loss"] = 0, ["draw"] = 1 },
+        };
+
+        var violations = await Policy().InspectAsync(
+            "taekwondo_poomsae", withDraw, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Points");
+    }
+
+    [Fact]
+    public async Task InspectAsync_PoomsaeWalkover_IsNeverValidatedAgainstAScorelineRule()
+    {
+        // Same as a cumulative sport: a judged score is never read against a
+        // scoreline the way a set is, so any pair of numbers is accepted.
+        var anyNumbersAtAll = ValidPoomsae() with
+        {
+            Walkover = new WalkoverRules { WinnerScore = 1, LoserScore = 0 },
+        };
+
+        var violations = await Policy().InspectAsync(
+            "taekwondo_poomsae", anyNumbersAtAll, CancellationToken.None);
 
         violations.Should().BeEmpty();
     }

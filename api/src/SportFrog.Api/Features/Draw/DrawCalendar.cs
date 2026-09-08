@@ -76,6 +76,7 @@ public static class DrawCalendar
         Guid categoryId,
         Request request,
         SportFrogDbContext database,
+        ICalendarDrawRegistry draws,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -98,14 +99,7 @@ public static class DrawCalendar
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        if (competition.Format == CompetitionFormat.Knockout && request.Legs != 1)
-        {
-            return Results.Problem(
-                detail: "Acá una eliminatoria se sortea a una vuelta. Un cruce a ida y vuelta se " +
-                        "decide por acumulado, que es un objeto distinto de dos partidos " +
-                        "independientes.",
-                statusCode: StatusCodes.Status409Conflict);
-        }
+        var draw = draws.For(competition.Format);
 
         // Only teams still competing. One that withdrew keeps the matches it
         // played and is not given new ones, which is the same rule that stops
@@ -114,7 +108,7 @@ public static class DrawCalendar
             .AsNoTracking()
             .Where(team => team.CategoryId == categoryId && team.IsActive)
             .OrderBy(team => team.Name)
-            .Select(team => new { team.Id, team.GroupLabel })
+            .Select(team => new DrawnTeam(team.Id, team.GroupLabel))
             .ToListAsync(cancellationToken);
 
         if (teams.Count < 2)
@@ -124,16 +118,9 @@ public static class DrawCalendar
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        if (competition.Format == CompetitionFormat.Groups
-            && teams.All(team => team.GroupLabel is null))
+        if (draw.Inspect(teams, request.Legs) is { } problem)
         {
-            // A group stage with no groups is a league that has not been drawn
-            // into them yet. Refused rather than quietly treated as one,
-            // because the difference is a decision somebody has to make.
-            return Results.Problem(
-                detail: "Ningún equipo fue sorteado en un grupo. Definí el grupo de cada equipo " +
-                        "antes de sortear una fase de grupos.",
-                statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem(detail: problem, statusCode: StatusCodes.Status409Conflict);
         }
 
         var existing = await database.Matches
@@ -162,22 +149,7 @@ public static class DrawCalendar
             match.DeletedAt = now;
         }
 
-        var (drawn, phase, byes) = competition.Format switch
-        {
-            CompetitionFormat.Knockout => DrawBracket([.. teams.Select(team => team.Id)]),
-
-            // A group stage is a league inside each group, drawn together so
-            // that round one means the same weekend everywhere.
-            CompetitionFormat.Groups => (
-                [.. teams
-                    .GroupBy(team => team.GroupLabel)
-                    .SelectMany(group => RoundRobin.Draw(
-                        [.. group.Select(team => team.Id)], request.Legs))],
-                null,
-                0),
-
-            _ => (RoundRobin.Draw([.. teams.Select(team => team.Id)], request.Legs), null, 0),
-        };
+        var (drawn, phase, byes) = draw.Draw(teams, request.Legs);
 
         database.Matches.AddRange(drawn.Select(fixture => new Match
         {
@@ -200,16 +172,5 @@ public static class DrawCalendar
             drawn.Count == 0 ? 0 : drawn.Max(fixture => fixture.Round),
             phase,
             byes));
-    }
-
-    /// <summary>
-    /// The opening round of a knockout, named for its size.
-    /// </summary>
-    private static (IReadOnlyList<DrawnMatch> Matches, string? Phase, int Byes) DrawBracket(
-        IReadOnlyList<Guid> teams)
-    {
-        var (matches, byes) = Bracket.FirstRound(teams);
-
-        return (matches, Bracket.Phase(matches.Count, 1), byes.Count);
     }
 }

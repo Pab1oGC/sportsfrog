@@ -21,6 +21,7 @@ internal sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(x => x.GroupLabel).HasColumnName("group_label");
         builder.Property(x => x.Seed).HasColumnName("seed");
         builder.Property(x => x.IsActive).HasColumnName("is_active");
+        builder.Property(x => x.IsIndividual).HasColumnName("is_individual");
         builder.Property(x => x.DeletedAt).HasColumnName("deleted_at");
 
         builder.Property(x => x.CreatedAt)
@@ -33,10 +34,13 @@ internal sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
             .ValueGeneratedOnAddOrUpdate();
 
         // One entry per club per category, among the living: a club that
-        // withdrew and is re-entered takes the place it left.
+        // withdrew and is re-entered takes the place it left. Individual
+        // sports are exempt — several athletes of the same delegation, each
+        // a team of one, sharing a club and a category is the ordinary case
+        // there, not a duplicate entry.
         builder.HasIndex(x => new { x.CategoryId, x.ClubId })
             .IsUnique()
-            .HasFilter("deleted_at IS NULL");
+            .HasFilter("deleted_at IS NULL AND NOT is_individual");
 
         // Two conditions, and both are the team's own visibility: its row is
         // not deleted, and the competition it plays in is still there. The

@@ -12,9 +12,15 @@ namespace SportFrog.Domain.Rules;
 /// point for taking a set off the winner needs those spelled out separately.
 ///
 /// The derivation itself now lives in <see cref="IMatchOutcomeRules"/> and
-/// its two implementations, resolved through <see cref="IMatchOutcomeRulesRegistry"/>
+/// its implementations, resolved through <see cref="IMatchOutcomeRulesRegistry"/>
 /// — this stays as the entry point every existing caller already uses, so
-/// nothing that calls it today has to change to keep working.
+/// nothing that calls it today has to change to keep working. Its own
+/// registry is a separate, hardcoded instance rather than the container's:
+/// this class is reached from <c>SportFrog.Domain</c>, which has no DI
+/// container to resolve one from, so a new mode has to be added here by hand
+/// — this is the one place in the mode-strategy design that is not wired
+/// through <c>Program.cs</c>, and it is exactly the seam a new mode can be
+/// forgotten at.
 /// </remarks>
 public static class MatchOutcomes
 {
@@ -23,7 +29,8 @@ public static class MatchOutcomes
     public const string Loss = "loss";
 
     private static readonly IMatchOutcomeRulesRegistry Registry =
-        new MatchOutcomeRulesRegistry([new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules()]);
+        new MatchOutcomeRulesRegistry(
+            [new CumulativeMatchOutcomeRules(), new SetsMatchOutcomeRules(), new JudgedMatchOutcomeRules()]);
 
     /// <summary>
     /// Outcomes a ruleset for this sport must price.

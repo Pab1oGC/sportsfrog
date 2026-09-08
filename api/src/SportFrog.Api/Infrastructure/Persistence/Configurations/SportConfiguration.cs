@@ -13,9 +13,12 @@ internal sealed class SportConfiguration : IEntityTypeConfiguration<Sport>
     /// the CHECK constraint accepts appear here literally. A rename of an enum
     /// member is then a compile-time concern and not a runtime surprise.
     /// </summary>
+    // Nested conditionals rather than a switch expression: EF compiles this
+    // lambda into a SQL expression tree, and a switch expression cannot
+    // appear inside one.
     private static readonly ValueConverter<ScoreMode, string> ScoreModeConverter = new(
-        mode => mode == ScoreMode.Sets ? "sets" : "cumulative",
-        stored => stored == "sets" ? ScoreMode.Sets : ScoreMode.Cumulative);
+        mode => mode == ScoreMode.Sets ? "sets" : mode == ScoreMode.Judged ? "judged" : "cumulative",
+        stored => stored == "sets" ? ScoreMode.Sets : stored == "judged" ? ScoreMode.Judged : ScoreMode.Cumulative);
 
     public void Configure(EntityTypeBuilder<Sport> builder)
     {

@@ -98,6 +98,8 @@ public static class UpdateCategory
         category.MaxRosterSize = contract.MaxRosterSize;
         category.DisplayOrder = contract.DisplayOrder;
         category.QualifiersPerGroup = contract.QualifiersPerGroup;
+        category.MinWeightKg = contract.MinWeightKg;
+        category.MaxWeightKg = contract.MaxWeightKg;
 
         try
         {
@@ -122,7 +124,9 @@ public static class UpdateCategory
     /// Compared against the stored values rather than asked of the change
     /// tracker, unlike the ruleset module: these are plain columns, so an
     /// equality check here says exactly what it means, and singling out which
-    /// four of the seven fields matter is the whole point.
+    /// of the contract's fields actually decide eligibility is the whole
+    /// point — only the name and the display order are labels, and everything
+    /// else here was already asked of a roster the moment it registered.
     /// </remarks>
     private static bool EligibilityChanged(
         Category category,
@@ -132,5 +136,7 @@ public static class UpdateCategory
         || category.Gender != gender
         || category.BirthDateFrom != contract.BirthDateFrom
         || category.BirthDateTo != contract.BirthDateTo
-        || category.MaxRosterSize != contract.MaxRosterSize;
+        || category.MaxRosterSize != contract.MaxRosterSize
+        || category.MinWeightKg != contract.MinWeightKg
+        || category.MaxWeightKg != contract.MaxWeightKg;
 }

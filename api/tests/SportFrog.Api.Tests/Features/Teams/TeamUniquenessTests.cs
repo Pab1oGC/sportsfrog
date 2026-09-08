@@ -12,10 +12,9 @@ namespace SportFrog.Api.Tests.Features.Teams;
 /// The database-level guarantee behind "one team per club per category":
 /// <c>uq_teams_club_category</c>. CreateTeam's own app-level pre-check reads
 /// as an optimization on top of this — the constraint is what actually makes
-/// the rule true under a race, and it is the piece a future individual-sport
-/// team (taekwondo: one athlete, one delegation, several categories by
-/// weight) will need relaxed. This test exists to prove exactly what that
-/// change will be loosening.
+/// the rule true under a race. Since RelaxTeamUniquenessForIndividualSports,
+/// the guarantee only holds for <c>teams.is_individual = false</c>: a team of
+/// one, entered for an athlete of an individual sport, is exempt.
 /// </summary>
 [Collection(nameof(SportFrogDatabaseCollection))]
 public sealed class TeamUniquenessTests(SportFrogDatabaseFixture fixture)
@@ -130,6 +129,43 @@ public sealed class TeamUniquenessTests(SportFrogDatabaseFixture fixture)
         var postgres = Assert.IsType<PostgresException>(thrown.InnerException);
         Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres.SqlState);
         Assert.Contains("uq_teams_club_category", postgres.ConstraintName ?? postgres.MessageText);
+    }
+
+    [Fact]
+    public async Task SecondTeam_SameClub_SameCategory_BothIndividual_IsAllowed()
+    {
+        // Kyorugi's own shape: several athletes of the same delegation, each
+        // a team of one, entered in the same weight category. The index's
+        // predicate excludes is_individual precisely so this insert succeeds
+        // where the identical non-individual one above fails.
+        var fx = await SeedAsync();
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
+
+        context.Teams.Add(new Team
+        {
+            Id = Guid.NewGuid(),
+            OrgId = fx.OrgId,
+            ClubId = fx.ClubId,
+            CategoryId = fx.CategoryAId,
+            Name = "Primer competidor",
+            IsIndividual = true,
+        });
+        context.Teams.Add(new Team
+        {
+            Id = Guid.NewGuid(),
+            OrgId = fx.OrgId,
+            ClubId = fx.ClubId,
+            CategoryId = fx.CategoryAId,
+            Name = "Segundo competidor, misma delegacion, misma categoria",
+            IsIndividual = true,
+        });
+
+        var rows = await context.SaveChangesAsync();
+
+        Assert.Equal(2, rows);
     }
 
     [Fact]

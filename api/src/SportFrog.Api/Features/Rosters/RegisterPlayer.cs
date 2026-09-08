@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -11,6 +12,12 @@ namespace SportFrog.Api.Features.Rosters;
 /// <summary>
 /// Registers a person to play for a team.
 /// </summary>
+/// <remarks>
+/// For an individual-sport team — see <see cref="Teams.EnrollIndividual"/> —
+/// this is also how a pair or a team picks up a member after its first: the
+/// team's name has no source of its own there, so it is recomputed from
+/// whoever is actually on the team once this adds to it.
+/// </remarks>
 public static class RegisterPlayer
 {
     public sealed record Request(Guid AthleteId, short? JerseyNumber, string? Position);
@@ -60,8 +67,10 @@ public static class RegisterPlayer
         OrganizationContext organization,
         CancellationToken cancellationToken)
     {
+        // Tracked, unlike most reads here: an individual-sport team's name
+        // may be rewritten below, and that has to ride along in the same
+        // SaveChanges as the registration it is a consequence of.
         var team = await database.Teams
-            .AsNoTracking()
             .Include(candidate => candidate.Category)
                 .ThenInclude(category => category!.Competition)
             .SingleOrDefaultAsync(candidate => candidate.Id == teamId, cancellationToken);
@@ -128,6 +137,23 @@ public static class RegisterPlayer
         };
 
         database.RosterEntries.Add(entry);
+
+        if (team.IsIndividual)
+        {
+            // No other source for this team's name exists — see
+            // IndividualTeamName — so picking up a member is exactly the
+            // moment it has to be recomputed.
+            var teammates = await database.RosterEntries
+                .AsNoTracking()
+                .Where(candidate => candidate.TeamId == team.Id && candidate.WithdrawnAt == null)
+                .Select(candidate => new { candidate.Athlete!.FirstName, candidate.Athlete.LastName })
+                .ToListAsync(cancellationToken);
+
+            team.Name = IndividualTeamName.From(
+                teammates
+                    .Select(member => (member.FirstName, member.LastName))
+                    .Append((athlete.FirstName, athlete.LastName)));
+        }
 
         try
         {

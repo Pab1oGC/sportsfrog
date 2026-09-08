@@ -82,6 +82,8 @@ public static class CreateCategory
             MaxRosterSize = contract.MaxRosterSize,
             DisplayOrder = contract.DisplayOrder,
             QualifiersPerGroup = contract.QualifiersPerGroup,
+            MinWeightKg = contract.MinWeightKg,
+            MaxWeightKg = contract.MaxWeightKg,
         };
 
         database.Categories.Add(category);

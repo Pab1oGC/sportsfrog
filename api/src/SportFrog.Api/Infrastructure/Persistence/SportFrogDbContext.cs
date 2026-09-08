@@ -53,6 +53,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<PlayerEvent> PlayerEvents => Set<PlayerEvent>();
 
+    public DbSet<Performance> Performances => Set<Performance>();
+
     public DbSet<DocumentTemplate> DocumentTemplates => Set<DocumentTemplate>();
 
     public DbSet<DocumentTemplateVersion> DocumentTemplateVersions => Set<DocumentTemplateVersion>();
@@ -79,6 +81,7 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
         modelBuilder.HasPostgresEnum<DocumentKind>("public", "document_kind");
         modelBuilder.HasPostgresEnum<DocumentState>("public", "document_state");
         modelBuilder.HasPostgresEnum<DocumentBatchState>("public", "document_batch_state");
+        modelBuilder.HasPostgresEnum<PerformanceStatus>("public", "performance_status");
 
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }

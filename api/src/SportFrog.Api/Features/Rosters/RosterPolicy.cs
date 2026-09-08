@@ -120,6 +120,40 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
                 $"después del {latest:yyyy-MM-dd}, así que todavía no llega a la edad de esta " +
                 "categoría."));
         }
+
+        // Read as the window of weight admitted, same shape as the birth-date
+        // one — but unlike sex, there is no boundary value a missing weigh-in
+        // could be assumed to sit on the right side of, so a category with
+        // any restriction at all needs a real number to compare against.
+        if (category.MinWeightKg is not null || category.MaxWeightKg is not null)
+        {
+            if (athlete.WeightKg is null)
+            {
+                violations.Add(new RosterViolation(
+                    "AthleteId",
+                    $"Esta categoría admite un rango de peso, y no hay un pesaje registrado " +
+                    $"para {athlete.FirstName} {athlete.LastName}. Hay que registrarlo antes de " +
+                    "inscribir a esta persona."));
+            }
+            else
+            {
+                if (category.MinWeightKg is { } minimum && athlete.WeightKg < minimum)
+                {
+                    violations.Add(new RosterViolation(
+                        "AthleteId",
+                        $"{athlete.FirstName} {athlete.LastName} pesa {athlete.WeightKg} kg, " +
+                        $"menos que el mínimo de {minimum} kg de esta categoría."));
+                }
+
+                if (category.MaxWeightKg is { } maximum && athlete.WeightKg > maximum)
+                {
+                    violations.Add(new RosterViolation(
+                        "AthleteId",
+                        $"{athlete.FirstName} {athlete.LastName} pesa {athlete.WeightKg} kg, " +
+                        $"más que el máximo de {maximum} kg de esta categoría."));
+                }
+            }
+        }
     }
 
     /// <summary>

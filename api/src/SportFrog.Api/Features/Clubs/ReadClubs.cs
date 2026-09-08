@@ -46,6 +46,9 @@ public static class ReadClubs
         search = QueryFilter.OrAbsent(search);
 
         var clubs = await database.Clubs
+            // Not a club a delegate manages, so it has no place in a list or
+            // a picker built for those — see UnaffiliatedClub.
+            .Where(club => !club.IsUnaffiliated)
             .Where(club => search == null || EF.Functions.ILike(club.Name, $"%{search}%"))
             .OrderBy(club => club.Name)
             .ToListAsync(cancellationToken);

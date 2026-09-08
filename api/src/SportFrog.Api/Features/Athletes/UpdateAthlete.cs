@@ -10,6 +10,11 @@ namespace SportFrog.Api.Features.Athletes;
 /// <summary>Corrects the data of a registered person.</summary>
 public static class UpdateAthlete
 {
+    /// <param name="WeightKg">
+    /// The most recent weigh-in on record. Null clears it, same as every
+    /// other optional field here — a correction restates the whole person,
+    /// not a patch of one field.
+    /// </param>
     public sealed record Request(
         string FirstName,
         string LastName,
@@ -19,7 +24,8 @@ public static class UpdateAthlete
         string? GuardianName,
         string? GuardianPhone,
         string? PhotoUrl,
-        bool IsActive);
+        bool IsActive,
+        decimal? WeightKg = null);
 
     /// <summary>
     /// What an empty photograph means: remove the one on file.
@@ -75,6 +81,13 @@ public static class UpdateAthlete
                 .Must(InlinePhoto.IsAcceptable)
                 .When(request => request.PhotoUrl != RemovePhoto)
                 .WithMessage(InlinePhoto.Requirement);
+
+            // Mirrors ck_athletes_weight_positive: a weight of zero or less
+            // is not a real weigh-in.
+            RuleFor(request => request.WeightKg)
+                .GreaterThan(0)
+                .When(request => request.WeightKg is not null)
+                .WithMessage("El peso tiene que ser mayor que cero.");
         }
     }
 
@@ -146,6 +159,7 @@ public static class UpdateAthlete
         athlete.GuardianName = request.GuardianName?.Trim();
         athlete.GuardianPhone = request.GuardianPhone?.Trim();
         athlete.IsActive = request.IsActive;
+        athlete.WeightKg = request.WeightKg;
 
         await database.SaveChangesAsync(cancellationToken);
 

@@ -10,6 +10,7 @@
 global using SportFrog.Domain.Competitions;
 global using SportFrog.Domain.Documents;
 global using SportFrog.Domain.Matches;
+global using SportFrog.Domain.Performances;
 global using SportFrog.Domain.Rules;
 global using SportFrog.Domain.Scheduling;
 global using SportFrog.Domain.Serialization;

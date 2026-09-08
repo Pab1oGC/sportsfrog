@@ -92,15 +92,18 @@ public sealed class Category
     public short? QualifiersPerGroup { get; set; }
 
     /// <summary>
-    /// Who qualified out of the group stage, in seeded order, once the
-    /// knockout bracket is drawn.
+    /// Who qualified into the knockout, in seeded order, once it is drawn
+    /// from a stage that ran before it — a group stage or a classification
+    /// stage, whichever this category played.
     /// </summary>
     /// <remarks>
-    /// Null for a category that never ran a group stage, and null still for
-    /// one that did but has not yet been promoted to a knockout. Set once, at
-    /// the moment of promotion, and read back only to tell a genuine bye
-    /// apart from a team the group stage eliminated — both are active teams
-    /// that never played a knockout match, and only this says which is which.
+    /// Null for a category that never ran a stage ahead of its knockout, and
+    /// null still for one that did but has not yet been promoted. Set once,
+    /// at the moment of promotion — by <c>PromoteGroupStage</c> or
+    /// <c>PromoteClassification</c>, whichever applies — and read back only
+    /// to tell a genuine bye apart from a competitor the earlier stage
+    /// eliminated — both are active teams that never played a knockout
+    /// match, and only this says which is which.
     /// </remarks>
     public Guid[]? KnockoutEntrants { get; set; }
 

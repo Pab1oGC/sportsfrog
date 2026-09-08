@@ -13,6 +13,7 @@ using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Organizations;
+using SportFrog.Api.Features.Performances;
 using SportFrog.Api.Features.Rosters;
 using SportFrog.Api.Features.Rosters.Import;
 using SportFrog.Api.Features.MatchEvents;
@@ -176,13 +177,19 @@ builder.Services.AddScoped<SessionIssuer>();
 
 builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.CumulativeRulesetShape>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.SetsRulesetShape>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.JudgedRulesetShape>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRulesRegistry, SportFrog.Api.Features.Rulebook.RulesetShapeRulesRegistry>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDraw, SportFrog.Api.Features.Draw.LeagueCalendarDraw>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDraw, SportFrog.Api.Features.Draw.GroupsCalendarDraw>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDraw, SportFrog.Api.Features.Draw.KnockoutCalendarDraw>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDrawRegistry, SportFrog.Api.Features.Draw.CalendarDrawRegistry>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Competitions.CompetitionActivity>();
 builder.Services.AddScoped<SportFrog.Api.Features.Teams.TeamUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Clubs.UnaffiliatedClub>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
@@ -193,9 +200,11 @@ builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
 // change to anything that already depends on them.
 builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRules, SportFrog.Domain.Rules.CumulativeMatchOutcomeRules>();
 builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRules, SportFrog.Domain.Rules.SetsMatchOutcomeRules>();
+builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRules, SportFrog.Domain.Rules.JudgedMatchOutcomeRules>();
 builder.Services.AddSingleton<SportFrog.Domain.Rules.IMatchOutcomeRulesRegistry, SportFrog.Domain.Rules.MatchOutcomeRulesRegistry>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRules, SportFrog.Api.Features.Matches.CumulativeResultShape>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRules, SportFrog.Api.Features.Matches.SetsResultShape>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRules, SportFrog.Api.Features.Matches.JudgedResultShape>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRulesRegistry, SportFrog.Api.Features.Matches.ResultShapeRulesRegistry>();
 
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRulesLookup>();
@@ -205,6 +214,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 builder.Services.AddScoped<SportFrog.Api.Features.Clubs.ClubPhoto>();
 builder.Services.AddScoped<SportFrog.Api.Infrastructure.Storage.PortalPicture>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportReview>();
+builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.DelegationRosterImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.IssueDocumentsJob>();
@@ -309,6 +319,7 @@ api.MapUpdateCategory();
 api.MapDeleteCategory();
 
 api.MapCreateTeam();
+api.MapEnrollIndividual();
 api.MapReadTeams();
 api.MapUpdateTeam();
 api.MapDeleteTeam();
@@ -321,6 +332,14 @@ api.MapStrikeRegistration();
 api.MapBuildRosterTemplate();
 api.MapPreviewRosterImport();
 api.MapApplyRosterImport();
+
+api.MapBuildDelegationRosterTemplate();
+api.MapPreviewDelegationRosterImport();
+api.MapApplyDelegationRosterImport();
+
+api.MapOpenClassificationStage();
+api.MapRecordPerformance();
+api.MapReadPerformances();
 
 api.MapImportAthletePhotos();
 api.MapReadPhotoImports();
@@ -360,6 +379,7 @@ api.MapDrawCalendar();
 api.MapScheduleCalendar();
 api.MapAdvanceBracket();
 api.MapPromoteGroupStage();
+api.MapPromoteClassification();
 
 api.MapReadPublicCompetitions();
 api.MapReadPublicCompetition();

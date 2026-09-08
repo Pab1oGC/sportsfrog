@@ -113,4 +113,30 @@ public sealed class MatchOutcomesTests
 
         produced.Should().BeEquivalentTo(required);
     }
+
+    // ---- Judged ------------------------------------------------------
+
+    [Fact]
+    public void RequiredFor_Judged_IsWinAndLossOnly()
+    {
+        MatchOutcomes.RequiredFor(ScoreMode.Judged, periods: 1)
+            .Should().BeEquivalentTo(["win", "loss"]);
+    }
+
+    [Fact]
+    public void OptionalFor_Judged_OffersNothing()
+    {
+        // Unlike a cumulative match, whether a judged bout may end level is
+        // not left to the competition: judges settle it before a result
+        // ever reaches here, so there is no draw to offer even as optional.
+        MatchOutcomes.OptionalFor(ScoreMode.Judged).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(765, 742, "win")]
+    [InlineData(742, 765, "loss")]
+    public void For_Judged_ComparesOwnAgainstOpponent(int own, int against, string expected)
+    {
+        MatchOutcomes.For(ScoreMode.Judged, own, against).Should().Be(expected);
+    }
 }

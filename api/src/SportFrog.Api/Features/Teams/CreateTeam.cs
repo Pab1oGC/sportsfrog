@@ -67,11 +67,24 @@ public static class CreateTeam
         var category = await database.Categories
             .AsNoTracking()
             .Include(candidate => candidate.Competition)
+                .ThenInclude(competition => competition!.Sport)
             .SingleOrDefaultAsync(candidate => candidate.Id == categoryId, cancellationToken);
 
-        if (category?.Competition is not { } competition)
+        if (category?.Competition is not { Sport: { } sport } competition)
         {
             return Results.NotFound();
+        }
+
+        if (sport.IsIndividual)
+        {
+            // A club entered here would be a team with nobody on it: for an
+            // individual sport, the team exists only because the athlete
+            // does, and EnrollIndividual is what creates both together.
+            return Results.Problem(
+                detail: $"{sport.Name} es un deporte individual, así que sus categorías se " +
+                        "inscriben por deportista — con /categories/{id}/individuals — y no por " +
+                        "club.",
+                statusCode: StatusCodes.Status409Conflict);
         }
 
         if (competition.Status is not (CompetitionState.Draft or CompetitionState.Scheduled))
@@ -111,6 +124,9 @@ public static class CreateTeam
 
         var name = string.IsNullOrWhiteSpace(request.Name) ? club.Name : request.Name.Trim();
 
+        // Reachable only for a team sport now — the check above already sent
+        // an individual one to EnrollIndividual — so this is exactly the
+        // ordinary "one team per club per category" rule.
         if (await database.Teams.AnyAsync(
                 team => team.CategoryId == categoryId && team.ClubId == request.ClubId,
                 cancellationToken))
@@ -133,6 +149,9 @@ public static class CreateTeam
                 ? null
                 : request.GroupLabel.Trim(),
             Seed = request.Seed,
+            // Always false here: an individual-sport category never reaches
+            // this line (see the check above).
+            IsIndividual = false,
         };
 
         database.Teams.Add(team);

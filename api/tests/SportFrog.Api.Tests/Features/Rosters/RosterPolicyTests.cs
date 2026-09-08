@@ -125,7 +125,8 @@ public sealed class RosterPolicyTests(SportFrogDatabaseFixture fixture)
     }
 
     private async Task<Athlete> CreateAthleteAsync(
-        Guid orgId, string firstName, string lastName, DateOnly birthDate, string? gender = null, bool isActive = true)
+        Guid orgId, string firstName, string lastName, DateOnly birthDate, string? gender = null,
+        bool isActive = true, decimal? weightKg = null)
     {
         var athlete = new Athlete
         {
@@ -137,6 +138,7 @@ public sealed class RosterPolicyTests(SportFrogDatabaseFixture fixture)
             BirthDate = birthDate,
             Gender = gender,
             IsActive = isActive,
+            WeightKg = weightKg,
         };
 
         await using var context = fixture.CreateAppContext();
@@ -304,6 +306,108 @@ public sealed class RosterPolicyTests(SportFrogDatabaseFixture fixture)
         var latest = Today.AddYears(-14);
         var fx = await SeedAsync(category => category.BirthDateTo = latest);
         var athlete = await CreateAthleteAsync(fx.OrgId, "Hugo", "Paz", latest);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    // ---- Athlete eligibility: weight window ---------------------
+
+    [Fact]
+    public async Task InspectAsync_AthleteBelowTheMinimumWeight_IsRejected()
+    {
+        var fx = await SeedAsync(category => category.MinWeightKg = 58m);
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Wendy", "Cruz", Today.AddYears(-20), weightKg: 57.9m);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().ContainSingle(v => v.Property == "AthleteId");
+    }
+
+    [Fact]
+    public async Task InspectAsync_AthleteExactlyOnTheMinimumWeight_IsAccepted()
+    {
+        // The boundary itself is admitted, same as the birth-date window.
+        var fx = await SeedAsync(category => category.MinWeightKg = 58m);
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Ximena", "Rios", Today.AddYears(-20), weightKg: 58m);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_AthleteAboveTheMaximumWeight_IsRejected()
+    {
+        var fx = await SeedAsync(category => category.MaxWeightKg = 68m);
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Yago", "Solis", Today.AddYears(-20), weightKg: 68.1m);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().ContainSingle(v => v.Property == "AthleteId");
+    }
+
+    [Fact]
+    public async Task InspectAsync_AthleteExactlyOnTheMaximumWeight_IsAccepted()
+    {
+        var fx = await SeedAsync(category => category.MaxWeightKg = 68m);
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Zoe", "Tapia", Today.AddYears(-20), weightKg: 68m);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_WeightClassedCategory_AthleteWithNoWeighInRecorded_IsRejected()
+    {
+        // Cannot be shown to fail the range, but cannot be shown to pass it
+        // either — same reasoning as the missing-sex case, since a weight
+        // class exists to keep somebody out and a missing number cannot
+        // prove they belong.
+        var fx = await SeedAsync(category => category.MinWeightKg = 58m);
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Alan", "Duran", Today.AddYears(-20), weightKg: null);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().ContainSingle(v => v.Property == "AthleteId");
+    }
+
+    [Fact]
+    public async Task InspectAsync_CategoryHasNoWeightRestriction_AnyWeightIsAccepted()
+    {
+        var fx = await SeedAsync(); // MinWeightKg/MaxWeightKg left null
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Bruno", "Espinoza", Today.AddYears(-20), weightKg: null);
+        await using var session = await OpenAsync(fx, fx.TeamAId);
+
+        var violations = await session.Policy.InspectAsync(
+            session.Team, session.Category, athlete, jerseyNumber: null, excluding: null, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_WithinTheWeightWindow_IsAccepted()
+    {
+        var fx = await SeedAsync(category =>
+        {
+            category.MinWeightKg = 58m;
+            category.MaxWeightKg = 68m;
+        });
+        var athlete = await CreateAthleteAsync(fx.OrgId, "Carla", "Fuentes", Today.AddYears(-20), weightKg: 63m);
         await using var session = await OpenAsync(fx, fx.TeamAId);
 
         var violations = await session.Policy.InspectAsync(

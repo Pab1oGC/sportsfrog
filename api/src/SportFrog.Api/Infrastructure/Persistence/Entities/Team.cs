@@ -67,6 +67,20 @@ public sealed class Team
     /// </remarks>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// A snapshot of <see cref="Sport.IsIndividual"/>, taken when this team
+    /// was entered.
+    /// </summary>
+    /// <remarks>
+    /// Exists only so the database can enforce "one team per club per
+    /// category" with a plain partial index: the predicate can only see this
+    /// table's own columns, and the sport sits two joins away through
+    /// <see cref="Category"/> and <see cref="Category.Competition"/>.
+    /// A team's sport never changes after it is entered, so the copy never
+    /// goes stale.
+    /// </remarks>
+    public bool IsIndividual { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

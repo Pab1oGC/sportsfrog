@@ -11,6 +11,11 @@ namespace SportFrog.Api.Features.Athletes;
 /// <summary>Registers a person in the active organization (RF-08).</summary>
 public static class CreateAthlete
 {
+    /// <param name="WeightKg">
+    /// The most recent weigh-in on record, if one is being entered now. What
+    /// a weight-classed category's eligibility check reads — see
+    /// <c>RosterPolicy</c>.
+    /// </param>
     public sealed record Request(
         string FirstName,
         string LastName,
@@ -19,7 +24,8 @@ public static class CreateAthlete
         string? Gender,
         string? GuardianName,
         string? GuardianPhone,
-        string? PhotoUrl);
+        string? PhotoUrl,
+        decimal? WeightKg = null);
 
     /// <param name="AlreadyRegistered">
     /// True when the document already named someone here. The existing person
@@ -66,6 +72,13 @@ public static class CreateAthlete
             RuleFor(request => request.PhotoUrl)
                 .Must(InlinePhoto.IsAcceptable)
                 .WithMessage(InlinePhoto.Requirement);
+
+            // Mirrors ck_athletes_weight_positive: a weight of zero or less
+            // is not a real weigh-in.
+            RuleFor(request => request.WeightKg)
+                .GreaterThan(0)
+                .When(request => request.WeightKg is not null)
+                .WithMessage("El peso tiene que ser mayor que cero.");
         }
     }
 
@@ -134,6 +147,7 @@ public static class CreateAthlete
             GuardianName = request.GuardianName?.Trim(),
             GuardianPhone = request.GuardianPhone?.Trim(),
             PhotoKey = photoKey,
+            WeightKg = request.WeightKg,
         };
 
         database.Athletes.Add(athlete);

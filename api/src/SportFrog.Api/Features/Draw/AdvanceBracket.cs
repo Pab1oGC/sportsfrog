@@ -156,19 +156,22 @@ public static class AdvanceBracket
                 .SelectMany(match => new[] { match.HomeTeamId, match.AwayTeamId })
                 .ToHashSet();
 
-            if (competition.Format == CompetitionFormat.Groups)
+            // Read regardless of format: what actually distinguishes a
+            // promoted bracket is that this is set, not which stage — a
+            // group stage or a classification stage — set it.
+            var entrants = await database.Categories
+                .AsNoTracking()
+                .Where(candidate => candidate.Id == categoryId)
+                .Select(candidate => candidate.KnockoutEntrants)
+                .SingleAsync(cancellationToken);
+
+            if (entrants is not null)
             {
                 // "Every active team in the category" is the wrong universe
-                // once groups exist — most of them never entered the
-                // knockout at all. What PromoteGroupStage drew is the right
+                // once a bracket was promoted from a smaller field — most
+                // never entered it. What the promotion drew is the right
                 // one, and it is the only place that answer still exists.
-                var entrants = await database.Categories
-                    .AsNoTracking()
-                    .Where(candidate => candidate.Id == categoryId)
-                    .Select(candidate => candidate.KnockoutEntrants)
-                    .SingleAsync(cancellationToken);
-
-                byes = [.. (entrants ?? []).Where(team => !played.Contains(team))];
+                byes = [.. entrants.Where(team => !played.Contains(team))];
             }
             else
             {

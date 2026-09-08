@@ -19,7 +19,9 @@ public sealed record CategoryContract(
     DateOnly? BirthDateTo,
     short? MaxRosterSize,
     short DisplayOrder,
-    short? QualifiersPerGroup);
+    short? QualifiersPerGroup,
+    decimal? MinWeightKg = null,
+    decimal? MaxWeightKg = null);
 
 internal sealed class CategoryContractValidator : AbstractValidator<CategoryContract>
 {
@@ -68,6 +70,25 @@ internal sealed class CategoryContractValidator : AbstractValidator<CategoryCont
             .When(contract => contract.QualifiersPerGroup.HasValue)
             .WithMessage("La cantidad de clasificados por grupo debe estar entre 1 y 16, o se " +
                          "deja sin definir para no resaltar ninguna fila.");
+
+        // Mirrors ck_categories_min_weight_positive / ck_categories_max_weight_positive.
+        RuleFor(contract => contract.MinWeightKg)
+            .GreaterThan(0)
+            .When(contract => contract.MinWeightKg.HasValue)
+            .WithMessage("El peso mínimo tiene que ser mayor que cero.");
+
+        RuleFor(contract => contract.MaxWeightKg)
+            .GreaterThan(0)
+            .When(contract => contract.MaxWeightKg.HasValue)
+            .WithMessage("El peso máximo tiene que ser mayor que cero.");
+
+        // Read as the window of weight the category admits, same shape as
+        // the birth-date window above. Mirrors ck_categories_weight_range_valid.
+        RuleFor(contract => contract.MaxWeightKg)
+            .GreaterThanOrEqualTo(contract => contract.MinWeightKg!.Value)
+            .When(contract => contract.MinWeightKg.HasValue && contract.MaxWeightKg.HasValue)
+            .WithMessage("El peso mínimo admitido no puede ser mayor que el máximo: tal como " +
+                         "está, nadie podría calificar nunca.");
     }
 }
 

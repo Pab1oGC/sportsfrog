@@ -30,7 +30,8 @@ public static class ReadAthletes
         string? PhotoUrl,
         string? GuardianName,
         string? GuardianPhone,
-        bool IsActive);
+        bool IsActive,
+        decimal? WeightKg);
 
     public static IEndpointRouteBuilder MapReadAthletes(this IEndpointRouteBuilder routes)
     {
@@ -119,5 +120,6 @@ public static class ReadAthletes
             await photos.LinkAsync(athlete.PhotoKey, cancellationToken),
             athlete.GuardianName,
             athlete.GuardianPhone,
-            athlete.IsActive);
+            athlete.IsActive,
+            athlete.WeightKg);
 }
