@@ -35,8 +35,7 @@ BEGIN
     FROM organizations o
     WHERE o.slug = p_org_slug
       AND o.is_active
-      AND o.deleted_at IS NULL
-      AND o.slug = 'frogtech-solutions'; -- TEMPORARY, see migration header.
+      AND o.deleted_at IS NULL;
 
     IF v_org_id IS NULL THEN
         RETURN;
@@ -106,7 +105,6 @@ LANGUAGE sql STABLE AS $fn$
       AND c.deleted_at IS NULL
       AND o.is_active
       AND o.deleted_at IS NULL
-      AND o.slug = 'frogtech-solutions' -- TEMPORARY, see migration header.
 
       AND (p_sport  IS NULL OR c.sport_code = p_sport)
       AND (p_season IS NULL OR c.season = p_season)

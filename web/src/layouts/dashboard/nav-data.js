@@ -8,6 +8,7 @@ export var navData = [
     { title: "Equipos", path: "/dashboard/teams", icon: "mdi:account-group-outline" },
     { title: "Nomina", path: "/dashboard/roster", icon: "mdi:account-multiple-check-outline" },
     { title: "Fixtures/Partidos", path: "/dashboard/matches", icon: "mdi:calendar-clock-outline" },
+    { title: "Fixture Oficial", path: "/dashboard/fixture", icon: "mdi:tournament" },
     { title: "Tabla posiciones", path: "/dashboard/standings", icon: "mdi:format-list-numbered" },
     { title: "Lideres", path: "/dashboard/leaders", icon: "mdi:star-outline" },
   ]},
@@ -16,9 +17,11 @@ export var navData = [
     { title: "Deportistas", path: "/dashboard/athletes", icon: "mdi:run" },
     { title: "Sedes", path: "/dashboard/venues", icon: "mdi:map-marker-outline" },
     { title: "Reglamentos", path: "/dashboard/rulesets", icon: "mdi:book-open-outline" },
+    { title: "Tematización", path: "/dashboard/theme", icon: "mdi:palette-outline" },
   ]},
   { subheader: "Documentos", items: [
     { title: "Plantillas", path: "/dashboard/templates", icon: "mdi:file-document-outline" },
+    { title: "Credenciales y Fichas", path: "/dashboard/credentials", icon: "mdi:card-account-details-outline" },
     { title: "Documentos emitidos", path: "/dashboard/documents", icon: "mdi:certificate-outline" },
   ]},
   { subheader: "Sistema", items: [

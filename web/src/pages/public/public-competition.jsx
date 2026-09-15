@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
@@ -27,6 +27,7 @@ import { ColorModeToggle } from 'src/components/color-mode-toggle';
 import { FASES } from 'src/lib/phase-labels';
 import { PENDIENTE } from 'src/lib/match-status';
 import { etiquetasDesempate, columnasMarcador } from 'src/lib/tiebreaker-labels';
+import { getThemeForCompetition } from 'src/context/tournament-theme-context';
 
 var publicFetcher = function(url) { return publicAxios.get(url).then(function(r) { return r.data; }); };
 var SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
@@ -103,10 +104,13 @@ export default function PublicCompetitionPage() {
   );
 
   var cats = comp.categories || [];
-  // Ausente en toda competencia que nunca abrió "Personalizar portal": el
-  // resto de la pagina se dibuja exactamente como siempre.
   var portal = comp.portal || {};
-  var sponsors = portal.sponsors || [];
+  var theme = getThemeForCompetition(comp);
+
+  var activeBanner = theme.bannerUrl || portal.bannerUrl;
+  var activePrimaryColor = theme.primaryColor || portal.accentColor || '#1B8A2E';
+  var activeSponsors = (theme.sponsors && theme.sponsors.length > 0) ? theme.sponsors : (portal.sponsors || []);
+
   var social = [
     { key: 'instagram', href: portal.instagram, icon: 'mdi:instagram' },
     { key: 'facebook', href: portal.facebook, icon: 'mdi:facebook' },
@@ -123,9 +127,9 @@ export default function PublicCompetitionPage() {
           color: 'white',
           py: { xs: 3, sm: 4 },
           px: 3,
-          bgcolor: portal.accentColor || 'primary.main',
-          backgroundImage: portal.bannerUrl
-            ? 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.6)), url(' + portal.bannerUrl + ')'
+          bgcolor: activePrimaryColor,
+          backgroundImage: activeBanner
+            ? 'linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.7)), url("' + activeBanner + '")'
             : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
@@ -175,13 +179,13 @@ export default function PublicCompetitionPage() {
           <CalendarView data={calendarData} loading={loadingCalendar} selectedCatId={selectedCatId} orgSlug={orgSlug} compSlug={compSlug} mostrarEventos={showRosters} />
         )}
 
-        {sponsors.length > 0 && (
+        {activeSponsors.length > 0 && (
           <Box sx={{ mt: 5, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
             <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1.5, textAlign: 'center' }}>
               Auspician
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-              {sponsors.map(function(s, i) {
+              {activeSponsors.map(function(s, i) {
                 var logo = <Avatar src={s.logoUrl} variant="rounded" sx={{ width: 64, height: 64, bgcolor: 'action.hover', '& img': { objectFit: 'contain' } }} />;
                 return s.url ? (
                   <Box component="a" key={i} href={s.url} target="_blank" rel="noopener noreferrer" title={s.name || ''} sx={{ display: 'flex' }}>

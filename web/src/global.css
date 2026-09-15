@@ -1,5 +1,42 @@
-﻿*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body { font-family: 'Inter', sans-serif; background: #f4f6f8; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #c4c4c4; border-radius: 3px; }
+
+/* ─── Reglas de Impresión (@media print) ─── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  /* Ocultar barra lateral de navegación, header del dashboard, botones de acción */
+  .no-print,
+  nav,
+  header,
+  aside,
+  .MuiDrawer-root,
+  .no-print-nav {
+    display: none !important;
+  }
+
+  /* Ajustar área imprimible */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Control de saltos de página */
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+}
+

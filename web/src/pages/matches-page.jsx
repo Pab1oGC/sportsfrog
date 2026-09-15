@@ -291,7 +291,7 @@ export default function MatchesPage() {
       />
 
       <EditDialog
-        open={editOpen} onClose={() => setEditOpen(false)} selMatch={selMatch} mutate={mutate}
+        open={editOpen} onClose={() => setEditOpen(false)} selMatch={selMatch} allMatches={matches || []} mutate={mutate}
         loading={loading} setLoading={setLoading} error={error} setError={setError}
       />
 

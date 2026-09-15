@@ -28,6 +28,9 @@ var MembersPage = lazy(function() { return import("src/pages/members-page"); });
 var OrganizationPage = lazy(function() { return import("src/pages/organization-page"); });
 var PublicPortalPage = lazy(function() { return import("src/pages/public/public-portal"); });
 var PublicCompetitionPage = lazy(function() { return import("src/pages/public/public-competition"); });
+var FixturePage = lazy(function() { return import("src/pages/fixture-page"); });
+var ThemeConfigPage = lazy(function() { return import("src/pages/theme-config-page"); });
+var CredentialsPage = lazy(function() { return import("src/pages/credentials/credentials-page"); });
 
 function LazyPage(props) {
   return (
@@ -74,6 +77,9 @@ export var routesSection = [
       { path: "documents", element: <LazyPage Component={DocumentsPage} /> },
       { path: "members", element: <LazyPage Component={MembersPage} /> },
       { path: "organization", element: <LazyPage Component={OrganizationPage} /> },
+      { path: "fixture", element: <LazyPage Component={FixturePage} /> },
+      { path: "theme", element: <LazyPage Component={ThemeConfigPage} /> },
+      { path: "credentials", element: <LazyPage Component={CredentialsPage} /> },
     ],
   },
 

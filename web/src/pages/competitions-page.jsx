@@ -26,6 +26,9 @@ import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } f
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { ConvocatoriaDialog } from 'src/components/convocatoria-dialog';
+import { ParticipantsReportDialog } from 'src/components/participants-report-dialog';
+import { TaekwondoQaDialog } from 'src/components/taekwondo-qa-dialog';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
@@ -71,6 +74,14 @@ export default function CompetitionsPage() {
   const nombreDeporte = (code) => sports?.find((s) => s.code === code)?.name || code;
 
   const [slugTouched, setSlugTouched] = useState(false);
+  const [convocatoriaOpen, setConvocatoriaOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [taekwondoOpen, setTaekwondoOpen] = useState(false);
+  const [selectedComp, setSelectedComp] = useState(null);
+
+  const { data: categories } = useApi(selectedComp ? endpoints.categories(selectedComp.id) : null);
+  const { data: teams } = useApi(endpoints.teams);
+  const { data: roster } = useApi(endpoints.athletes);
 
   const {
     rows: data, isLoading, mutate, open, editId, form, setForm, error, setError, saving, openCreate: openCreateBase,
@@ -251,6 +262,9 @@ export default function CompetitionsPage() {
             { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => remove(row.id) },
           ]}
           actions={[
+            { icon: 'mdi:file-document-edit-outline', label: 'Convocatoria (PDF/Word)', color: 'primary.main', onClick: () => { setSelectedComp(row); setConvocatoriaOpen(true); } },
+            { icon: 'mdi:account-group-outline', label: 'Reporte Participantes', color: 'info.main', onClick: () => { setSelectedComp(row); setReportOpen(true); } },
+            { icon: 'mdi:karate', label: 'Taekwondo QA', color: 'error.main', onClick: () => { setSelectedComp(row); setTaekwondoOpen(true); } },
             ...next.map((s) => ({ icon: icons[s] || 'eva:arrow-right-fill', label: SL[s], color: `${colors[s]}.main`, onClick: () => changeStatus(row.id, s) })),
             row.status === 'scheduled' && { icon: 'eva:clock-outline', label: 'Programar', color: 'info.main', onClick: () => schedule(row.id) },
           ].filter(Boolean)}
@@ -261,8 +275,54 @@ export default function CompetitionsPage() {
 
   return (
     <Box>
-      <PageHeader title="Competiciones" actionLabel="Nueva" onAction={() => openDialog(null)} />
+      <PageHeader title="Competiciones" actionLabel="Nueva" onAction={() => openDialog(null)}>
+        <Button
+          variant="outlined"
+          startIcon={<Iconify icon="mdi:file-document-edit-outline" />}
+          onClick={() => { setSelectedComp((data || [])[0] || null); setConvocatoriaOpen(true); }}
+        >
+          Convocatoria (T-15)
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<Iconify icon="mdi:account-group-outline" />}
+          onClick={() => { setSelectedComp((data || [])[0] || null); setReportOpen(true); }}
+        >
+          Reporte Participantes (T-16)
+        </Button>
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={<Iconify icon="mdi:karate" />}
+          onClick={() => { setSelectedComp((data || [])[0] || null); setTaekwondoOpen(true); }}
+        >
+          Taekwondo QA (T-20)
+        </Button>
+      </PageHeader>
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
+
+      <ConvocatoriaDialog
+        open={convocatoriaOpen}
+        onClose={() => setConvocatoriaOpen(false)}
+        competition={selectedComp}
+        categories={categories || []}
+      />
+
+      <ParticipantsReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        competition={selectedComp}
+        categories={categories || []}
+        teams={teams || []}
+        roster={roster || []}
+      />
+
+      <TaekwondoQaDialog
+        open={taekwondoOpen}
+        onClose={() => setTaekwondoOpen(false)}
+        competition={selectedComp}
+        mutateMatches={mutate}
+      />
       <CrudDialog open={open} editId={editId} entityName="Competicion" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
         <TextField label="Nombre" value={form.name} onChange={handleNameChange} fullWidth required />
         {/* La direccion queda fija desde que se crea: cambiarla romperia
