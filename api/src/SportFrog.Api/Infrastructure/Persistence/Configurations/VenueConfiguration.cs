@@ -17,6 +17,7 @@ internal sealed class VenueConfiguration : IEntityTypeConfiguration<Venue>
         builder.Property(x => x.OrgId).HasColumnName("org_id");
         builder.Property(x => x.Name).HasColumnName("name").IsRequired();
         builder.Property(x => x.Address).HasColumnName("address");
+        builder.Property(x => x.MapsUrl).HasColumnName("maps_url");
         builder.Property(x => x.IsActive).HasColumnName("is_active");
 
         builder.Property(x => x.CreatedAt)

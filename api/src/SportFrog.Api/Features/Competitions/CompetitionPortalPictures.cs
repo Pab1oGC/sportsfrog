@@ -5,11 +5,11 @@ namespace SportFrog.Api.Features.Competitions;
 
 /// <summary>
 /// Turns the pictures inside a competition's <see cref="PublicSettings"/> —
-/// the banner, and every sponsor's mark — from whatever a caller sent into
-/// what gets kept: a fresh data URL becomes a stored key, and a key already
-/// on file passes through untouched. Shared between create and update
-/// because both write the same shape, and update alone also needs to notice
-/// which keys a fresh save stopped pointing at.
+/// the banner, the logo, every sponsor's mark, and every gallery photo —
+/// from whatever a caller sent into what gets kept: a fresh data URL becomes
+/// a stored key, and a key already on file passes through untouched. Shared
+/// between create and update because both write the same shape, and update
+/// alone also needs to notice which keys a fresh save stopped pointing at.
 /// </summary>
 internal static class CompetitionPortalPictures
 {
@@ -34,6 +34,18 @@ internal static class CompetitionPortalPictures
             banner = stored;
         }
 
+        var logo = requested.LogoKey;
+
+        if (logo is not null && !PortalPicture.IsStoredKey(logo))
+        {
+            if (await pictures.StoreAsync("competition-logos", logo, cancellationToken) is not { } stored)
+            {
+                return null;
+            }
+
+            logo = stored;
+        }
+
         List<SponsorLink>? sponsors = null;
 
         if (requested.Sponsors is { Count: > 0 })
@@ -42,24 +54,49 @@ internal static class CompetitionPortalPictures
 
             foreach (var sponsor in requested.Sponsors)
             {
-                var logo = sponsor.LogoKey;
+                var sponsorLogo = sponsor.LogoKey;
 
-                if (!PortalPicture.IsStoredKey(logo))
+                if (!PortalPicture.IsStoredKey(sponsorLogo))
                 {
-                    if (await pictures.StoreAsync("competition-sponsors", logo, cancellationToken)
+                    if (await pictures.StoreAsync("competition-sponsors", sponsorLogo, cancellationToken)
                         is not { } stored)
                     {
                         return null;
                     }
 
-                    logo = stored;
+                    sponsorLogo = stored;
                 }
 
-                sponsors.Add(sponsor with { LogoKey = logo });
+                sponsors.Add(sponsor with { LogoKey = sponsorLogo });
             }
         }
 
-        return requested with { BannerKey = banner, Sponsors = sponsors };
+        List<GalleryPhoto>? gallery = null;
+
+        if (requested.Gallery is { Count: > 0 })
+        {
+            gallery = new List<GalleryPhoto>(requested.Gallery.Count);
+
+            foreach (var photo in requested.Gallery)
+            {
+                var photoKey = photo.Key;
+
+                if (!PortalPicture.IsStoredKey(photoKey))
+                {
+                    if (await pictures.StoreAsync("competition-gallery", photoKey, cancellationToken)
+                        is not { } stored)
+                    {
+                        return null;
+                    }
+
+                    photoKey = stored;
+                }
+
+                gallery.Add(photo with { Key = photoKey });
+            }
+        }
+
+        return requested with { BannerKey = banner, LogoKey = logo, Sponsors = sponsors, Gallery = gallery };
     }
 
     /// <summary>Every stored key a public-settings block references.</summary>
@@ -75,9 +112,19 @@ internal static class CompetitionPortalPictures
             yield return banner;
         }
 
+        if (settings.LogoKey is { } logo)
+        {
+            yield return logo;
+        }
+
         foreach (var sponsor in settings.Sponsors ?? [])
         {
             yield return sponsor.LogoKey;
+        }
+
+        foreach (var photo in settings.Gallery ?? [])
+        {
+            yield return photo.Key;
         }
     }
 

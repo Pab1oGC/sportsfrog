@@ -33,6 +33,30 @@ public static class ReadSports
         string Name,
         string PeriodLabel,
         short DefaultPeriods,
+
+        /// <summary>
+        /// Whether a period of this sport runs on a clock at all — not the
+        /// same question as <see cref="IsPlayedInSets"/>: a volleyball set
+        /// and a taekwondo asalto are both decided by periods won, but only
+        /// one of them can also run out of time. The fact a client checks
+        /// before it offers a clock-length field to fill in.
+        /// </summary>
+        bool PeriodHasClock,
+
+        /// <summary>
+        /// The standard clock length of one period, to prefill a reglamento
+        /// form the moment the sport is picked. Null exactly where
+        /// <see cref="PeriodHasClock"/> is false.
+        /// </summary>
+        short? DefaultMinutes,
+
+        /// <summary>
+        /// The standard rest between periods, to prefill a reglamento form
+        /// the same moment as <see cref="DefaultMinutes"/>. Null exactly
+        /// where that one is null.
+        /// </summary>
+        short? DefaultBreakMinutes,
+
         string ScoringUnit,
         string ScoreMode,
 
@@ -56,6 +80,21 @@ public static class ReadSports
         /// of "enter a club" for this sport's categories.
         /// </summary>
         bool IsIndividual,
+
+        /// <summary>
+        /// How many athletes may make up one entry — 1 where a pair cannot
+        /// exist (Kyorugi), 3 where the sport runs individual, pair and trio
+        /// (Poomsae), null for a team sport, whose squad size is the
+        /// category's business and not the sport's.
+        /// </summary>
+        /// <remarks>
+        /// What a client checks before offering to enter more than one
+        /// athlete together, so the choice is never offered where the sport
+        /// itself rules it out. The cap that actually applies to a category
+        /// is the lower of this and its own roster size; the same arithmetic
+        /// runs in <c>RosterPolicy</c>, which is what enforces it.
+        /// </remarks>
+        short? MaxEntrySize,
 
         /// <summary>
         /// The outcomes a ruleset for this sport must price, at its default
@@ -141,10 +180,14 @@ public static class ReadSports
             sport.Name,
             sport.PeriodLabel,
             sport.DefaultPeriods,
+            sport.PeriodHasClock,
+            sport.DefaultMinutes,
+            sport.DefaultBreakMinutes,
             sport.ScoringUnit,
             ScoreModeCode(sport.ScoreMode),
             sport.ScoreMode == ScoreMode.Sets,
             sport.IsIndividual,
+            sport.MaxEntrySize,
             rules.RequiredOutcomes(sport.DefaultPeriods),
             rules.OptionalOutcomes(),
             sport.Metrics

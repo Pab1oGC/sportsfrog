@@ -5,6 +5,7 @@ using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
+using SportFrog.Domain.ValueObjects;
 
 namespace SportFrog.Api.Features.Clubs;
 
@@ -17,7 +18,11 @@ public static class CreateClub
     /// same reason: a column of arbitrary URLs is one dead link away from an
     /// empty crest on every table and bracket that names this club.
     /// </param>
-    public sealed record Request(string Name, string? ShortName, string? LogoUrl);
+    /// <param name="ContactEmail">
+    /// Where a reprogramming notice goes — see <see cref="Matches.RescheduleMatch"/>.
+    /// Optional: a club with none on file is simply not written to.
+    /// </param>
+    public sealed record Request(string Name, string? ShortName, string? LogoUrl, string? ContactEmail);
 
     public sealed record Response(Guid Id);
 
@@ -38,6 +43,11 @@ public static class CreateClub
                 .Must(InlinePhoto.IsAcceptable)
                 .When(request => request.LogoUrl is not null)
                 .WithMessage(InlinePhoto.Requirement);
+
+            RuleFor(request => request.ContactEmail)
+                .Must(email => Email.TryParse(email, out _))
+                .When(request => !string.IsNullOrWhiteSpace(request.ContactEmail))
+                .WithMessage("El correo de contacto no tiene un formato válido.");
         }
     }
 
@@ -94,6 +104,7 @@ public static class CreateClub
             Name = name,
             ShortName = request.ShortName?.Trim(),
             LogoUrl = logoKey,
+            ContactEmail = string.IsNullOrWhiteSpace(request.ContactEmail) ? null : request.ContactEmail.Trim(),
         };
 
         database.Clubs.Add(club);

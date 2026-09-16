@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Infrastructure.Jobs;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -34,6 +35,7 @@ internal sealed class DocumentBatchRefused(string reason) : Exception(reason);
 public sealed class IssueDocumentsJob(
     OrganizationJobScope scopes,
     ObjectStore store,
+    AthletePhoto photos,
     IOptions<DocumentOptions> options,
     ILogger<IssueDocumentsJob> logger)
 {
@@ -277,7 +279,7 @@ public sealed class IssueDocumentsJob(
                 var assets = new DocumentAssets(
                     front,
                     back,
-                    await PhotoAsync(organizationId, subject.PhotoKey, cancellationToken),
+                    await photos.BytesAsync(organizationId, subject.PhotoKey, cancellationToken),
                     VerificationCode.Draw(print.VerifyUrl));
 
                 var pdf = DocumentRenderer.Render(work.Layout, work.PageSize, print, assets);
@@ -360,42 +362,11 @@ public sealed class IssueDocumentsJob(
             ? null
             : await store.ReadAsync(organizationId, key, cancellationToken);
 
-    /// <summary>
-    /// A subject's photograph, or the placeholder silhouette if there isn't one
-    /// to draw.
-    /// </summary>
-    /// <remarks>
-    /// Three cases end up here, and all three print the placeholder rather
-    /// than fail the card: no key at all, because nobody has uploaded a
-    /// photograph yet; a key still holding a data URL, from before images
-    /// moved out of the database, which nothing here can fetch from the
-    /// bucket; and a key pointing at an object the bucket has since lost.
-    /// A credential is not the place a missing photograph gets discovered —
-    /// the roster already shows that — so the card comes out with
-    /// <see cref="DefaultAvatar"/> in its place instead of holding up the rest
-    /// of the batch.
-    /// </remarks>
-    private async Task<byte[]> PhotoAsync(
-        Guid organizationId,
-        string? key,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(key) || key.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-        {
-            return DefaultAvatar.Bytes;
-        }
-
-        try
-        {
-            return await store.ReadAsync(organizationId, key, cancellationToken);
-        }
-        catch (Exception failure) when (failure is not OperationCanceledException)
-        {
-            logger.LogWarning(failure, "Could not read the photograph {Key}.", key);
-
-            return DefaultAvatar.Bytes;
-        }
-    }
+    // A subject's photograph, or the placeholder silhouette if there isn't
+    // one to draw, is now AthletePhoto.BytesAsync — shared with
+    // Features.Reports.AthleteReportQuery, which answers the exact same
+    // question for a different document. See its own remarks for the three
+    // cases that draw the placeholder instead of failing the card.
 
     /// <summary>Writes down every card that came out.</summary>
     private async Task FinishAsync(

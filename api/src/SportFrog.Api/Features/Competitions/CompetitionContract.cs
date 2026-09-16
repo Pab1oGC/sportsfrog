@@ -44,16 +44,6 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
     public static bool TryReadCaptureLevel(string? value, out CaptureLevel level) =>
         WireEnum.TryParse(value, out level);
 
-    /// <summary>
-    /// Whether one scheduling window says enough to be scheduled against.
-    /// </summary>
-    private static bool IsUsableWindow(ScheduleSpace window) =>
-        window.VenueSpaceId != Guid.Empty
-        && (window.Days is null || window.Days.All(day => day is >= 0 and <= 6))
-        && TimeOnly.TryParse(window.From, out var opens)
-        && TimeOnly.TryParse(window.To, out var closes)
-        && opens <= closes;
-
     public CompetitionContractValidator()
     {
         RuleFor(contract => contract.RulesetId)
@@ -84,22 +74,32 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
             .WithMessage(
                 $"Nivel de captura desconocido. Disponibles: {WireEnum.Options<CaptureLevel>()}.");
 
-        // The scheduling windows are checked for shape only. Whether the
-        // spaces they name exist is not asked here: the venues module already
+        // The enabled pitches are checked for shape only. Whether the spaces
+        // they name exist is not asked here: the venues module already
         // refuses to remove a space a competition schedules against, so the
-        // reference cannot go stale, and a window naming one that was never
+        // reference cannot go stale, and one naming a space that was never
         // real simply places nothing — which the placement reports.
         When(contract => contract.Settings?.Schedule is not null, () =>
         {
-            RuleFor(contract => contract.Settings!.Schedule!.SlotMinutes)
-                .InclusiveBetween((short)1, (short)600)
-                .WithMessage("Un partido ocupa su espacio entre 1 y 600 minutos.");
+            RuleFor(contract => contract.Settings!.Schedule!.BufferMinutes)
+                .InclusiveBetween((short)0, (short)120)
+                .When(contract => contract.Settings!.Schedule!.BufferMinutes.HasValue)
+                .WithMessage("El margen entre partidos va de 0 a 120 minutos.");
 
-            RuleFor(contract => contract.Settings!.Schedule!.Spaces)
-                .Must(spaces => spaces == null || spaces.All(IsUsableWindow))
-                .WithMessage("Cada ventana de horario necesita un espacio, días entre 0 " +
-                             "(domingo) y 6, y horas escritas como HH:mm, con la primera no " +
-                             "posterior a la última.");
+            RuleFor(contract => contract.Settings!.Schedule!.SpaceIds)
+                .Must(spaceIds => spaceIds == null || spaceIds.All(id => id != Guid.Empty))
+                .WithMessage("Cada cancha habilitada necesita un espacio válido.");
+        });
+
+        // The bulletin's free text. Long limits, not short ones: sanctions
+        // and general provisions are often a page or two of actual
+        // regulation text, copied in from wherever the federation keeps it.
+        When(contract => contract.Settings?.Bulletin is not null, () =>
+        {
+            RuleFor(contract => contract.Settings!.Bulletin!.Introduction).MaximumLength(4000);
+            RuleFor(contract => contract.Settings!.Bulletin!.Sanctions).MaximumLength(4000);
+            RuleFor(contract => contract.Settings!.Bulletin!.GeneralProvisions).MaximumLength(4000);
+            RuleFor(contract => contract.Settings!.Bulletin!.ContactInfo).MaximumLength(1000);
         });
 
         // Mirrors ck_competition_dates. Stated here as well so the caller is
@@ -125,10 +125,75 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
                 .When(contract => contract.Settings!.Public!.BannerKey is not null)
                 .WithMessage(InlinePhoto.Requirement);
 
+            RuleFor(contract => contract.Settings!.Public!.LogoKey)
+                .Must(value => PortalPicture.IsStoredKey(value!) || InlinePhoto.IsAcceptable(value))
+                .When(contract => contract.Settings!.Public!.LogoKey is not null)
+                .WithMessage(InlinePhoto.Requirement);
+
             RuleFor(contract => contract.Settings!.Public!.AccentColor)
-                .Matches("^#[0-9a-fA-F]{6}$")
+                .Matches(HexColour)
                 .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.AccentColor))
                 .WithMessage("El color se escribe como #rrggbb.");
+
+            // The portal theme. Every field optional — a theme that only
+            // named a font is valid — so each rule only runs When that one
+            // field was given. The four colours share the accent colour's
+            // pattern; the four choice fields are matched against the same
+            // allow-lists the public page defaults from, so a stale client
+            // sending a value that was later renamed is told the options
+            // rather than silently ignored.
+            When(contract => contract.Settings!.Public!.Theme is not null, () =>
+            {
+                RuleFor(contract => contract.Settings!.Public!.Theme!.Primary)
+                    .Matches(HexColour)
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.Primary))
+                    .WithMessage("El color principal se escribe como #rrggbb.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.PrimaryContrast)
+                    .Matches(HexColour)
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.PrimaryContrast))
+                    .WithMessage("El color del texto sobre el principal se escribe como #rrggbb.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.Secondary)
+                    .Matches(HexColour)
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.Secondary))
+                    .WithMessage("El color secundario se escribe como #rrggbb.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.Surface)
+                    .Matches(HexColour)
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.Surface))
+                    .WithMessage("El color de fondo se escribe como #rrggbb.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.HeadingFont)
+                    .Must(value => PortalTheme.Fonts.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.HeadingFont))
+                    .WithMessage($"Tipografía desconocida. Disponibles: {string.Join(", ", PortalTheme.Fonts.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.Corners)
+                    .Must(value => PortalTheme.CornerStyles.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.Corners))
+                    .WithMessage($"Estilo de bordes desconocido. Disponibles: {string.Join(", ", PortalTheme.CornerStyles.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.HeroStyle)
+                    .Must(value => PortalTheme.HeroStyles.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.HeroStyle))
+                    .WithMessage($"Estilo de portada desconocido. Disponibles: {string.Join(", ", PortalTheme.HeroStyles.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.ColorScheme)
+                    .Must(value => PortalTheme.ColorSchemes.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.ColorScheme))
+                    .WithMessage($"Modo de color desconocido. Disponibles: {string.Join(", ", PortalTheme.ColorSchemes.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.FocusX)
+                    .InclusiveBetween(0, 100)
+                    .When(contract => contract.Settings!.Public!.Theme!.FocusX is not null)
+                    .WithMessage("El punto focal horizontal va de 0 a 100.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.FocusY)
+                    .InclusiveBetween(0, 100)
+                    .When(contract => contract.Settings!.Public!.Theme!.FocusY is not null)
+                    .WithMessage("El punto focal vertical va de 0 a 100.");
+            });
 
             RuleFor(contract => contract.Settings!.Public!.Description)
                 .MaximumLength(500)
@@ -167,6 +232,53 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
                             .MaximumLength(300);
                     });
             });
+
+            RuleFor(contract => contract.Settings!.Public!.Gallery)
+                .Must(gallery => gallery == null || gallery.Count <= MaximumGalleryPhotos)
+                .WithMessage($"Como máximo {MaximumGalleryPhotos} fotos.");
+
+            // Mismo motivo que el guard de Sponsors de arriba: RuleForEach
+            // necesita la propiedad real, no un ?? [] de por medio.
+            When(contract => contract.Settings!.Public!.Gallery is { Count: > 0 }, () =>
+            {
+                RuleForEach(contract => contract.Settings!.Public!.Gallery!)
+                    .ChildRules(photo =>
+                    {
+                        photo.RuleFor(p => p.Key)
+                            .NotEmpty().WithMessage("Cada foto necesita una imagen.")
+                            .Must(value => PortalPicture.IsStoredKey(value) || InlinePhoto.IsAcceptable(value))
+                            .When(p => !string.IsNullOrEmpty(p.Key))
+                            .WithMessage(InlinePhoto.Requirement);
+
+                        photo.RuleFor(p => p.Caption)
+                            .MaximumLength(140)
+                            .WithMessage("El epígrafe de una foto tiene como máximo 140 caracteres.");
+                    });
+            });
+
+            // El orden y los nombres de las secciones. Cada fila que el
+            // estudio manda ya nombra una clave real -- las cuatro que
+            // PortalSection.Keys conoce -- así que lo único que puede fallar
+            // es un cliente desactualizado nombrando una que ya no existe, o
+            // una futura que todavía no.
+            RuleFor(contract => contract.Settings!.Public!.SectionOrder)
+                .Must(sections => sections == null || sections.Count <= PortalSection.Keys.Count)
+                .WithMessage($"Como máximo {PortalSection.Keys.Count} secciones.");
+
+            When(contract => contract.Settings!.Public!.SectionOrder is { Count: > 0 }, () =>
+            {
+                RuleForEach(contract => contract.Settings!.Public!.SectionOrder!)
+                    .ChildRules(section =>
+                    {
+                        section.RuleFor(s => s.Key)
+                            .Must(key => PortalSection.Keys.Contains(key))
+                            .WithMessage($"Sección desconocida. Disponibles: {string.Join(", ", PortalSection.Keys.Order(StringComparer.Ordinal))}.");
+
+                        section.RuleFor(s => s.Label)
+                            .MaximumLength(40)
+                            .WithMessage("El nombre de una sección tiene como máximo 40 caracteres.");
+                    });
+            });
         });
     }
 
@@ -175,4 +287,18 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
     /// something a phone has to scroll sideways to read.
     /// </summary>
     private const int MaximumSponsors = 16;
+
+    /// <summary>
+    /// Enough of an event's own photos for a real gallery — a weekend
+    /// tournament's worth of match and podium pictures — without one
+    /// competition's settings row growing without bound.
+    /// </summary>
+    private const int MaximumGalleryPhotos = 60;
+
+    /// <summary>
+    /// A colour as the portal stores every one of them: a full six-digit hex
+    /// with the hash, nothing shorter. Shared by the accent colour and each
+    /// of the theme's four colours so they cannot drift apart.
+    /// </summary>
+    private const string HexColour = "^#[0-9a-fA-F]{6}$";
 }

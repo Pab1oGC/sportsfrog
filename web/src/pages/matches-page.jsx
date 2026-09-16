@@ -4,11 +4,20 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
+import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
+import IconButton from '@mui/material/IconButton';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Divider from '@mui/material/Divider';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
-import { endpoints } from 'src/lib/axios';
+import { endpoints, default as axios } from 'src/lib/axios';
+import { downloadBlob } from 'src/lib/download-blob';
 import { nombreFase } from 'src/lib/phase-labels';
 import { fechaHora } from 'src/lib/format-date';
 import { PENDIENTE } from 'src/lib/match-status';
@@ -17,6 +26,7 @@ import { CascadeFilters } from 'src/components/cascade-filters';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { toast } from 'sonner';
+import { DateField } from 'src/components/date-field';
 import { DrawDialog } from 'src/pages/matches/draw-dialog';
 import { PromoteDialog } from 'src/pages/matches/promote-dialog';
 import { ScheduleDialog } from 'src/pages/matches/schedule-dialog';
@@ -25,14 +35,16 @@ import { ResultDialog } from 'src/pages/matches/result-dialog';
 import { WalkoverDialog } from 'src/pages/matches/walkover-dialog';
 import { PenaltiesDialog } from 'src/pages/matches/penalties-dialog';
 import { EventsDialog } from 'src/pages/matches/events-dialog';
+import { BulkRescheduleDialog } from 'src/pages/matches/bulk-reschedule-dialog';
 
 const SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
 const SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado', walkover: 'Walkover', postponed: 'Aplazado' };
 
 /**
- * Coordina la lista de partidos de una categoria y sus ocho diálogos —
- * programar, reprogramar, resultado, walkover, penales, eventos, sorteo y
- * promoción a eliminatoria. Cada diálogo vive en su propio archivo bajo
+ * Coordina la lista de partidos de una categoria y sus nueve diálogos —
+ * programar, reprogramar, reprogramar en bloque, resultado, walkover,
+ * penales, eventos, sorteo y promoción a eliminatoria. Cada diálogo vive en
+ * su propio archivo bajo
  * `matches/`, con su propio formulario; lo que sigue viviendo acá es lo que
  * de verdad es de la página entera:
  *
@@ -54,6 +66,15 @@ export default function MatchesPage() {
   const { data: matches, mutate, isLoading } = useApi(cascade.compId ? endpoints.competitionMatches(cascade.compId) : null);
   const { data: teams, mutate: mutateTeams } = useApi(cascade.catId ? endpoints.teams(cascade.catId) : null);
 
+  // El orden de las categorias solo importa aca: decide que bloque arma
+  // primero "Generar siguiente jornada" cuando la competencia tiene mas de
+  // una (ver ScheduleCalendar.FindNextJornadaAsync del lado del servidor).
+  // No es un dato de la categoria en si — por eso se reordena desde este
+  // dialogo, no desde la pantalla de Categorias.
+  const { data: jornadaCategorias, mutate: mutateJornadaCategorias } = useApi(
+    cascade.compId ? endpoints.categories(cascade.compId) : null,
+  );
+
   const [selMatch, setSelMatch] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,6 +88,19 @@ export default function MatchesPage() {
   const [drawOpen, setDrawOpen] = useState(false);
   const [drawResult, setDrawResult] = useState(null);
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [jornadaRound, setJornadaRound] = useState('');
+
+  // Una jornada por click -- una ronda de una categoria -- nunca la
+  // competencia entera de un tiron (ver ScheduleCalendar del lado del
+  // servidor). La fecha queda vacia por defecto para que "seguir
+  // clickeando" alcance; la hora de inicio no tiene default -- a que hora
+  // se puede usar la cancha es algo que el organizador ya acordo con quien
+  // la administra, no algo que el sistema deba suponer.
+  const [jornadaOpen, setJornadaOpen] = useState(false);
+  const [jornadaForm, setJornadaForm] = useState({ from: '', startTime: '' });
+  const [jornadaSaving, setJornadaSaving] = useState(false);
+  const [jornadaError, setJornadaError] = useState('');
 
   // El grupo no es un dato del partido, es un dato del equipo — asi que se
   // arma aca, por equipo local, para que la grilla no mezcle sin avisar los
@@ -142,6 +176,94 @@ export default function MatchesPage() {
     setLoading(true); setError('');
     try { const r = await apiPost(endpoints.categoryAdvanceBracket(cascade.catId), {}); mutate(); setDrawResult(r); setDrawOpen(true); }
     catch (err) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const abrirGenerarJornada = () => {
+    setJornadaOpen(true);
+    setJornadaForm({ from: '', startTime: '' });
+    setJornadaError('');
+  };
+
+  const moverCategoriaOrden = async (categoryId, delta) => {
+    const rows = jornadaCategorias || [];
+    const index = rows.findIndex((row) => row.id === categoryId);
+    const otherIndex = index + delta;
+    if (index < 0 || otherIndex < 0 || otherIndex >= rows.length) return;
+
+    const a = rows[index];
+    const b = rows[otherIndex];
+    const payloadFor = (row, displayOrder) => ({
+      name: row.name,
+      gender: row.gender || null,
+      birthDateFrom: row.birthDateFrom || null,
+      birthDateTo: row.birthDateTo || null,
+      maxRosterSize: row.maxRosterSize ?? null,
+      displayOrder,
+      rulesetId: row.rulesetId || null,
+      qualifiersPerGroup: row.qualifiersPerGroup ?? null,
+      minWeightKg: row.minWeightKg ?? null,
+      maxWeightKg: row.maxWeightKg ?? null,
+    });
+
+    try {
+      await apiPut(endpoints.category(cascade.compId, a.id), payloadFor(a, b.displayOrder));
+      await apiPut(endpoints.category(cascade.compId, b.id), payloadFor(b, a.displayOrder));
+      mutateJornadaCategorias();
+    } catch (err) { toast.error(err.message); }
+  };
+
+  const generarJornada = async () => {
+    setJornadaSaving(true); setJornadaError('');
+    try {
+      const r = await apiPost(endpoints.competitionSchedule(cascade.compId), {
+        from: jornadaForm.from || null,
+        startTime: jornadaForm.startTime || null,
+      });
+      mutate();
+      setJornadaOpen(false);
+      if (!r.categoryName) {
+        toast.success('No queda ninguna jornada pendiente por programar.');
+      } else {
+        const sinLugar = r.unplaced ? `, ${r.unplaced} sin lugar` : '';
+        toast.success(`Jornada ${r.roundNumber} de ${r.categoryName}: ${r.placed} partido(s) colocado(s)${sinLugar}.`);
+      }
+    } catch (err) { setJornadaError(err.message); }
+    finally { setJornadaSaving(false); }
+  };
+
+  const descargarFixture = async () => {
+    if (!cascade.compId) return;
+    const url = cascade.catId ? endpoints.categoryFixturePdf(cascade.catId) : endpoints.competitionFixturePdf(cascade.compId);
+    try {
+      const res = await axios.get(url, { responseType: 'blob' });
+      downloadBlob(res, 'fixture.pdf');
+    } catch (err) {
+      // El servidor rechaza el fixture completo si todavia hay partidos sin
+      // fecha (ver ReadMatches.HandleCompetitionPdfAsync/HandleCategoryPdfAsync) —
+      // su mensaje ya explica que conviene generar una jornada puntual en
+      // cambio, asi que alcanza con mostrarlo tal cual.
+      toast.error(err.message);
+    }
+  };
+
+  // Las rondas de fase de eliminatoria reusan numeros desde 1 (ver
+  // AdvanceBracket) y no tienen relacion con las jornadas de la fase de
+  // grupos, asi que solo se ofrecen rondas sin fase — igual criterio que ya
+  // usa la columna "Jornada" de la grilla mas abajo.
+  const rondasDisponibles = cascade.catId
+    ? [...new Set((matches || [])
+        .filter((m) => m.categoryId === cascade.catId && !m.phase && m.roundNumber != null)
+        .map((m) => m.roundNumber))]
+        .sort((a, b) => a - b)
+    : [];
+
+  const descargarJornada = async () => {
+    if (!cascade.catId || jornadaRound === '') return;
+    const url = `${endpoints.categoryFixturePdf(cascade.catId)}?round=${jornadaRound}`;
+    try {
+      const res = await axios.get(url, { responseType: 'blob' });
+      downloadBlob(res, `fixture-jornada-${jornadaRound}.pdf`);
+    } catch (err) { toast.error(err.message); }
   };
 
   const openEdit = (m) => { setSelMatch(m); setError(''); setEditOpen(true); };
@@ -262,15 +384,36 @@ export default function MatchesPage() {
     <Box>
       <PageHeader title="Fixtures / Partidos">
         {cascade.catId && <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-fill" />} onClick={() => { setDrawResult(null); setError(''); setDrawOpen(true); }} disabled={loading}>Sortear</Button>}
+        {cascade.compId && comp && !['finished', 'cancelled'].includes(comp.status) && (
+          <Button variant="outlined" startIcon={<Iconify icon="eva:clock-outline" />} onClick={abrirGenerarJornada} disabled={loading}>
+            Generar siguiente jornada
+          </Button>
+        )}
         {cascade.catId && formato === 'groups' && (
           <Button variant="outlined" startIcon={<Iconify icon="eva:trending-up-outline" />} onClick={() => { setError(''); setPromoteOpen(true); }} disabled={loading}>
             Promover a eliminatoria
           </Button>
         )}
         {cascade.catId && (formato === 'knockout' || formato === 'groups') && <Button variant="outlined" startIcon={<Iconify icon="eva:arrow-forward-outline" />} onClick={doAdvance} disabled={loading}>Siguiente ronda</Button>}
+        {cascade.catId && <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-outline" />} onClick={() => { setError(''); setBulkOpen(true); }} disabled={loading}>Reprogramar en bloque</Button>}
+        {cascade.catId && rondasDisponibles.length > 0 && (
+          <TextField
+            select size="small" label="Jornada" value={jornadaRound}
+            onChange={(e) => setJornadaRound(e.target.value)}
+            sx={{ minWidth: 110 }}
+          >
+            {rondasDisponibles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+          </TextField>
+        )}
+        {cascade.catId && rondasDisponibles.length > 0 && (
+          <Button variant="outlined" startIcon={<Iconify icon="mdi:file-pdf-box" />} onClick={descargarJornada} disabled={jornadaRound === ''}>
+            Descargar jornada
+          </Button>
+        )}
+        {cascade.compId && <Button variant="outlined" startIcon={<Iconify icon="mdi:file-pdf-box" />} onClick={descargarFixture}>Descargar PDF completo</Button>}
         <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={() => { setError(''); setSchedOpen(true); }} disabled={!cascade.catId}>Programar</Button>
       </PageHeader>
-      {error && !evOpen && !resOpen && !woOpen && !poOpen && !drawOpen && !promoteOpen && !editOpen && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && !evOpen && !resOpen && !woOpen && !poOpen && !drawOpen && !promoteOpen && !editOpen && !bulkOpen && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <CascadeFilters cascade={cascade} />
       <DataGrid rows={filtered} columns={columns} loading={isLoading} autoHeight rowHeight={56} disableRowSelectionOnClick getRowId={(r) => r.id} />
 
@@ -278,6 +421,7 @@ export default function MatchesPage() {
         open={drawOpen} onClose={() => setDrawOpen(false)} result={drawResult} setResult={setDrawResult}
         cascade={cascade} formato={formato} teams={teams} mutate={mutate} mutateTeams={mutateTeams}
         motivoSinSorteo={motivoSinSorteo} loading={loading} setLoading={setLoading} error={error} setError={setError}
+        onGenerarJornada={() => { setDrawOpen(false); abrirGenerarJornada(); }}
       />
 
       <PromoteDialog
@@ -292,6 +436,11 @@ export default function MatchesPage() {
 
       <EditDialog
         open={editOpen} onClose={() => setEditOpen(false)} selMatch={selMatch} mutate={mutate}
+        loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
+
+      <BulkRescheduleDialog
+        open={bulkOpen} onClose={() => setBulkOpen(false)} matches={filtered} mutate={mutate}
         loading={loading} setLoading={setLoading} error={error} setError={setError}
       />
 
@@ -314,6 +463,54 @@ export default function MatchesPage() {
         open={evOpen} onClose={() => setEvOpen(false)} selMatch={selMatch} sportInfo={sportInfo}
         loading={loading} setLoading={setLoading} error={error} setError={setError}
       />
+
+      <Dialog open={jornadaOpen} onClose={() => setJornadaOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Generar siguiente jornada</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+          {jornadaError && <Alert severity="error">{jornadaError}</Alert>}
+          <Typography variant="body2" color="text.secondary">
+            Coloca una sola jornada (una ronda de una categoría) por vez, siempre la próxima pendiente.
+            Dejá la fecha vacía para que siga automáticamente desde donde quedó la última — la hora de
+            inicio hay que indicarla siempre.
+          </Typography>
+          {jornadaCategorias && jornadaCategorias.length > 1 && (
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Orden de las categorías</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                No se arma una jornada de la siguiente categoría hasta agotar todas las de esta.
+              </Typography>
+              {jornadaCategorias.map((cat, i) => (
+                <Box key={cat.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+                  <Typography variant="body2" sx={{ flexGrow: 1 }}>{i + 1}. {cat.name}</Typography>
+                  <IconButton size="small" disabled={i === 0} onClick={() => moverCategoriaOrden(cat.id, -1)}><Iconify icon="eva:chevron-up-fill" /></IconButton>
+                  <IconButton size="small" disabled={i === jornadaCategorias.length - 1} onClick={() => moverCategoriaOrden(cat.id, 1)}><Iconify icon="eva:chevron-down-fill" /></IconButton>
+                </Box>
+              ))}
+              <Divider sx={{ mt: 1 }} />
+            </Box>
+          )}
+          <DateField
+            label="Fecha (opcional)"
+            value={jornadaForm.from}
+            onChange={(e) => setJornadaForm((f) => ({ ...f, from: e.target.value }))}
+            fullWidth
+          />
+          <TextField
+            label="Hora de inicio"
+            type="time"
+            value={jornadaForm.startTime}
+            onChange={(e) => setJornadaForm((f) => ({ ...f, startTime: e.target.value }))}
+            fullWidth
+            required
+            helperText="Ancla el primer partido de esta jornada — si hace falta más de un día, los siguientes reutilizan esta misma hora. No hay tope de hasta qué hora se puede jugar."
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setJornadaOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={generarJornada} disabled={jornadaSaving || !jornadaForm.startTime}>Generar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

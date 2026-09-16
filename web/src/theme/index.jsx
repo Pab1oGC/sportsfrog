@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, createContext, useContext } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { esES as dataGridEsES } from '@mui/x-data-grid/locales';
 
 /* ---------------------------------------------------------------------------
    Modo claro y oscuro.
@@ -79,91 +80,100 @@ export function ColorModeProvider({ children }) {
  *
  * El verde de la marca se aclara en oscuro: el mismo #1B8A2E que se lee bien
  * sobre blanco queda por debajo del contraste mínimo sobre un fondo casi negro.
+ *
+ * `dataGridEsES` como segundo argumento de createTheme: es el mismo mecanismo
+ * que usa @mui/material/locale, un objeto de "aumento" del tema que createTheme
+ * mezcla en components — acá agrega los textos en español de la grilla ("Filas
+ * por página", "de", los menús de columna) para las MuiDataGrid de toda la
+ * app sin tener que pasarle localeText a cada una por separado.
  */
 function construir(mode) {
   const oscuro = mode === 'dark';
 
-  return createTheme({
-    palette: {
-      mode: mode,
-      primary: { main: oscuro ? '#3FBF55' : '#1B8A2E', lighter: oscuro ? 'rgba(63,191,85,0.16)' : '#E8F5EA' },
-      background: {
-        default: oscuro ? '#111315' : '#f4f6f8',
-        paper: oscuro ? '#1A1D20' : '#ffffff',
+  return createTheme(
+    {
+      palette: {
+        mode: mode,
+        primary: { main: oscuro ? '#3FBF55' : '#1B8A2E', lighter: oscuro ? 'rgba(63,191,85,0.16)' : '#E8F5EA' },
+        background: {
+          default: oscuro ? '#111315' : '#f4f6f8',
+          paper: oscuro ? '#1A1D20' : '#ffffff',
+        },
+        divider: oscuro ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
       },
-      divider: oscuro ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+      typography: { fontFamily: 'Inter, sans-serif' },
+      shape: { borderRadius: 12 },
+      components: {
+        MuiButton: {
+          styleOverrides: {
+            root: {
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease',
+            },
+            contained: {
+              '&:hover': { transform: 'translateY(-1px)' },
+              '&:active': { transform: 'translateY(0)' },
+            },
+          },
+        },
+        // @iconify/react inyecta el contenido del SVG con dangerouslySetInnerHTML:
+        // esos <path> quedan fuera del árbol de React. Un click real que aterriza
+        // justo ahí a veces no burbujea hasta quien tiene el onClick — ni al
+        // IconButton que lo envuelve, ni al propio <svg> cuando el onClick está
+        // puesto directamente sobre el ícono (patrón usado en varias páginas del
+        // panel: Clubes, Categorías, Reglamentos, Equipos, Deportistas). Global
+        // en vez de acotado a MuiIconButton porque cubre los dos patrones con
+        // una sola regla: el ícono nunca debe ser el que recibe el click.
+        MuiCssBaseline: {
+          styleOverrides: {
+            '.iconify > *': { pointerEvents: 'none' },
+          },
+        },
+        MuiCard: {
+          styleOverrides: {
+            root: {
+              // Una sombra negra sobre un fondo casi negro no se ve. En oscuro
+              // la separación la da el borde, no la sombra.
+              boxShadow: oscuro ? 'none' : '0 2px 12px rgba(0,0,0,0.08)',
+              border: oscuro ? '1px solid rgba(255,255,255,0.08)' : undefined,
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+            },
+          },
+        },
+        MuiListItemButton: {
+          styleOverrides: {
+            root: {
+              transition: 'background-color 0.15s ease, color 0.15s ease',
+            },
+          },
+        },
+        MuiDataGrid: {
+          styleOverrides: {
+            root: {
+              border: oscuro ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
+              borderRadius: 12,
+              overflow: 'hidden',
+              backgroundColor: oscuro ? '#1A1D20' : '#ffffff',
+              boxShadow: oscuro ? 'none' : '0 2px 12px rgba(0,0,0,0.06)',
+            },
+            columnHeaders: {
+              backgroundColor: oscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+              borderTopLeftRadius: 0,
+              borderTopRightRadius: 0,
+            },
+            row: {
+              transition: 'background-color 0.15s ease',
+            },
+          },
+        },
+        MuiPaper: {
+          styleOverrides: {
+            root: { transition: 'box-shadow 0.2s ease, border-color 0.2s ease' },
+          },
+        },
+      },
     },
-    typography: { fontFamily: 'Inter, sans-serif' },
-    shape: { borderRadius: 12 },
-    components: {
-      MuiButton: {
-        styleOverrides: {
-          root: {
-            textTransform: 'none',
-            fontWeight: 600,
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease',
-          },
-          contained: {
-            '&:hover': { transform: 'translateY(-1px)' },
-            '&:active': { transform: 'translateY(0)' },
-          },
-        },
-      },
-      // @iconify/react inyecta el contenido del SVG con dangerouslySetInnerHTML:
-      // esos <path> quedan fuera del árbol de React. Un click real que aterriza
-      // justo ahí a veces no burbujea hasta quien tiene el onClick — ni al
-      // IconButton que lo envuelve, ni al propio <svg> cuando el onClick está
-      // puesto directamente sobre el ícono (patrón usado en varias páginas del
-      // panel: Clubes, Categorías, Reglamentos, Equipos, Deportistas). Global
-      // en vez de acotado a MuiIconButton porque cubre los dos patrones con
-      // una sola regla: el ícono nunca debe ser el que recibe el click.
-      MuiCssBaseline: {
-        styleOverrides: {
-          '.iconify > *': { pointerEvents: 'none' },
-        },
-      },
-      MuiCard: {
-        styleOverrides: {
-          root: {
-            // Una sombra negra sobre un fondo casi negro no se ve. En oscuro
-            // la separación la da el borde, no la sombra.
-            boxShadow: oscuro ? 'none' : '0 2px 12px rgba(0,0,0,0.08)',
-            border: oscuro ? '1px solid rgba(255,255,255,0.08)' : undefined,
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-          },
-        },
-      },
-      MuiListItemButton: {
-        styleOverrides: {
-          root: {
-            transition: 'background-color 0.15s ease, color 0.15s ease',
-          },
-        },
-      },
-      MuiDataGrid: {
-        styleOverrides: {
-          root: {
-            border: oscuro ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
-            borderRadius: 12,
-            overflow: 'hidden',
-            backgroundColor: oscuro ? '#1A1D20' : '#ffffff',
-            boxShadow: oscuro ? 'none' : '0 2px 12px rgba(0,0,0,0.06)',
-          },
-          columnHeaders: {
-            backgroundColor: oscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-            borderTopLeftRadius: 0,
-            borderTopRightRadius: 0,
-          },
-          row: {
-            transition: 'background-color 0.15s ease',
-          },
-        },
-      },
-      MuiPaper: {
-        styleOverrides: {
-          root: { transition: 'box-shadow 0.2s ease, border-color 0.2s ease' },
-        },
-      },
-    },
-  });
+    dataGridEsES,
+  );
 }

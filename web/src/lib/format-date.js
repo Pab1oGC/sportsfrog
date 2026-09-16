@@ -16,3 +16,15 @@ export function fechaHora(iso) {
 
   return `${dd}/${mm}/${yyyy} ${pad(horas)}:${pad(d.getMinutes())} ${ampm}`;
 }
+
+// El input datetime-local quiere hora local sin zona ("2026-05-01T16:00"), y
+// lo que guarda el partido es una fecha con zona ("...Z" o "+00:00").
+// Formatear a mano evita el redondeo raro que a veces da toISOString con la
+// hora local. Compartida entre EditDialog y el reprogramado en bloque —
+// los dos editan la misma fecha del mismo partido.
+export function aFechaInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

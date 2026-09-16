@@ -54,7 +54,13 @@ public static class ReadAthletes
     /// <remarks>
     /// Searching by document is what makes the register usable: it answers
     /// "is this person already here" before a second record is created for
-    /// them, which is the same question RF-43 exists to settle.
+    /// them, which is the same question RF-43 exists to settle — and, same as
+    /// a name, an operator dialing in a document from memory rarely has every
+    /// digit of it, so this matches partially too, not only a full document
+    /// typed exactly. The one place a document genuinely has to be exact — the
+    /// duplicate check when a new person is registered — is a question of its
+    /// own, answered by <see cref="Athletes.CreateAthlete"/> directly against
+    /// the database, not by filtering this listing.
     /// </remarks>
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
@@ -66,7 +72,7 @@ public static class ReadAthletes
 
         var athletes = await database.Athletes
             .Where(athlete => search == null
-                || athlete.DocumentId == search
+                || EF.Functions.ILike(athlete.DocumentId, $"%{search}%")
                 || EF.Functions.ILike(athlete.LastName, $"%{search}%")
                 || EF.Functions.ILike(athlete.FirstName, $"%{search}%"))
             .OrderBy(athlete => athlete.LastName)

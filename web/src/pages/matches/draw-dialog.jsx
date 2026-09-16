@@ -23,7 +23,7 @@ const FORMATO_LABEL = { league: 'Todos vs todos', knockout: 'Eliminacion directa
  * dialogo en vez de tener uno cada una. Por eso `result` llega como prop en
  * vez de vivir aca adentro — MatchesPage lo escribe desde los dos lugares.
  */
-export function DrawDialog({ open, onClose, result, setResult, cascade, formato, teams, mutate, mutateTeams, motivoSinSorteo, loading, setLoading, error, setError }) {
+export function DrawDialog({ open, onClose, result, setResult, cascade, formato, teams, mutate, mutateTeams, motivoSinSorteo, loading, setLoading, error, setError, onGenerarJornada }) {
   const [legs, setLegs] = useState(1);
   const [groupCount, setGroupCount] = useState('');
   const [allowSamePot, setAllowSamePot] = useState(false);
@@ -143,6 +143,14 @@ export function DrawDialog({ open, onClose, result, setResult, cascade, formato,
       <DialogActions>
         <Button onClick={onClose}>{result ? 'Listo' : 'Cancelar'}</Button>
         {!result && <Button variant="contained" onClick={doDraw} disabled={loading || !!motivoSinSorteo || (sinGrupos && (!groupCount || bomboExcedido))}>{loading ? 'Sorteando...' : 'Sortear'}</Button>}
+        {/* Un fixture recien armado casi siempre necesita fecha y cancha a
+            continuacion -- separarlo en un segundo click, en otro boton, era
+            justo la friccion que llevaba a sortear una y otra vez sin encontrar
+            nunca la forma de programar el calendario. No tiene sentido si ya
+            se corono un campeon: ahi no queda nada por programar. */}
+        {result && !result.champion && (
+          <Button variant="contained" onClick={onGenerarJornada}>Generar jornada</Button>
+        )}
       </DialogActions>
     </Dialog>
   );

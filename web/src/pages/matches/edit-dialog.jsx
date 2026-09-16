@@ -8,19 +8,9 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { aFechaInput } from 'src/lib/format-date';
 import { SelectionSpace } from 'src/components/selectors';
 import { toast } from 'sonner';
-
-// El input datetime-local quiere hora local sin zona ("2026-05-01T16:00"), y
-// lo que guarda el partido es una fecha con zona ("...Z" o "+00:00").
-// Formatear a mano evita el redondeo raro que a veces da toISOString con la
-// hora local.
-function aInputFecha(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /** Reprograma un partido: sede, fecha y ronda. */
 export function EditDialog({ open, onClose, selMatch, mutate, loading, setLoading, error, setError }) {
@@ -30,7 +20,7 @@ export function EditDialog({ open, onClose, selMatch, mutate, loading, setLoadin
     if (open && selMatch) {
       setForm({
         venueSpaceId: selMatch.venueSpaceId || '',
-        scheduledAt: aInputFecha(selMatch.scheduledAt),
+        scheduledAt: aFechaInput(selMatch.scheduledAt),
         roundNumber: selMatch.roundNumber ?? '',
         notes: selMatch.notes || '',
       });

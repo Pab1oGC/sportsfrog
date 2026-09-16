@@ -30,6 +30,9 @@ internal sealed class SportConfiguration : IEntityTypeConfiguration<Sport>
         builder.Property(x => x.Name).HasColumnName("name").IsRequired();
         builder.Property(x => x.PeriodLabel).HasColumnName("period_label").IsRequired();
         builder.Property(x => x.DefaultPeriods).HasColumnName("default_periods");
+        builder.Property(x => x.PeriodHasClock).HasColumnName("period_has_clock");
+        builder.Property(x => x.DefaultMinutes).HasColumnName("default_minutes");
+        builder.Property(x => x.DefaultBreakMinutes).HasColumnName("default_break_minutes");
         builder.Property(x => x.ScoringUnit).HasColumnName("scoring_unit").IsRequired();
 
         builder.Property(x => x.ScoreMode)
@@ -38,6 +41,7 @@ internal sealed class SportConfiguration : IEntityTypeConfiguration<Sport>
             .IsRequired();
 
         builder.Property(x => x.IsIndividual).HasColumnName("is_individual");
+        builder.Property(x => x.MaxEntrySize).HasColumnName("max_entry_size");
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")

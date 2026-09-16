@@ -25,6 +25,8 @@ public sealed class ReadSportsTests
         Name = "Fútbol",
         PeriodLabel = "tiempo",
         DefaultPeriods = 2,
+        DefaultMinutes = 45,
+        DefaultBreakMinutes = 15,
         ScoringUnit = "gol",
         ScoreMode = ScoreMode.Cumulative,
         Metrics =
@@ -40,12 +42,30 @@ public sealed class ReadSportsTests
         Name = "Wally",
         PeriodLabel = "set",
         DefaultPeriods = 3,
+        PeriodHasClock = false,
         ScoringUnit = "punto",
         ScoreMode = ScoreMode.Sets,
         Metrics =
         [
             new SportMetric { SportCode = "wally", Code = "point", Label = "Punto", AffectsScore = false, IsRankable = true, DisplayOrder = 1 },
         ],
+    };
+
+    // Taekwondo Kyorugi, shape-only: sets-mode like Wally, but an asalto
+    // still runs on a two-minute clock — the case that disproves "played in
+    // sets" and "has no clock" are the same fact.
+    private static Sport Kyorugi() => new()
+    {
+        Code = "taekwondo_kyorugi",
+        Name = "Taekwondo (Kyorugi)",
+        PeriodLabel = "asalto",
+        DefaultPeriods = 3,
+        PeriodHasClock = true,
+        DefaultMinutes = 2,
+        DefaultBreakMinutes = 1,
+        ScoringUnit = "punto",
+        ScoreMode = ScoreMode.Sets,
+        IsIndividual = true,
     };
 
     [Fact]
@@ -106,10 +126,7 @@ public sealed class ReadSportsTests
     [Fact]
     public void Project_IndividualSport_ExposesIt()
     {
-        var kyorugi = Wally();
-        kyorugi.IsIndividual = true;
-
-        ReadSports.Project(kyorugi, OutcomeRules).IsIndividual.Should().BeTrue();
+        ReadSports.Project(Kyorugi(), OutcomeRules).IsIndividual.Should().BeTrue();
     }
 
     [Fact]
@@ -127,5 +144,60 @@ public sealed class ReadSportsTests
 
         summary.Metrics.Single(metric => metric.Code == "goal").AffectsScore.Should().BeTrue();
         summary.Metrics.Single(metric => metric.Code == "assist").AffectsScore.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Project_CumulativeSport_CarriesItsStandardClockLength()
+    {
+        ReadSports.Project(Football(), OutcomeRules).DefaultMinutes.Should().Be((short)45);
+    }
+
+    [Fact]
+    public void Project_ClocklessSetsSport_HasNoStandardClockLengthToSuggest()
+    {
+        // Wally's sets end on a score, not a clock — nothing to prefill a
+        // reglamento form with.
+        ReadSports.Project(Wally(), OutcomeRules).DefaultMinutes.Should().BeNull();
+    }
+
+    [Fact]
+    public void Project_ClocklessSetsSport_ExposesPeriodHasClockAsFalse()
+    {
+        ReadSports.Project(Wally(), OutcomeRules).PeriodHasClock.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Project_TimedSetsSport_ExposesPeriodHasClockAsTrue()
+    {
+        // Kyorugi is decided by periods won same as Wally, but an asalto
+        // still runs on a clock — the two facts are independent, and a
+        // client checks this one, not IsPlayedInSets, before it decides
+        // whether to show a clock-length field.
+        ReadSports.Project(Kyorugi(), OutcomeRules).PeriodHasClock.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Project_TimedSetsSport_CarriesItsStandardClockLength()
+    {
+        // The bug this guards against: an earlier version derived "has a
+        // clock" from ScoreMode == Sets and left every sets-mode sport
+        // clockless, Kyorugi included — which is wrong, an asalto runs two
+        // minutes on a clock same as a football half.
+        var summary = ReadSports.Project(Kyorugi(), OutcomeRules);
+
+        summary.IsPlayedInSets.Should().BeTrue();
+        summary.DefaultMinutes.Should().Be((short)2);
+    }
+
+    [Fact]
+    public void Project_CumulativeSport_CarriesItsStandardBreakLength()
+    {
+        ReadSports.Project(Football(), OutcomeRules).DefaultBreakMinutes.Should().Be((short)15);
+    }
+
+    [Fact]
+    public void Project_ClocklessSetsSport_HasNoStandardBreakLengthToSuggest()
+    {
+        ReadSports.Project(Wally(), OutcomeRules).DefaultBreakMinutes.Should().BeNull();
     }
 }

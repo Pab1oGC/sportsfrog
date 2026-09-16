@@ -22,7 +22,7 @@ import { EditDeleteActions } from 'src/components/edit-delete-actions';
 //   - logoUrl: 'data:..' -> reemplazarlo por este
 // currentLogo es aparte y nunca se envia: es solo lo que ya hay, para la
 // vista previa.
-const emptyForm = () => ({ name: '', shortName: '', logoUrl: null, currentLogo: null, isActive: true });
+const emptyForm = () => ({ name: '', shortName: '', logoUrl: null, currentLogo: null, contactEmail: '', isActive: true });
 
 export default function ClubsPage() {
   const { rows, isLoading, open, editId, form, setForm, error, saving, openCreate, openEdit, close, save, remove } = useCrudDialog({
@@ -32,8 +32,14 @@ export default function ClubsPage() {
     // isActive es obligatorio para el backend al editar y no tiene valor por
     // defecto: si no se manda, el club queda inactivo en silencio con
     // cualquier edicion, aunque nadie haya tocado el interruptor.
-    mapToForm: (row) => ({ name: row.name || '', shortName: row.shortName || '', logoUrl: null, currentLogo: row.logoUrl || null, isActive: row.isActive !== false }),
-    mapToSend: (f) => ({ name: f.name, shortName: f.shortName || null, logoUrl: f.logoUrl, isActive: f.isActive }),
+    mapToForm: (row) => ({
+      name: row.name || '', shortName: row.shortName || '', logoUrl: null, currentLogo: row.logoUrl || null,
+      contactEmail: row.contactEmail || '', isActive: row.isActive !== false,
+    }),
+    mapToSend: (f) => ({
+      name: f.name, shortName: f.shortName || null, logoUrl: f.logoUrl,
+      contactEmail: f.contactEmail || null, isActive: f.isActive,
+    }),
   });
 
   const elegirLogo = async (e) => {
@@ -54,6 +60,7 @@ export default function ClubsPage() {
     )},
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
     { field: 'shortName', headerName: 'Abrev.', width: 120 },
+    { field: 'contactEmail', headerName: 'Correo de contacto', width: 200, renderCell: ({ value }) => value || '--' },
     { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
       <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
@@ -67,6 +74,11 @@ export default function ClubsPage() {
       <CrudDialog open={open} editId={editId} entityName="Club" error={error} saving={saving} onClose={close} onSave={save}>
         <TextField label="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth />
         <TextField label="Abreviatura" value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} fullWidth />
+        <TextField
+          label="Correo de contacto" type="email" value={form.contactEmail}
+          onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} fullWidth
+          helperText="Adonde se avisa si se reprograma un partido de este club. Opcional."
+        />
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* object-fit: contain, no el "cover" que trae Avatar por defecto —

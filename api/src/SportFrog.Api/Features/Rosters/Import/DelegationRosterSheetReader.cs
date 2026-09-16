@@ -161,12 +161,14 @@ internal static class DelegationRosterSheetReader
         var firstName = Text(DelegationRosterSheet.FirstName);
         var birthText = Text(DelegationRosterSheet.BirthDate);
         var sex = Text(DelegationRosterSheet.Sex);
+        var weightText = Text(DelegationRosterSheet.Weight);
         var category = Text(DelegationRosterSheet.Category);
         var guardian = Text(DelegationRosterSheet.Guardian);
         var guardianPhone = Text(DelegationRosterSheet.GuardianPhone);
 
         if (document is null && lastName is null && firstName is null && birthText is null
-            && sex is null && category is null && guardian is null && guardianPhone is null)
+            && sex is null && weightText is null && category is null && guardian is null
+            && guardianPhone is null)
         {
             return null;
         }
@@ -179,10 +181,17 @@ internal static class DelegationRosterSheetReader
             ReadDate(sheet, headers, number),
             birthText,
             sex,
+            ReadWeight(weightText),
+            weightText,
             category,
             guardian,
             guardianPhone);
     }
+
+    private static decimal? ReadWeight(string? text) =>
+        decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number)
+            ? number
+            : null;
 
     private static DateOnly? ReadDate(
         IXLWorksheet sheet,

@@ -9,6 +9,7 @@ using SportFrog.Api.Features.Auth;
 using SportFrog.Api.Features.Draw;
 using SportFrog.Api.Features.Public;
 using SportFrog.Api.Features.Competitions;
+using SportFrog.Api.Features.Competitions.Bulletin;
 using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
@@ -19,12 +20,14 @@ using SportFrog.Api.Features.Rosters.Import;
 using SportFrog.Api.Features.MatchEvents;
 using SportFrog.Api.Features.Matches;
 using SportFrog.Api.Features.Rulebook;
+using SportFrog.Api.Features.Reports;
 using SportFrog.Api.Features.Standings;
 using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Features.Venues;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Caching;
+using SportFrog.Api.Infrastructure.Email;
 using SportFrog.Api.Infrastructure.Jobs;
 using SportFrog.Api.Infrastructure.Observability;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -149,6 +152,10 @@ builder.Services.AddScoped<OrganizationContext>();
 // backup, every replica and every listing that reads the row.
 builder.Services.AddSportFrogStorage(builder.Configuration);
 
+// Outgoing mail — a club told its fixture moved, today the only thing that
+// sends any. Optional on purpose: see SmtpOptions's remarks.
+builder.Services.AddSportFrogEmail(builder.Configuration);
+
 // Work that outlives a request: a batch of photographs is minutes of decoding
 // and uploading, and no browser waits for that. The queue lives in the same
 // database, so a job and the row it is about are written together or not at
@@ -199,7 +206,22 @@ builder.Services.AddScoped<SportFrog.Api.Features.Clubs.UnaffiliatedClub>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
+
+// Only ever asked to follow a shortened Google Maps link so the location
+// picker can read the coordinates it hides — never an arbitrary admin-typed
+// URL, which ManageVenues.ResolveMapsLinkAsync enforces by host allowlist
+// before this is ever reached. Redirects and the response body are capped
+// tight: this exists to read where a redirect landed, not to fetch content.
+builder.Services.AddHttpClient("MapsLinkResolver", client => client.Timeout = TimeSpan.FromSeconds(5))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 5,
+    });
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRescheduleNotificationJob>();
+builder.Services.AddScoped<SportFrog.Api.Features.Performances.PerformancePolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Performances.PerformanceRescheduleNotificationJob>();
 
 // Mode-specific rules, resolved through their registries rather than a mode
 // check — a new score mode is a new registration on these four lines, not a
@@ -318,6 +340,7 @@ api.MapUpdateCompetition();
 api.MapDeleteCompetition();
 api.MapChangeCompetitionStatus();
 api.MapPublishCompetition();
+api.MapReadCompetitionBulletin();
 
 api.MapCreateCategory();
 api.MapReadCategories();
@@ -331,6 +354,7 @@ api.MapUpdateTeam();
 api.MapDeleteTeam();
 
 api.MapRegisterPlayer();
+api.MapRegisterPlayersBulk();
 api.MapReadRoster();
 api.MapCorrectRegistration();
 api.MapWithdrawPlayer();
@@ -346,6 +370,8 @@ api.MapApplyDelegationRosterImport();
 api.MapOpenClassificationStage();
 api.MapRecordPerformance();
 api.MapReadPerformances();
+api.MapSchedulePerformance();
+api.MapRescheduleClassificationOrder();
 
 api.MapImportAthletePhotos();
 api.MapReadPhotoImports();
@@ -366,6 +392,7 @@ api.MapVenueSpaces();
 api.MapScheduleMatch();
 api.MapReadMatches();
 api.MapRescheduleMatch();
+api.MapRescheduleMatchesBulk();
 api.MapDeleteMatch();
 api.MapRecordResult();
 api.MapChangeMatchStatus();
@@ -379,6 +406,8 @@ api.MapDeleteEvent();
 
 api.MapReadStandings();
 api.MapReadLeaders();
+api.MapReadTeamReport();
+api.MapReadAthleteReport();
 
 api.MapDrawGroups();
 api.MapDrawCalendar();
@@ -389,6 +418,7 @@ api.MapPromoteClassification();
 
 api.MapReadPublicCompetitions();
 api.MapReadPublicCompetition();
+api.MapReadPublicCompetitionPreview();
 api.MapReadPublicTables();
 api.MapReadPublicClassification();
 api.MapReadPublicCalendar();

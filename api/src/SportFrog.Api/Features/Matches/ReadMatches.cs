@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Matches;
@@ -62,6 +63,16 @@ public static class ReadMatches
             .RequireRole(MembershipRole.Viewer)
             .WithName("ReadMatch")
             .WithSummary("Reads one fixture.");
+
+        routes.MapGet("/competitions/{competitionId:guid}/fixture.pdf", HandleCompetitionPdfAsync)
+            .RequireRole(MembershipRole.Viewer)
+            .WithName(nameof(ReadMatches) + "CompetitionPdf")
+            .WithSummary("Renders a competition's calendar as a PDF.");
+
+        routes.MapGet("/categories/{categoryId:guid}/fixture.pdf", HandleCategoryPdfAsync)
+            .RequireRole(MembershipRole.Viewer)
+            .WithName(nameof(ReadMatches) + "CategoryPdf")
+            .WithSummary("Renders a category's calendar as a PDF.");
 
         return routes;
     }
@@ -130,6 +141,124 @@ public static class ReadMatches
 
         return Results.Ok(await WithLiveScoresAsync(database, matches, cancellationToken));
     }
+
+    private static async Task<IResult> HandleCompetitionPdfAsync(
+        Guid competitionId,
+        SportFrogDbContext database,
+        ObjectStore store,
+        CancellationToken cancellationToken,
+        string? status = null,
+        Guid? categoryId = null,
+        short? round = null)
+    {
+        // Loaded whole, not projected: Settings is a jsonb column read back as
+        // a real CompetitionSettings object once the row is materialized —
+        // EF cannot translate a path into it, the way it can an ordinary
+        // column, inside a Select.
+        var competition = await database.Competitions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == competitionId, cancellationToken);
+
+        if (competition is null)
+        {
+            return Results.NotFound();
+        }
+
+        var competitionName = competition.Name;
+
+        var branding = await CompetitionBranding.FromAsync(store, competition, cancellationToken);
+
+        if (!TryReadStatus(status, out var state, out var refusal))
+        {
+            return refusal;
+        }
+
+        // A category named by id gets the same one-category heading a
+        // request straight to /categories/{id}/fixture.pdf would — the query
+        // parameter is for narrowing an otherwise whole-competition sheet to
+        // one division without a second address to remember.
+        var categoryName = categoryId is { } id
+            ? await database.Categories
+                .AsNoTracking()
+                .Where(category => category.Id == id && category.CompetitionId == competitionId)
+                .Select(category => category.Name)
+                .SingleOrDefaultAsync(cancellationToken)
+            : null;
+
+        var matches = await Ordered(database.Matches
+                .Where(match => match.CompetitionId == competitionId)
+                .Where(match => categoryId == null || match.CategoryId == categoryId)
+                .Where(match => round == null || match.RoundNumber == round)
+                .Where(match => state == null || match.Status == state))
+            .ToListAsync(cancellationToken);
+
+        if (RefuseIfIncomplete(round, matches) is { } refusalIncomplete)
+        {
+            return refusalIncomplete;
+        }
+
+        return Results.File(
+            FixturePdf.Render(competitionName, categoryName, round, branding, matches), "application/pdf", "fixture.pdf");
+    }
+
+    private static async Task<IResult> HandleCategoryPdfAsync(
+        Guid categoryId,
+        SportFrogDbContext database,
+        ObjectStore store,
+        CancellationToken cancellationToken,
+        string? status = null,
+        short? round = null)
+    {
+        var category = await database.Categories
+            .AsNoTracking()
+            .Include(candidate => candidate.Competition)
+            .SingleOrDefaultAsync(candidate => candidate.Id == categoryId, cancellationToken);
+
+        if (category?.Competition is not { } competition)
+        {
+            return Results.NotFound();
+        }
+
+        var branding = await CompetitionBranding.FromAsync(store, competition, cancellationToken);
+
+        if (!TryReadStatus(status, out var state, out var refusal))
+        {
+            return refusal;
+        }
+
+        var matches = await Ordered(database.Matches
+                .Where(match => match.CategoryId == categoryId)
+                .Where(match => round == null || match.RoundNumber == round)
+                .Where(match => state == null || match.Status == state))
+            .ToListAsync(cancellationToken);
+
+        if (RefuseIfIncomplete(round, matches) is { } refusalIncomplete)
+        {
+            return refusalIncomplete;
+        }
+
+        return Results.File(
+            FixturePdf.Render(competition.Name, category.Name, round, branding, matches), "application/pdf", "fixture.pdf");
+    }
+
+    /// <summary>
+    /// Refuses a "whole sheet" request — no single round asked for — that
+    /// would still print a gap. A single jornada is exempt: a match that did
+    /// not fit when the calendar was generated still deserves a PDF of
+    /// whatever the rest of that jornada does have.
+    /// </summary>
+    /// <remarks>
+    /// A cancelled match carrying no date is expected, not a gap — it owes
+    /// nothing further, per its own remark on <see cref="MatchState.Cancelled"/> —
+    /// so it is the one status excluded from the check.
+    /// </remarks>
+    internal static IResult? RefuseIfIncomplete(short? round, IReadOnlyList<Summary> matches) =>
+        round is null && matches.Any(match => match.ScheduledAt is null && match.Status != MatchState.Cancelled)
+            ? Results.Problem(
+                detail: "Todavía hay partidos sin fecha. Programalos todos antes de descargar el fixture " +
+                        "completo, o generá el PDF de una jornada puntual en su lugar.",
+                statusCode: StatusCodes.Status409Conflict)
+            : null;
 
     private static async Task<IResult> ReadAsync(
         Guid id,

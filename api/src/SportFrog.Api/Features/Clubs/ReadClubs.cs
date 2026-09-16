@@ -20,7 +20,8 @@ public static class ReadClubs
     /// address. It expires; it is meant to be loaded now, by the page that
     /// asked for it, and not stored anywhere.
     /// </param>
-    public sealed record Summary(Guid Id, string Name, string? ShortName, string? LogoUrl, bool IsActive);
+    public sealed record Summary(
+        Guid Id, string Name, string? ShortName, string? LogoUrl, string? ContactEmail, bool IsActive);
 
     public static IEndpointRouteBuilder MapReadClubs(this IEndpointRouteBuilder routes)
     {
@@ -88,5 +89,6 @@ public static class ReadClubs
             club.Name,
             club.ShortName,
             await photos.LinkAsync(club.LogoUrl, cancellationToken),
+            club.ContactEmail,
             club.IsActive);
 }

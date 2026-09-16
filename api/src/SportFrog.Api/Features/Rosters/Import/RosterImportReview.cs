@@ -257,6 +257,17 @@ internal sealed class RosterImportReview(SportFrogDbContext database, RosterPoli
                 + $"{Sex.Female} o {Sex.Male}, o quedar vacío.");
         }
 
+        // Mirrors ck_athletes_weight_positive: mismo chequeo que
+        // CreateAthlete/UpdateAthlete le hacen a un peso cargado a mano.
+        if (row.WeightText is not null && row.Weight is null)
+        {
+            problems.Add($"'{row.WeightText}' no es un peso.");
+        }
+        else if (row.Weight is <= 0)
+        {
+            problems.Add("El peso tiene que ser mayor que cero.");
+        }
+
         if (row.JerseyText is not null && row.Jersey is null)
         {
             problems.Add($"'{row.JerseyText}' no es un número de dorsal.");
@@ -288,6 +299,7 @@ internal sealed class RosterImportReview(SportFrogDbContext database, RosterPoli
         DocumentId = document,
         BirthDate = row.BirthDate ?? default,
         Gender = Sex.Normalize(row.Sex),
+        WeightKg = row.Weight,
         IsActive = true,
     };
 

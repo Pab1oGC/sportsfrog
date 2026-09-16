@@ -34,7 +34,7 @@ internal static class RosterSheet
     /// Bumped when the columns change, so a workbook filled in against an
     /// older template can be recognised rather than misread.
     /// </summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const int HeaderRow = 1;
 
@@ -62,6 +62,9 @@ internal static class RosterSheet
     public static readonly SheetColumn Sex =
         new("Sexo", "F o M. Obligatorio solo si la categoría admite uno de los dos.", Required: false);
 
+    public static readonly SheetColumn Weight =
+        new("Peso (kg)", "Peso más reciente, en kilogramos. Obligatorio solo si la categoría admite un rango de peso.", Required: false);
+
     public static readonly SheetColumn Jersey =
         new("Dorsal", "Número de camiseta. Se puede dejar vacío hasta que se repartan.", Required: false);
 
@@ -87,7 +90,7 @@ internal static class RosterSheet
     /// </remarks>
     public static readonly IReadOnlyList<SheetColumn> Columns =
     [
-        Document, LastName, FirstName, BirthDate, Sex,
+        Document, LastName, FirstName, BirthDate, Sex, Weight,
         Jersey, Position, Guardian, GuardianPhone,
     ];
 

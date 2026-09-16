@@ -22,6 +22,13 @@ public sealed class Club
 
     public string? LogoUrl { get; set; }
 
+    /// <summary>
+    /// Where to tell this club something about one of its own fixtures
+    /// changed — a match rescheduled to another ground or instant, today the
+    /// only thing that writes to it. Null means nobody is told.
+    /// </summary>
+    public string? ContactEmail { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     /// <summary>

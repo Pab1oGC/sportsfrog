@@ -19,6 +19,8 @@ internal sealed record SheetRow(
     DateOnly? BirthDate,
     string? BirthDateText,
     string? Sex,
+    decimal? Weight,
+    string? WeightText,
     short? Jersey,
     string? JerseyText,
     string? Position,
@@ -218,6 +220,7 @@ internal static class RosterSheetReader
         var firstName = Text(RosterSheet.FirstName);
         var birthText = Text(RosterSheet.BirthDate);
         var sex = Text(RosterSheet.Sex);
+        var weightText = Text(RosterSheet.Weight);
         var jerseyText = Text(RosterSheet.Jersey);
         var position = Text(RosterSheet.Position);
         var guardian = Text(RosterSheet.Guardian);
@@ -227,7 +230,7 @@ internal static class RosterSheetReader
         // the end of the squad. Reporting four hundred blank rows as errors is
         // the fastest way to make a report unreadable.
         if (document is null && lastName is null && firstName is null && birthText is null
-            && sex is null && jerseyText is null && position is null
+            && sex is null && weightText is null && jerseyText is null && position is null
             && guardian is null && guardianPhone is null)
         {
             return null;
@@ -241,6 +244,8 @@ internal static class RosterSheetReader
             ReadDate(sheet, headers, number),
             birthText,
             sex,
+            ReadWeight(weightText),
+            weightText,
             ReadJersey(jerseyText),
             jerseyText,
             position,
@@ -295,6 +300,11 @@ internal static class RosterSheetReader
 
     private static short? ReadJersey(string? text) =>
         short.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
+            ? number
+            : null;
+
+    private static decimal? ReadWeight(string? text) =>
+        decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number)
             ? number
             : null;
 

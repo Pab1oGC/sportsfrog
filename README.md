@@ -81,8 +81,8 @@ Queda en **http://localhost:5293**. `GET /health` responde 200 cuando está list
 ```bash
 cd ../web
 cp .env.example .env       # se deja vacío: es el valor correcto en desarrollo
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Queda en **http://localhost:5173**.

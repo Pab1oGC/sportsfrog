@@ -34,6 +34,13 @@ public sealed record RulesetConfiguration
     /// <see cref="Rulebook.MatchOutcomes"/> and checked before the ruleset is
     /// stored, so the freedom here is in the shape and not in what is
     /// accepted.
+    ///
+    /// Empty is also accepted, and means something different from "not
+    /// filled in yet": a competition drawn as a straight knockout never
+    /// builds a standings table, so nothing here is ever read for it. A
+    /// ruleset outlives any one competition — the same one is reused by
+    /// others that may draw it differently — so whether a table will ever
+    /// exist cannot be decided while the ruleset itself is being written.
     /// </remarks>
     public required IReadOnlyDictionary<string, int> Points { get; init; }
 
@@ -80,10 +87,42 @@ public sealed record PeriodRules
     public required string Label { get; init; }
 
     /// <summary>
-    /// Length of a period. Null where the period ends on a score rather than
-    /// on a clock, which is every sport played in sets.
+    /// Length of a period. Null where the period does not run on a clock at
+    /// all — a volleyball set, decided purely on score. Not the same
+    /// question as whether the sport is played in sets: a taekwondo asalto
+    /// is also decided by periods won, but it still runs a clock, so this is
+    /// filled in for it the same as for a sport scored cumulatively.
     /// </summary>
     public short? Minutes { get; init; }
+
+    /// <summary>
+    /// Rest between one period and the next, in minutes.
+    /// </summary>
+    /// <remarks>
+    /// Only means something alongside <see cref="Minutes"/> — a period with
+    /// no clock has no time between periods to measure either. Null is "not
+    /// declared" rather than "none": <see cref="MatchDuration.From"/> reads
+    /// it as zero, so a reglamento written before this existed still adds up
+    /// to exactly the total it always did.
+    /// </remarks>
+    public short? BreakMinutes { get; init; }
+
+    /// <summary>
+    /// How long a match under this reglamento is expected to take, declared
+    /// rather than computed.
+    /// </summary>
+    /// <remarks>
+    /// Only means something where <see cref="Minutes"/> is null: a sport with
+    /// no clock at all — a volleyball set, decided purely on score — has
+    /// nothing for <see cref="MatchDuration.From"/> to add up on its own, so
+    /// this is the only source of that figure it has. Lives beside
+    /// <see cref="Minutes"/> rather than on the competition that plays under
+    /// this reglamento, for the same reason the period length itself does: a
+    /// youth category can be given a shorter reglamento the same way it can
+    /// be given shorter halves (see <c>Category.RulesetId</c>), which a
+    /// single competition-wide number never let it do.
+    /// </remarks>
+    public short? EstimatedMinutes { get; init; }
 }
 
 /// <summary>The score awarded when a match is not played.</summary>

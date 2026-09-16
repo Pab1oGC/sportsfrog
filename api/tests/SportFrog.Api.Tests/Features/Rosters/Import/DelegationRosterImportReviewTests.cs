@@ -174,8 +174,8 @@ public sealed class DelegationRosterImportReviewTests(SportFrogDatabaseFixture f
 
     private static DelegationSheetRow Row(
         int number, string document, string lastName, string firstName, string categoryName,
-        DateOnly? birthDate = null, string? sex = null) =>
-        new(number, document, lastName, firstName, birthDate ?? AnAdult, null, sex, categoryName, null, null);
+        DateOnly? birthDate = null, string? sex = null, decimal? weight = null) =>
+        new(number, document, lastName, firstName, birthDate ?? AnAdult, null, sex, weight, null, categoryName, null, null);
 
     // ---- The ordinary cases ----------------------------------------------
 
@@ -376,7 +376,7 @@ public sealed class DelegationRosterImportReviewTests(SportFrogDatabaseFixture f
         await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
 
         var club = new Club { Id = fx.ClubId, OrgId = fx.OrgId, Name = "x" };
-        var rows = new[] { new DelegationSheetRow(2, null, "Vera", "Saul", AnAdult, null, null, fx.Open.Name, null, null) };
+        var rows = new[] { new DelegationSheetRow(2, null, "Vera", "Saul", AnAdult, null, null, null, null, fx.Open.Name, null, null) };
 
         var reviewed = await review.ReviewAsync(
             fx.CompetitionId, club, [fx.Open, fx.FemaleOnly], rows, CancellationToken.None);

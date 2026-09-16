@@ -14,10 +14,15 @@ import { toast } from 'sonner';
  * @param {string} opts.resourceUrl - Endpoint de la colección (endpoints.clubs).
  *   Tambien de donde se lee la lista (GET) y, salvo que se pase createUrl, a
  *   donde se manda el alta (POST).
- * @param {string} [opts.createUrl] - Endpoint del alta, si es distinto de
- *   resourceUrl -- caso real: EnrollIndividual vive en una direccion propia
+ * @param {string|function} [opts.createUrl] - Endpoint del alta, si es distinto
+ *   de resourceUrl -- caso real: EnrollIndividual vive en una direccion propia
  *   (/categories/{id}/individuals), no en la misma coleccion que su lectura
- *   (/categories/{id}/teams). Por defecto, resourceUrl.
+ *   (/categories/{id}/teams). Por defecto, resourceUrl. Tambien puede ser una
+ *   funcion (form) => string, para cuando la propia direccion depende de lo
+ *   que se está por mandar -- caso real: NominaPage manda a un endpoint
+ *   distinto si se eligio mas de un deportista a la vez. Se resuelve en
+ *   save(), con el `form` mas reciente, no con el que existia cuando se
+ *   armaron las opciones del hook.
  * @param {object|function} opts.emptyForm - Estado inicial del formulario, o una
  *   función que lo devuelve (para no compartir el mismo objeto entre aperturas)
  * @param {string} opts.entityName - Nombre legible ("club", "reglamento") para
@@ -88,7 +93,8 @@ export function useCrudDialog(opts) {
     try {
       const wasEdit = Boolean(editId);
       const body = mapToSend(form, wasEdit);
-      const result = wasEdit ? await apiPut(getUrl(editId), body) : await apiPost(createUrl, body);
+      const target = typeof createUrl === 'function' ? createUrl(form) : createUrl;
+      const result = wasEdit ? await apiPut(getUrl(editId), body) : await apiPost(target, body);
       setOpen(false);
       mutate();
       if (savedMessage) {

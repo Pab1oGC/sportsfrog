@@ -5,16 +5,35 @@ import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import { DataGrid } from '@mui/x-data-grid';
-import { Iconify } from 'src/components/iconify';
 import { useApi } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { SelectionCompetition, SelectionField } from 'src/components/selectors';
+import { DateField } from 'src/components/date-field';
 import { esIndividual } from 'src/lib/sport-shape';
 
 const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '', minWeightKg: '', maxWeightKg: '' });
+
+// Un deporte de equipo tiene tres niveles -- club, equipo, jugadores -- y
+// "Max. nomina" pregunta por el ultimo: cuantos jugadores entran en el
+// plantel. Un deporte individual, para quien lo usa, tiene dos: el club y
+// sus deportistas. La unidad que compite (una persona, o la pareja de
+// Poomsae) es una capa del modelo que el usuario no tiene por que conocer,
+// asi que preguntarle "cuantos entran en la nomina" lo hace adivinar sobre
+// un nivel que en su cabeza no existe -- y lo mas probable es que conteste
+// pensando en cuantos deportistas puede anotar el club, que es otra cosa.
+//
+// Misma columna por debajo (Category.MaxRosterSize, que RosterPolicy ya hace
+// cumplir), otra pregunta arriba: como se compite esta categoria.
+const MODALIDADES = [
+  { value: '1', label: 'Individual' },
+  { value: '2', label: 'Pareja' },
+  { value: '3', label: 'Trío' },
+];
+
+const modalidadDe = (value) => MODALIDADES.find((m) => m.value === String(value))?.label;
 
 export default function CategoriesPage() {
   const [searchParams] = useSearchParams();
@@ -50,13 +69,16 @@ export default function CategoriesPage() {
   const possibleRulesets = (rulesets || []).filter((r) => comp && r.sportCode === comp.sportCode);
   const sport = sports?.find((s) => comp && s.code === comp.sportCode);
   const sportName = sport?.name || comp?.sportCode || '';
+  const individual = esIndividual(sport);
 
   const columns = [
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 180 },
     { field: 'gender', headerName: 'Genero', width: 90, renderCell: ({ value }) => value === 'M' ? 'Masculino' : value === 'F' ? 'Femenino' : 'Abierto' },
     { field: 'birthDateFrom', headerName: 'Nac. desde', width: 120 },
     { field: 'birthDateTo', headerName: 'Nac. hasta', width: 120 },
-    { field: 'maxRosterSize', headerName: 'Max nomina', width: 100, renderCell: ({ value }) => value || '--' },
+    individual
+      ? { field: 'maxRosterSize', headerName: 'Modalidad', width: 110, renderCell: ({ value }) => modalidadDe(value) || '--' }
+      : { field: 'maxRosterSize', headerName: 'Max nomina', width: 100, renderCell: ({ value }) => value || '--' },
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
       <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
@@ -69,12 +91,36 @@ export default function CategoriesPage() {
         <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
       </Box>
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
-      <CrudDialog open={open} editId={editId} entityName="Categoria" error={error} saving={saving} onClose={close} onSave={save}>
+      <CrudDialog open={open} editId={editId} entityName="Categoria" entityGender="f" error={error} saving={saving} onClose={close} onSave={save}>
         <TextField label="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth required />
         <SelectionField label="Genero" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} emptyLabel="Abierto" options={[{ value: 'M', label: 'Masculino' }, { value: 'F', label: 'Femenino' }]} />
-        <TextField label="Nac. desde" type="date" value={form.birthDateFrom} onChange={(e) => setForm({ ...form, birthDateFrom: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField label="Nac. hasta" type="date" value={form.birthDateTo} onChange={(e) => setForm({ ...form, birthDateTo: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField label="Max. nomina" type="number" value={form.maxRosterSize} onChange={(e) => setForm({ ...form, maxRosterSize: e.target.value })} fullWidth />
+        <DateField label="Nac. desde" value={form.birthDateFrom} onChange={(e) => setForm({ ...form, birthDateFrom: e.target.value })} fullWidth />
+        <DateField label="Nac. hasta" value={form.birthDateTo} onChange={(e) => setForm({ ...form, birthDateTo: e.target.value })} fullWidth />
+        {individual ? (
+          // String a los dos lados: mapToForm deja un numero cuando la
+          // categoria ya tenia cupo, y compararlo contra un option de texto
+          // dejaria el desplegable en blanco sobre una categoria ya cargada.
+          // mapToSend lo vuelve a Number antes de mandarlo, como siempre.
+          <SelectionField
+            label="Modalidad"
+            value={form.maxRosterSize === '' ? '' : String(form.maxRosterSize)}
+            onChange={(e) => setForm({ ...form, maxRosterSize: e.target.value })}
+            emptyLabel="Sin definir"
+            // El deporte pone el techo (Sport.MaxEntrySize) y acá solo se
+            // puede elegir por debajo: en Kyorugi la única opción es
+            // Individual, así que no hay forma de inventar una dupla que la
+            // categoría no puede tener. Sin techo declarado se ofrecen las
+            // tres y manda lo que diga la categoría.
+            options={sport?.maxEntrySize != null
+              ? MODALIDADES.filter((m) => Number(m.value) <= sport.maxEntrySize)
+              : MODALIDADES}
+            helperText={sport?.maxEntrySize === 1
+              ? `${sportName} se compite de a uno, así que la categoría no admite otra modalidad.`
+              : 'Cuántos compiten juntos en esta categoría.'}
+          />
+        ) : (
+          <TextField label="Max. nomina" type="number" value={form.maxRosterSize} onChange={(e) => setForm({ ...form, maxRosterSize: e.target.value })} fullWidth />
+        )}
         {comp?.format === 'groups' && (
           <TextField
             label="Clasifican por grupo"
@@ -85,7 +131,7 @@ export default function CategoriesPage() {
             fullWidth
           />
         )}
-        {esIndividual(sport) && (
+        {individual && (
           // Solo tiene sentido donde el que se inscribe es un deportista, no
           // un club: RosterPolicy compara el peso del deportista contra esta
           // ventana al inscribirlo. Ambos extremos quedan abiertos si se

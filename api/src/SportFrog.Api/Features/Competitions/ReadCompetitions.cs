@@ -41,7 +41,8 @@ public static class ReadCompetitions
     /// than written into it, because that field keeps the raw keys — what a
     /// save sends back unchanged when a picture was left alone.
     /// </summary>
-    public sealed record PublicPreview(string? BannerUrl, IReadOnlyList<SponsorPreview> Sponsors);
+    public sealed record PublicPreview(
+        string? BannerUrl, string? LogoUrl, IReadOnlyList<SponsorPreview> Sponsors, IReadOnlyList<GalleryPreview> Gallery);
 
     /// <param name="LogoKey">
     /// The same key <see cref="Summary.Settings"/> carries for this sponsor,
@@ -49,6 +50,9 @@ public static class ReadCompetitions
     /// without depending on both lists staying in the same order.
     /// </param>
     public sealed record SponsorPreview(string LogoKey, string? Name, string? Url, string LogoUrl);
+
+    /// <param name="Key">Same reason as <see cref="SponsorPreview.LogoKey"/> — matches a preview back to its stored entry.</param>
+    public sealed record GalleryPreview(string Key, string? Caption, string Url);
 
     public static IEndpointRouteBuilder MapReadCompetitions(this IEndpointRouteBuilder routes)
     {
@@ -190,16 +194,30 @@ public static class ReadCompetitions
             ? await pictures.LinkAsync(banner, cancellationToken)
             : null;
 
+        var logoUrl = @public.LogoKey is { } logo
+            ? await pictures.LinkAsync(logo, cancellationToken)
+            : null;
+
         var sponsors = new List<SponsorPreview>();
 
         foreach (var sponsor in @public.Sponsors ?? [])
         {
-            if (await pictures.LinkAsync(sponsor.LogoKey, cancellationToken) is { } logoUrl)
+            if (await pictures.LinkAsync(sponsor.LogoKey, cancellationToken) is { } sponsorLogoUrl)
             {
-                sponsors.Add(new SponsorPreview(sponsor.LogoKey, sponsor.Name, sponsor.Url, logoUrl));
+                sponsors.Add(new SponsorPreview(sponsor.LogoKey, sponsor.Name, sponsor.Url, sponsorLogoUrl));
             }
         }
 
-        return competition with { PublicPreview = new PublicPreview(bannerUrl, sponsors) };
+        var gallery = new List<GalleryPreview>();
+
+        foreach (var photo in @public.Gallery ?? [])
+        {
+            if (await pictures.LinkAsync(photo.Key, cancellationToken) is { } photoUrl)
+            {
+                gallery.Add(new GalleryPreview(photo.Key, photo.Caption, photoUrl));
+            }
+        }
+
+        return competition with { PublicPreview = new PublicPreview(bannerUrl, logoUrl, sponsors, gallery) };
     }
 }

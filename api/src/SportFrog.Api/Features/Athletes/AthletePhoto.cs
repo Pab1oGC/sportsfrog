@@ -19,7 +19,7 @@ namespace SportFrog.Api.Features.Athletes;
 /// organization's prefix, handed out only through a link that expires, and
 /// never reaches the public view (RNF-16).
 /// </remarks>
-public sealed class AthletePhoto(ObjectStore store, OrganizationContext organization)
+public sealed class AthletePhoto(ObjectStore store, OrganizationContext organization, ILogger<AthletePhoto> logger)
 {
     /// <summary>
     /// Normalizes and stores an uploaded photograph, answering the key it was
@@ -111,6 +111,47 @@ public sealed class AthletePhoto(ObjectStore store, OrganizationContext organiza
 
         await store.ForgetAsync(
             organization.RequireOrganizationId(), stored, cancellationToken);
+    }
+
+    /// <summary>
+    /// The athlete's own photograph, decoded and ready to draw into a
+    /// document — or the placeholder silhouette if there is not a real one
+    /// to use.
+    /// </summary>
+    /// <remarks>
+    /// Takes the organization explicitly rather than reading it off
+    /// <see cref="OrganizationContext"/>, unlike every other method here: a
+    /// background job has no ambient request to read one from, and this is
+    /// the one photo operation both a request and a job need — see
+    /// <see cref="Documents.IssueDocumentsJob"/>, which used to answer this
+    /// same question on its own before this existed.
+    ///
+    /// Three cases end up drawing the placeholder rather than failing
+    /// whatever asked for a picture: no key at all, because nobody has
+    /// uploaded a photograph yet; a key still holding a data URL, from
+    /// before images moved out of the database, which nothing here can
+    /// fetch from a bucket; and a key pointing at an object the bucket has
+    /// since lost. None of those is the moment a missing photograph should
+    /// hold up a document that is about something else.
+    /// </remarks>
+    public async Task<byte[]> BytesAsync(
+        Guid organizationId, string? key, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(key) || key.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return DefaultAvatar.Bytes;
+        }
+
+        try
+        {
+            return await store.ReadAsync(organizationId, key, cancellationToken);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            logger.LogWarning(failure, "Could not read the photograph {Key}.", key);
+
+            return DefaultAvatar.Bytes;
+        }
     }
 
     /// <summary>What to say when the bytes turn out not to be a picture.</summary>

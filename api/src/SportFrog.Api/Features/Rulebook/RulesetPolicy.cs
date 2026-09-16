@@ -75,10 +75,37 @@ internal sealed class RulesetPolicy(
         if (periodsAreUsable)
         {
             InspectPoints(sport, configuration, violations);
+            InspectDuration(sport, configuration, violations);
             shape.InspectWalkover(sport, configuration, violations);
         }
 
         return violations;
+    }
+
+    /// <summary>
+    /// A sport with no clock at all needs a declared estimate to schedule
+    /// against.
+    /// </summary>
+    /// <remarks>
+    /// Mode-agnostic and checked here rather than delegated to
+    /// <see cref="IRulesetShapeRules"/>: whether a sport runs a clock has
+    /// nothing to do with how its score is kept — a sets-mode sport can run
+    /// one (kyorugi) or not (wally), and the shape a ruleset is validated
+    /// against says nothing about which. Only <see cref="Sport.PeriodHasClock"/>
+    /// does.
+    /// </remarks>
+    private static void InspectDuration(
+        Sport sport,
+        RulesetConfiguration configuration,
+        List<RulesetViolation> violations)
+    {
+        if (!sport.PeriodHasClock && configuration.Periods.EstimatedMinutes is null)
+        {
+            violations.Add(new RulesetViolation(
+                "Config.Periods.EstimatedMinutes",
+                $"{sport.Name} no corre por reloj, así que hace falta declarar cuánto dura un " +
+                "partido en promedio para poder armar el calendario."));
+        }
     }
 
     /// <summary>
@@ -89,6 +116,18 @@ internal sealed class RulesetPolicy(
         RulesetConfiguration configuration,
         List<RulesetViolation> violations)
     {
+        // Vacio es una salida deliberada, no un reglamento a medio llenar: una
+        // competencia armada como llave directa nunca construye una tabla de
+        // posiciones, y StandingsCalculator ya trata un desenlace sin precio
+        // como si valiera cero — dejar todos afuera y tarifarlos todos en
+        // cero significan lo mismo para lo unico que lee esto. Lo que no se
+        // permite es la mitad: alguien que tarifo el triunfo y se olvido de
+        // la derrota probablemente queria una tabla y la dejo incompleta.
+        if (configuration.Points.Count == 0)
+        {
+            return;
+        }
+
         var rules = outcomeRules.For(sport.ScoreMode);
         var required = rules.RequiredOutcomes(configuration.Periods.Count);
 

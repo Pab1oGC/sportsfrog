@@ -154,7 +154,11 @@ export const endpoints = {
   competitionStatus: (id) => `${api}/competitions/${id}/status`,
   competitionPublication: (id) => `${api}/competitions/${id}/publication`,
   competitionSchedule: (id) => `${api}/competitions/${id}/schedule`,
+  competitionBulletinPdf: (id) => `${api}/competitions/${id}/bulletin.pdf`,
+  competitionBulletinWord: (id) => `${api}/competitions/${id}/bulletin.docx`,
   competitionMatches: (id) => `${api}/competitions/${id}/matches`,
+  competitionFixturePdf: (id) => `${api}/competitions/${id}/fixture.pdf`,
+  categoryFixturePdf: (catId) => `${api}/categories/${catId}/fixture.pdf`,
 
   // Categories
   categories: (compId) => `${api}/competitions/${compId}/categories`,
@@ -180,15 +184,27 @@ export const endpoints = {
   teams: (catId) => `${api}/categories/${catId}/teams`,
   team: (id) => `${api}/teams/${id}`,
   roster: (teamId) => `${api}/teams/${teamId}/roster`,
+  rosterRegisterBulk: (teamId) => `${api}/teams/${teamId}/roster/register-bulk`,
   rosterEntry: (id) => `${api}/roster/${id}`,
   rosterWithdrawal: (id) => `${api}/roster/${id}/withdrawal`,
   rosterTemplate: (teamId) => `${api}/teams/${teamId}/roster/import/template`,
   rosterImportPreview: (teamId) => `${api}/teams/${teamId}/roster/import/preview`,
   rosterImportApply: (teamId) => `${api}/teams/${teamId}/roster/import`,
+  // Hermano del de arriba, pero para deportes individuales: no hay un
+  // equipo al que apuntar el archivo (cada fila crea el suyo), asi que se
+  // pide por competencia + club en vez de por equipo.
+  delegationRosterTemplate: (competitionId, clubId) => `${api}/competitions/${competitionId}/clubs/${clubId}/individuals/import/template`,
+  delegationRosterImportPreview: (competitionId, clubId) => `${api}/competitions/${competitionId}/clubs/${clubId}/individuals/import/preview`,
+  delegationRosterImportApply: (competitionId, clubId) => `${api}/competitions/${competitionId}/clubs/${clubId}/individuals/import`,
+  teamReport: (id) => `${api}/teams/${id}/report`,
+  teamReportPdf: (id) => `${api}/teams/${id}/report.pdf`,
+  athleteReport: (id) => `${api}/athletes/${id}/report`,
+  athleteReportPdf: (id) => `${api}/athletes/${id}/report.pdf`,
 
   // Venues & Spaces
   venues: `${api}/venues`,
   venue: (id) => `${api}/venues/${id}`,
+  resolveVenueMapsLink: (url) => `${api}/venues/resolve-maps-link?url=${encodeURIComponent(url)}`,
   venueSpaces: (venueId) => `${api}/venues/${venueId}/spaces`,
   spaces: `${api}/spaces`,
   space: (id) => `${api}/spaces/${id}`,
@@ -201,6 +217,7 @@ export const endpoints = {
   matchWalkover: (id) => `${api}/matches/${id}/walkover`,
   matchPenalties: (id) => `${api}/matches/${id}/penalties`,
   matchEvents: (matchId) => `${api}/matches/${matchId}/events`,
+  matchesRescheduleBulk: `${api}/matches/reschedule-bulk`,
   event: (id) => `${api}/events/${id}`,
 
   // Standings & Leaders
@@ -211,6 +228,8 @@ export const endpoints = {
   // por eso vive aparte de las categoryPerformances* de arriba, igual que
   // matchResult vive aparte de categoryMatches.
   performanceScore: (id) => `${api}/performances/${id}/score`,
+  performanceSchedule: (id) => `${api}/performances/${id}/schedule`,
+  performancesRescheduleBulk: `${api}/performances/reschedule-bulk`,
 
   // Documents
   templates: `${api}/documents/templates`,

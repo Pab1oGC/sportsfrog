@@ -20,8 +20,11 @@ const EMPTY_FORM = {
   name: '',
   sportCode: 'football',
   config: {
-    periods: { count: 2, label: 'Tiempo', minutes: 45 },
-    points: { win: 3, draw: 1, loss: 0 },
+    periods: { count: 2, label: 'Tiempo', minutes: 45, breakMinutes: 15, estimatedMinutes: null },
+    // Vacio: armar tabla de posiciones es opcional (ver habilitarPuntos mas
+    // abajo) y la mayoria de los reglamentos nuevos no la necesitan hasta que
+    // el organizador la pide.
+    points: {},
     tiebreakers: ['score_difference', 'head_to_head'],
   },
 };
@@ -42,6 +45,18 @@ function desenlacesDeSets(count) {
     desenlaces.push(`loss_${lost}_${toWin}`);
   }
   return desenlaces;
+}
+
+// React no resincroniza el valor de un <input type="number"> mientras esta
+// enfocado (para no interrumpir mientras alguien termina de escribir "1." o
+// "-5"), asi que un cero que ya estaba en el campo se queda pegado en
+// pantalla hasta que se pierde el foco: se escribe "1" y se ve "01". Se
+// corrige a mano sobre el nodo del DOM -- eso si toma efecto de inmediato,
+// porque no pasa por la reconciliacion de React.
+function limpiarCeroInicial(e) {
+  const limpio = e.target.value.replace(/^0+(?=\d)/, '');
+  if (limpio !== e.target.value) e.target.value = limpio;
+  return limpio;
 }
 
 // "win_2_0" -> "Pts 2-0 (ganado)"; "loss_0_2" -> "Pts 0-2 (perdido)".
@@ -96,6 +111,14 @@ export default function RulesetsPage() {
   const sportInfo = (sports || []).find((s) => s.code === form.sportCode);
   const esPorSets = Boolean(sportInfo?.isPlayedInSets);
   const juzgado = esJuzgado(sportInfo);
+  // No es lo mismo que esPorSets: un set de voley se decide por marcador y
+  // no corre reloj, pero un asalto de Kyorugi tambien se decide por sets
+  // ganados y SI corre uno de dos minutos. periodHasClock es la pregunta que
+  // en verdad decide si mostrar el campo de duracion, no isPlayedInSets. Sin
+  // datos del catalogo todavia (sportInfo === undefined) se asume que si hay
+  // reloj, para no ocultar el campo del deporte por defecto (futbol) mientras
+  // /sports esta cargando.
+  const tieneReloj = sportInfo ? Boolean(sportInfo.periodHasClock) : true;
   const setsParaGanar = Math.ceil((form.config.periods.count || 1) / 2);
   const walkover = form.config.walkover || null;
 
@@ -117,6 +140,26 @@ export default function RulesetsPage() {
     updateConfig('walkover', esPorSets
       ? { winnerScore: setsParaGanar, loserScore: 0 }
       : { winnerScore: 3, loserScore: 0 });
+  };
+
+  // Vacio es una eleccion valida (ver RulesetPolicy.InspectPoints en el
+  // backend): una llave de eliminacion directa nunca arma tabla, asi que
+  // nadie deberia tener que inventarle puntaje a un desenlace que ninguna
+  // tabla va a leer. El switch existe para que esa eleccion sea explicita en
+  // vez de una fila de campos vacios que dan la impresion de ser obligatorios.
+  const tienePuntos = Object.keys(form.config.points || {}).length > 0;
+
+  const habilitarPuntos = (activo) => {
+    if (!activo) { updateConfig('points', {}); return; }
+    if (esPorSets) {
+      const enCero = {};
+      desenlacesRequeridos.forEach((code) => { enCero[code] = 0; });
+      updateConfig('points', enCero);
+      return;
+    }
+    const porDefecto = { win: 3, loss: 0 };
+    if (desenlacesOpcionales.includes('draw')) porDefecto.draw = 1;
+    updateConfig('points', porDefecto);
   };
 
   const columns = [
@@ -143,7 +186,14 @@ export default function RulesetsPage() {
             // viceversa), asi que un puntaje ya cargado para el anterior no
             // tiene sentido conservarlo. Periodos tambien vuelve al default
             // del deporte nuevo — el de antes podria ser par en un deporte
-            // que ahora se juega por sets, donde eso no es valido.
+            // que ahora se juega por sets, donde eso no es valido. La
+            // duracion tambien: el estandar del deporte nuevo, o nada si no
+            // corre reloj (ahi el campo ni se muestra — ver mas abajo). Ojo,
+            // no es lo mismo que "se juega por sets": Kyorugi se decide por
+            // sets Y corre reloj. estimatedMinutes siempre vuelve a null: no
+            // hay un estandar de catalogo del que precargarlo (a diferencia
+            // de minutes), asi que cambiar de deporte no deja pegado un
+            // numero que puede no tener nada que ver con el nuevo.
             const nuevoDeporte = (sports || []).find((s) => s.code === e.target.value);
             setForm({
               ...form,
@@ -156,7 +206,9 @@ export default function RulesetsPage() {
                   ? {
                       count: nuevoDeporte.defaultPeriods,
                       label: nuevoDeporte.periodLabel.charAt(0).toUpperCase() + nuevoDeporte.periodLabel.slice(1),
-                      minutes: form.config.periods.minutes,
+                      minutes: nuevoDeporte.periodHasClock ? (nuevoDeporte.defaultMinutes ?? null) : null,
+                      breakMinutes: nuevoDeporte.periodHasClock ? (nuevoDeporte.defaultBreakMinutes ?? null) : null,
+                      estimatedMinutes: null,
                     }
                   : form.config.periods,
               },
@@ -177,7 +229,7 @@ export default function RulesetsPage() {
           disabled={juzgado}
           helperText={juzgado ? `${sportInfo.name} se decide en una sola actuación por lado.` : undefined}
           onChange={(e) => {
-            const count = +e.target.value;
+            const count = +limpiarCeroInicial(e);
             const nuevoWalkover = esPorSets && walkover
               ? { ...walkover, winnerScore: Math.ceil((count || 1) / 2) }
               : walkover;
@@ -194,69 +246,113 @@ export default function RulesetsPage() {
           fullWidth
         />
         <TextField label="Nombre del período" value={form.config.periods.label} onChange={(e) => setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, label: e.target.value } } })} fullWidth helperText='Como se llama uno: "Tiempo", "Cuarto", "Set"...' />
-        <TextField
-          label="Duración del período (minutos)"
-          type="number"
-          value={form.config.periods.minutes ?? ''}
-          onChange={(e) => setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, minutes: e.target.value === '' ? null : +e.target.value } } })}
-          fullWidth
-          helperText="Dejar vacío en deportes que terminan por sets en vez de reloj (ej. vóley)."
-        />
+        {tieneReloj && (
+          <TextField
+            label="Duración del período (minutos)"
+            type="number"
+            value={form.config.periods.minutes ?? ''}
+            onChange={(e) => { const v = limpiarCeroInicial(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, minutes: v === '' ? null : +v } } }); }}
+            fullWidth
+            // Precargada con el estandar del deporte elegido (ver el onChange
+            // de "Deporte" mas arriba); el organizador la pisa si su liga
+            // juega distinto.
+            helperText="Se sugiere según el deporte — ajustala si tu competencia juega distinto."
+          />
+        )}
+        {tieneReloj && (
+          <TextField
+            label="Descanso entre períodos (minutos)"
+            type="number"
+            value={form.config.periods.breakMinutes ?? ''}
+            onChange={(e) => { const v = limpiarCeroInicial(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, breakMinutes: v === '' ? null : +v } } }); }}
+            fullWidth
+            helperText="Cuánto se descansa entre uno y el siguiente. Se usa junto a la duración para calcular solo cuánto ocupa un partido completo al armar el calendario."
+          />
+        )}
+        {!tieneReloj && (
+          // El unico lugar del sistema donde vive esta duracion: sin reloj
+          // no hay nada que MatchDuration.From pueda calcular sola, asi que
+          // hace falta declararla a mano — ver el remark de
+          // RulesetConfiguration.PeriodRules.EstimatedMinutes en el backend.
+          // Antes esto se pedia en cada competencia; vivir aca en cambio
+          // deja que una categoria mas chica juegue partidos mas cortos con
+          // solo darle su propio reglamento, igual que ya podia hacerlo un
+          // deporte con reloj.
+          <TextField
+            label="Duración total del partido (minutos)"
+            type="number"
+            value={form.config.periods.estimatedMinutes ?? ''}
+            onChange={(e) => { const v = limpiarCeroInicial(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, estimatedMinutes: v === '' ? null : +v } } }); }}
+            fullWidth
+            required
+            helperText={`${sportInfo?.name || 'Este deporte'} no corre por reloj — no hay forma de calcularla sola, así que hace falta cargarla para poder armar el calendario.`}
+          />
+        )}
         <Box>
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Puntos por desenlace</Typography>
+          <FormControlLabel
+            control={<Switch checked={tienePuntos} onChange={(e) => habilitarPuntos(e.target.checked)} />}
+            label="Armar tabla de posiciones"
+          />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            {esPorSets
-              ? 'Uno por cada marcador de sets con el que un partido puede terminar, visto desde los dos lados.'
-              : juzgado
-                // Ganar o perder sigue decidiendo quien avanza en la
-                // eliminatoria, aunque este deporte no arme una tabla de
-                // posiciones con esto (ver ClassificationRanking en el
-                // backend) — RulesetPolicy pide un valor igual, para
-                // cualquier deporte.
-                ? 'Cuanto vale ganar o perder un cruce. Poomsae no arma tabla de posiciones con esto, pero el reglamento le pide un valor a cada desenlace igual.'
-                : 'Cuanto vale cada resultado posible en la tabla de posiciones.'}
+            {juzgado
+              // Ganar o perder sigue decidiendo quien avanza en la
+              // eliminatoria aunque esto quede apagado — esto solo decide si
+              // ademas se arma una tabla (ver ClassificationRanking en el
+              // backend para como se ordena una fase de clasificacion, que
+              // no usa nada de esto).
+              ? 'Quien gana o pierde un cruce sigue decidiendo quien avanza aunque esto este apagado. Prendelo solo si, ademas, este reglamento va a correr una liga o una fase de grupos.'
+              : 'Le pone puntaje a cada resultado para ordenar una tabla. Una llave de eliminación directa nunca la necesita — solo hace falta si la competencia juega todos contra todos, o tiene una fase de grupos antes de la llave.'}
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {[...desenlacesRequeridos, ...desenlacesOpcionales].map((code) => (
-              <TextField
-                key={code}
-                label={etiquetaDesenlace(code)}
-                type="number"
-                value={form.config.points[code] ?? ''}
-                onChange={(e) => updateConfig(`points.${code}`, +e.target.value)}
-                fullWidth
-              />
-            ))}
-          </Box>
-        </Box>
-
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Criterios de desempate</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            En el orden en que se aplican cuando dos o mas equipos quedan igualados en puntos.
-          </Typography>
-          {tiebreakers.map((code, i) => (
-            <Box key={code} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
-              <Typography variant="body2" sx={{ flexGrow: 1 }}>{i + 1}. {etiquetas[code] || code}</Typography>
-              <IconButton size="small" disabled={i === 0} onClick={() => moverDesempate(i, -1)}><Iconify icon="eva:chevron-up-fill" /></IconButton>
-              <IconButton size="small" disabled={i === tiebreakers.length - 1} onClick={() => moverDesempate(i, 1)}><Iconify icon="eva:chevron-down-fill" /></IconButton>
-              <IconButton size="small" disabled={tiebreakers.length <= 1} onClick={() => quitarDesempate(i)}><Iconify icon="eva:trash-2-outline" sx={{ color: 'error.main' }} /></IconButton>
+          {tienePuntos && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              {esPorSets && (
+                <Typography variant="caption" color="text.secondary">
+                  Uno por cada marcador de sets con el que un partido puede terminar, visto desde los dos lados.
+                </Typography>
+              )}
+              {[...desenlacesRequeridos, ...desenlacesOpcionales].map((code) => (
+                <TextField
+                  key={code}
+                  label={etiquetaDesenlace(code)}
+                  type="number"
+                  value={form.config.points[code] ?? ''}
+                  onChange={(e) => updateConfig(`points.${code}`, +limpiarCeroInicial(e))}
+                  fullWidth
+                />
+              ))}
             </Box>
-          ))}
-          {tiebreakersDisponibles.length > 0 && (
-            <TextField
-              select
-              label="Agregar criterio"
-              value=""
-              onChange={(e) => agregarDesempate(e.target.value)}
-              fullWidth
-              size="small"
-              sx={{ mt: 1 }}
-            >
-              {tiebreakersDisponibles.map((code) => <MenuItem key={code} value={code}>{etiquetas[code]}</MenuItem>)}
-            </TextField>
           )}
         </Box>
+
+        {tienePuntos && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Criterios de desempate</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              En el orden en que se aplican cuando dos o mas equipos quedan igualados en puntos.
+            </Typography>
+            {tiebreakers.map((code, i) => (
+              <Box key={code} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+                <Typography variant="body2" sx={{ flexGrow: 1 }}>{i + 1}. {etiquetas[code] || code}</Typography>
+                <IconButton size="small" disabled={i === 0} onClick={() => moverDesempate(i, -1)}><Iconify icon="eva:chevron-up-fill" /></IconButton>
+                <IconButton size="small" disabled={i === tiebreakers.length - 1} onClick={() => moverDesempate(i, 1)}><Iconify icon="eva:chevron-down-fill" /></IconButton>
+                <IconButton size="small" disabled={tiebreakers.length <= 1} onClick={() => quitarDesempate(i)}><Iconify icon="eva:trash-2-outline" sx={{ color: 'error.main' }} /></IconButton>
+              </Box>
+            ))}
+            {tiebreakersDisponibles.length > 0 && (
+              <TextField
+                select
+                label="Agregar criterio"
+                value=""
+                onChange={(e) => agregarDesempate(e.target.value)}
+                fullWidth
+                size="small"
+                sx={{ mt: 1 }}
+              >
+                {tiebreakersDisponibles.map((code) => <MenuItem key={code} value={code}>{etiquetas[code]}</MenuItem>)}
+              </TextField>
+            )}
+          </Box>
+        )}
 
         <Box>
           <FormControlLabel
@@ -275,14 +371,14 @@ export default function RulesetsPage() {
                 value={walkover.winnerScore}
                 disabled={esPorSets}
                 helperText={esPorSets ? `Fijo: se gana en ${setsParaGanar} sets.` : undefined}
-                onChange={(e) => updateConfig('walkover', { ...walkover, winnerScore: +e.target.value })}
+                onChange={(e) => updateConfig('walkover', { ...walkover, winnerScore: +limpiarCeroInicial(e) })}
                 fullWidth
               />
               <TextField
                 label="Puntaje del que no se presento"
                 type="number"
                 value={walkover.loserScore}
-                onChange={(e) => updateConfig('walkover', { ...walkover, loserScore: +e.target.value })}
+                onChange={(e) => updateConfig('walkover', { ...walkover, loserScore: +limpiarCeroInicial(e) })}
                 fullWidth
               />
             </Box>

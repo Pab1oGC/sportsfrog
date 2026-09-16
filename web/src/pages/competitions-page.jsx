@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useCrudDialog } from 'src/hooks/use-crud';
-import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -19,13 +18,15 @@ import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPost, apiPut } from 'src/hooks/use-api';
-import { endpoints } from 'src/lib/axios';
-import { leerComoDataUrl } from 'src/lib/data-url';
+import { useApi, apiPut } from 'src/hooks/use-api';
+import { endpoints, default as axios } from 'src/lib/axios';
+import { downloadBlob } from 'src/lib/download-blob';
+import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { SelectionSpace } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 
@@ -40,28 +41,18 @@ const FORMATO_INFO = {
   groups: 'Primero zonas, despues llaves.',
 };
 
-// La personalizacion del portal viaja aparte de los campos de siempre porque
-// no comparte su forma: son las mismas claves que guarda el backend en
-// settings.public, mas currentBannerUrl/currentLogoUrl, que son solo vista
-// previa y nunca se envian. schedule pasa de largo, sin editarse aca — se
-// guarda tal cual llego, para no perder la disponibilidad configurada desde
-// otra pantalla al guardar este formulario (settings se reemplaza entero).
+// La personalizacion del portal (colores, tipografia, portada, redes,
+// auspiciantes) se edita en su propia pantalla con vista previa -- el estudio
+// de portal, /dashboard/competitions/:id/portal. Aca solo quedan los tres
+// interruptores de secciones, que son de una linea. La lectura y el armado
+// del cuerpo settings.public los comparte con el estudio en portal-payload.js
+// para que los dos no se pisen.
 const emptyForm = () => ({
   name: '', slug: '', season: '', format: 'league', rulesetId: '', captureLevel: 'basic',
-  schedule: null,
-  showStandings: true, showLeaders: true, showRosters: false,
-  bannerKey: null, currentBannerUrl: null,
-  accentColor: '', description: '',
-  instagram: '', facebook: '', whatsApp: '', website: '',
-  sponsors: [],
+  bufferMinutes: '', scheduleSpaceIds: [],
+  bulletinIntroduction: '', bulletinSanctions: '', bulletinGeneralProvisions: '', bulletinContactInfo: '',
+  ...EMPTY_PORTAL_FORM,
 });
-
-/** La imagen a mostrar para una clave de almacenamiento: la data URL recien
- * elegida si se acaba de subir, o el enlace firmado que ya se leyo, si no. */
-function vistaPreviaImagen(key, currentUrl) {
-  if (!key) return null;
-  return key.startsWith('data:') ? key : currentUrl;
-}
 
 export default function CompetitionsPage() {
   const confirm = useConfirm();
@@ -91,49 +82,46 @@ export default function CompetitionsPage() {
       if (!wasEdit) navigate(`/dashboard/categories?competition=${result.id}`);
     },
     mapToForm: (row) => {
-      const pub = (row.settings && row.settings.public) || {};
-      const preview = row.publicPreview || {};
-      const previewByKey = {};
-      (preview.sponsors || []).forEach((s) => { previewByKey[s.logoKey] = s.logoUrl; });
+      const sched = (row.settings && row.settings.schedule) || {};
+      const bulletin = (row.settings && row.settings.bulletin) || {};
       return {
         name: row.name, slug: row.slug, season: row.season, format: row.format,
         rulesetId: row.rulesetId || '', captureLevel: row.captureLevel,
-        schedule: (row.settings && row.settings.schedule) || null,
-        showStandings: pub.showStandings !== false,
-        showLeaders: pub.showLeaders !== false,
-        showRosters: !!pub.showRosters,
-        bannerKey: pub.bannerKey || null,
-        currentBannerUrl: preview.bannerUrl || null,
-        accentColor: pub.accentColor || '',
-        description: pub.description || '',
-        instagram: pub.instagram || '', facebook: pub.facebook || '',
-        whatsApp: pub.whatsApp || '', website: pub.website || '',
-        sponsors: (pub.sponsors || []).map((s) => ({
-          logoKey: s.logoKey, name: s.name || '', url: s.url || '',
-          currentLogoUrl: previewByKey[s.logoKey] || null,
-        })),
+        bufferMinutes: sched.bufferMinutes ?? '',
+        scheduleSpaceIds: sched.spaceIds || [],
+        bulletinIntroduction: bulletin.introduction || '',
+        bulletinSanctions: bulletin.sanctions || '',
+        bulletinGeneralProvisions: bulletin.generalProvisions || '',
+        bulletinContactInfo: bulletin.contactInfo || '',
+        // Colores, portada, redes y auspiciantes: se leen aca para reenviarlos
+        // sin tocar (el PUT reemplaza settings.public entero), pero se editan
+        // en el estudio de portal.
+        ...readPortalForm(row),
       };
     },
     mapToSend: (f) => ({
       name: f.name, slug: normalizarSlug(f.slug), season: f.season,
       format: f.format, rulesetId: f.rulesetId, captureLevel: f.captureLevel,
       settings: {
-        schedule: f.schedule,
-        public: {
-          showStandings: f.showStandings,
-          showLeaders: f.showLeaders,
-          showRosters: f.showRosters,
-          bannerKey: f.bannerKey || null,
-          accentColor: f.accentColor || null,
-          description: f.description || null,
-          instagram: f.instagram || null,
-          facebook: f.facebook || null,
-          whatsApp: f.whatsApp || null,
-          website: f.website || null,
-          sponsors: f.sponsors.length
-            ? f.sponsors.map((s) => ({ logoKey: s.logoKey, name: s.name || null, url: s.url || null }))
-            : null,
-        },
+        // Vacio de margen y de canchas es "no configurado todavia": se manda
+        // null en vez de un objeto a medio llenar, para no perder el aviso
+        // propio de ScheduleCalendar ("esta competencia no tiene canchas
+        // habilitadas") por uno generico de validacion. La duracion del
+        // partido en si ya no vive aca -- sale entera del reglamento, con o
+        // sin reloj (ver rulesets-page.jsx).
+        schedule: (f.bufferMinutes !== '' || f.scheduleSpaceIds.length) ? {
+          bufferMinutes: f.bufferMinutes !== '' ? Number(f.bufferMinutes) : null,
+          spaceIds: f.scheduleSpaceIds.length ? f.scheduleSpaceIds : null,
+        } : null,
+        // Igual criterio que schedule: nada cargado todavia es null, no un
+        // objeto con las cuatro claves vacias.
+        bulletin: (f.bulletinIntroduction || f.bulletinSanctions || f.bulletinGeneralProvisions || f.bulletinContactInfo) ? {
+          introduction: f.bulletinIntroduction || null,
+          sanctions: f.bulletinSanctions || null,
+          generalProvisions: f.bulletinGeneralProvisions || null,
+          contactInfo: f.bulletinContactInfo || null,
+        } : null,
+        public: buildPortalPayload(f),
       },
     }),
   });
@@ -155,31 +143,13 @@ export default function CompetitionsPage() {
     await saveBase();
   };
 
-  const elegirBanner = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const dataUrl = await leerComoDataUrl(file);
-    setForm((f) => ({ ...f, bannerKey: dataUrl }));
-  };
+  const agregarCancha = () => setForm((f) => ({ ...f, scheduleSpaceIds: [...f.scheduleSpaceIds, ''] }));
 
-  const quitarBanner = () => setForm((f) => ({ ...f, bannerKey: null, currentBannerUrl: null }));
+  const quitarCancha = (i) => setForm((f) => ({ ...f, scheduleSpaceIds: f.scheduleSpaceIds.filter((_, idx) => idx !== i) }));
 
-  const agregarAuspiciante = () => setForm((f) => ({
-    ...f, sponsors: [...f.sponsors, { logoKey: '', name: '', url: '', currentLogoUrl: null }],
+  const cambiarCancha = (i, venueSpaceId) => setForm((f) => ({
+    ...f, scheduleSpaceIds: f.scheduleSpaceIds.map((id, idx) => (idx === i ? venueSpaceId : id)),
   }));
-
-  const quitarAuspiciante = (i) => setForm((f) => ({ ...f, sponsors: f.sponsors.filter((_, idx) => idx !== i) }));
-
-  const editarAuspiciante = (i, patch) => setForm((f) => ({
-    ...f, sponsors: f.sponsors.map((s, idx) => (idx === i ? { ...s, ...patch } : s)),
-  }));
-
-  const elegirLogoAuspiciante = async (i, e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const dataUrl = await leerComoDataUrl(file);
-    editarAuspiciante(i, { logoKey: dataUrl, currentLogoUrl: null });
-  };
 
   const handleNameChange = (e) => {
     const name = e.target.value;
@@ -203,11 +173,13 @@ export default function CompetitionsPage() {
     catch (err) { toast.error(err.message); }
   };
 
-  const schedule = async (id) => {
-    const ok = await confirm('Programar calendario automaticamente?', { confirmLabel: 'Programar' });
-    if (!ok) return;
-    try { const r = await apiPost(endpoints.competitionSchedule(id), {}); mutate(); toast.success(`Colocados: ${r.placed}, Sin lugar: ${r.unplaced}`); }
-    catch (err) { toast.error(err.message); }
+  const descargarConvocatoria = async (id, formato) => {
+    const url = formato === 'pdf' ? endpoints.competitionBulletinPdf(id) : endpoints.competitionBulletinWord(id);
+    const fallback = formato === 'pdf' ? 'convocatoria.pdf' : 'convocatoria.docx';
+    try {
+      const res = await axios.get(url, { responseType: 'blob' });
+      downloadBlob(res, fallback);
+    } catch (err) { toast.error(err.message); }
   };
 
   const columns = [
@@ -252,7 +224,8 @@ export default function CompetitionsPage() {
           ]}
           actions={[
             ...next.map((s) => ({ icon: icons[s] || 'eva:arrow-right-fill', label: SL[s], color: `${colors[s]}.main`, onClick: () => changeStatus(row.id, s) })),
-            row.status === 'scheduled' && { icon: 'eva:clock-outline', label: 'Programar', color: 'info.main', onClick: () => schedule(row.id) },
+            { icon: 'mdi:file-pdf-box', label: 'Descargar convocatoria (PDF)', onClick: () => descargarConvocatoria(row.id, 'pdf') },
+            { icon: 'mdi:file-word-box', label: 'Descargar convocatoria (Word)', onClick: () => descargarConvocatoria(row.id, 'docx') },
           ].filter(Boolean)}
         />
       );
@@ -263,7 +236,7 @@ export default function CompetitionsPage() {
     <Box>
       <PageHeader title="Competiciones" actionLabel="Nueva" onAction={() => openDialog(null)} />
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
-      <CrudDialog open={open} editId={editId} entityName="Competicion" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
+      <CrudDialog open={open} editId={editId} entityName="Competicion" entityGender="f" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
         <TextField label="Nombre" value={form.name} onChange={handleNameChange} fullWidth required />
         {/* La direccion queda fija desde que se crea: cambiarla romperia
             cualquier enlace ya compartido, y el backend la rechaza (ver
@@ -293,7 +266,88 @@ export default function CompetitionsPage() {
 
         <Accordion disableGutters variant="outlined" sx={{ '&:before': { display: 'none' } }}>
           <AccordionSummary expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
-            <Typography variant="subtitle2">Personalizar portal publico</Typography>
+            <Typography variant="subtitle2">Disponibilidad para programar el calendario</Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* La duración del partido ya no se toca acá para ningún deporte
+                -- sale entera del reglamento de cada categoría, con reloj
+                (se calcula sola) o sin él (se declara ahí, ver
+                rulesets-page.jsx). Acá solo queda el margen, que es
+                logística de la organización y no del deporte. */}
+            <TextField
+              label="Minutos entre partidos"
+              type="number"
+              value={form.bufferMinutes}
+              onChange={(e) => setForm({ ...form, bufferMinutes: e.target.value })}
+              fullWidth
+              helperText="La duración del partido se calcula sola (o se declara, para un deporte sin reloj) desde el reglamento de cada categoría — esto es solo el margen entre el final de uno y el arranque del siguiente en la misma cancha (cambio de equipos, entrada en calor). Vacío usa un valor por defecto."
+            />
+
+            <Divider />
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="caption" color="text.secondary">Canchas habilitadas</Typography>
+              <Button size="small" startIcon={<Iconify icon="eva:plus-fill" width={16} />} onClick={agregarCancha}>Agregar</Button>
+            </Box>
+            {form.scheduleSpaceIds.length === 0 && (
+              <Typography variant="caption" color="text.secondary">
+                Sin canchas cargadas, "Generar siguiente jornada" no va a poder colocar ningun partido.
+                Cuáles y a qué hora están disponibles se acuerda directamente con quien las administra — acá
+                solo elegís cuáles de las que ya registraste en Sedes puede usar esta competencia.
+              </Typography>
+            )}
+            {form.scheduleSpaceIds.map((venueSpaceId, i) => (
+              <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Box sx={{ flex: 1 }}>
+                  <SelectionSpace value={venueSpaceId} onChange={(e) => cambiarCancha(i, e.target.value)} size="small" />
+                </Box>
+                <IconButton size="small" onClick={() => quitarCancha(i)} sx={{ mt: 0.5 }}>
+                  <Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} />
+                </IconButton>
+              </Box>
+            ))}
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion disableGutters variant="outlined" sx={{ '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
+            <Typography variant="subtitle2">Convocatoria</Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              Categorías, reglamento y puntaje salen solos de lo que ya cargaste en Categorías y Reglamento —
+              esto es solo lo que el sistema no puede saber por su cuenta.
+            </Typography>
+            <TextField
+              label="Presentación" value={form.bulletinIntroduction}
+              onChange={(e) => setForm({ ...form, bulletinIntroduction: e.target.value })}
+              fullWidth multiline minRows={2}
+              helperText="Abre el documento: qué es la competencia, quién la organiza, por qué existe."
+            />
+            <TextField
+              label="Sanciones" value={form.bulletinSanctions}
+              onChange={(e) => setForm({ ...form, bulletinSanctions: e.target.value })}
+              fullWidth multiline minRows={2}
+              helperText="Qué amerita tarjeta, suspensión o descalificación. No hay nada cargado en el sistema para esto."
+            />
+            <TextField
+              label="Disposiciones generales" value={form.bulletinGeneralProvisions}
+              onChange={(e) => setForm({ ...form, bulletinGeneralProvisions: e.target.value })}
+              fullWidth multiline minRows={2}
+              helperText="Lo demás: sedes, plazos de inscripción, protestos, cualquier cosa propia de esta competencia."
+            />
+            <TextField
+              label="Contacto" value={form.bulletinContactInfo}
+              onChange={(e) => setForm({ ...form, bulletinContactInfo: e.target.value })}
+              fullWidth multiline minRows={1}
+              helperText="A quién escribirle o llamar con una consulta."
+            />
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion disableGutters variant="outlined" sx={{ '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
+            <Typography variant="subtitle2">Portal publico</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -304,73 +358,28 @@ export default function CompetitionsPage() {
 
             <Divider />
 
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Portada</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar src={vistaPreviaImagen(form.bannerKey, form.currentBannerUrl) || undefined} variant="rounded" sx={{ width: 96, height: 56, bgcolor: 'action.hover' }}>
-                  {!vistaPreviaImagen(form.bannerKey, form.currentBannerUrl) && <Iconify icon="mdi:image-outline" width={24} sx={{ color: 'text.disabled' }} />}
-                </Avatar>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  <Button variant="outlined" component="label" size="small" startIcon={<Iconify icon="eva:upload-outline" width={16} />}>
-                    {form.bannerKey ? 'Reemplazar' : 'Subir portada'}
-                    <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={elegirBanner} />
-                  </Button>
-                  {form.bannerKey && <Button size="small" color="inherit" onClick={quitarBanner}>Quitar</Button>}
-                </Box>
-              </Box>
-            </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <TextField
-                label="Color de acento"
-                type="color"
-                value={form.accentColor || '#1976d2'}
-                onChange={(e) => setForm({ ...form, accentColor: e.target.value })}
-                sx={{ width: 140 }}
-                helperText={form.accentColor ? null : 'Sin elegir: color por defecto.'}
-              />
-              {form.accentColor && <Button size="small" color="inherit" onClick={() => setForm({ ...form, accentColor: '' })}>Quitar color</Button>}
-            </Box>
-
-            <TextField
-              label="Presentacion"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              fullWidth multiline minRows={2}
-              slotProps={{ htmlInput: { maxLength: 500 } }}
-              helperText={`${form.description.length}/500`}
-            />
-
-            <Divider />
-            <Typography variant="caption" color="text.secondary">Redes y contacto</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField label="Instagram" value={form.instagram} onChange={(e) => setForm({ ...form, instagram: e.target.value })} fullWidth placeholder="https://instagram.com/..." />
-              <TextField label="Facebook" value={form.facebook} onChange={(e) => setForm({ ...form, facebook: e.target.value })} fullWidth placeholder="https://facebook.com/..." />
-            </Stack>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField label="WhatsApp" value={form.whatsApp} onChange={(e) => setForm({ ...form, whatsApp: e.target.value })} fullWidth placeholder="https://wa.me/59171234567" />
-              <TextField label="Sitio web" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} fullWidth placeholder="https://..." />
-            </Stack>
-
-            <Divider />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="text.secondary">Auspiciantes</Typography>
-              <Button size="small" startIcon={<Iconify icon="eva:plus-fill" width={16} />} onClick={agregarAuspiciante}>Agregar</Button>
-            </Box>
-            {form.sponsors.map((s, i) => (
-              <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <Avatar src={vistaPreviaImagen(s.logoKey, s.currentLogoUrl) || undefined} variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'action.hover', flexShrink: 0, '& img': { objectFit: 'contain' } }}>
-                  {!vistaPreviaImagen(s.logoKey, s.currentLogoUrl) && <Iconify icon="mdi:image-outline" width={20} sx={{ color: 'text.disabled' }} />}
-                </Avatar>
-                <Button variant="outlined" component="label" size="small" sx={{ flexShrink: 0 }}>
-                  Logo
-                  <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => elegirLogoAuspiciante(i, e)} />
+            {/* Colores, tipografia, portada, redes y auspiciantes se editan en
+                el estudio de portal, con vista previa en vivo. Solo tiene
+                sentido sobre una competencia ya creada -- de ahi que en el
+                alta se muestre el aviso y no el boton. */}
+            {editId ? (
+              <Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<Iconify icon="mdi:palette-outline" width={18} />}
+                  onClick={() => { close(); navigate(`/dashboard/competitions/${editId}/portal`); }}
+                >
+                  Abrir estudio de portal
                 </Button>
-                <TextField label="Nombre" size="small" value={s.name} onChange={(e) => editarAuspiciante(i, { name: e.target.value })} sx={{ flex: 1, minWidth: 100 }} />
-                <TextField label="Enlace" size="small" value={s.url} onChange={(e) => editarAuspiciante(i, { url: e.target.value })} sx={{ flex: 1, minWidth: 100 }} />
-                <IconButton size="small" onClick={() => quitarAuspiciante(i)}><Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} /></IconButton>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Colores, tipografia, portada, presentacion, redes y auspiciantes, con vista previa.
+                </Typography>
               </Box>
-            ))}
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                Guarda la competencia y despues personaliza su portal (colores, portada, redes) desde el estudio.
+              </Typography>
+            )}
           </AccordionDetails>
         </Accordion>
       </CrudDialog>

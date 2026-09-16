@@ -26,10 +26,13 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
         new RulesetShapeRulesRegistry(
             [new CumulativeRulesetShape(), new SetsRulesetShape(), new JudgedRulesetShape()]));
 
-    // Best of three: won at two.
+    // Best of three: won at two. EstimatedMinutes is required here, not
+    // optional decoration — wally has no clock (see the real catalog row
+    // AddSportPeriodHasClock seeds), so InspectDuration rejects a wally
+    // ruleset without one.
     private static RulesetConfiguration ValidWally() => new()
     {
-        Periods = new PeriodRules { Count = 3, Label = "set", Minutes = null },
+        Periods = new PeriodRules { Count = 3, Label = "set", Minutes = null, EstimatedMinutes = 30 },
         Points = new Dictionary<string, int>
         {
             ["win_2_0"] = 3, ["loss_0_2"] = 0,
@@ -55,10 +58,11 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
 
     // One performance a side, decided by judges: won at whatever score is
     // higher, never level. Against the real taekwondo_poomsae catalog row
-    // seeded by SeedPoomsaeCatalog.
+    // seeded by SeedPoomsaeCatalog — also clockless, same as wally, so this
+    // needs EstimatedMinutes for the same reason ValidWally does.
     private static RulesetConfiguration ValidPoomsae() => new()
     {
-        Periods = new PeriodRules { Count = 1, Label = "actuación", Minutes = null },
+        Periods = new PeriodRules { Count = 1, Label = "actuación", Minutes = null, EstimatedMinutes = 5 },
         Points = new Dictionary<string, int> { ["win"] = 3, ["loss"] = 0 },
         Tiebreakers = [],
     };
@@ -265,6 +269,35 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
         violations[0].Property.Should().Be("Config.Periods.Count");
     }
 
+    // ---- Duration --------------------------------------------------------
+
+    [Fact]
+    public async Task InspectAsync_ClocklessSportWithNoEstimateDeclared_IsRejected()
+    {
+        // Wally has no clock at all (the real catalog row) — nothing lets
+        // MatchDuration.From compute a duration for it, so an estimate has
+        // to be declared by hand or the calendar has nothing to schedule
+        // against.
+        var noEstimate = ValidWally() with { Periods = ValidWally().Periods with { EstimatedMinutes = null } };
+
+        var violations = await Policy().InspectAsync("wally", noEstimate, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Periods.EstimatedMinutes");
+    }
+
+    [Fact]
+    public async Task InspectAsync_ClockedSportWithNoPeriodMinutesAndNoEstimate_IsNotRejectedOnDurationGrounds()
+    {
+        // Kyorugi's own catalog row has a clock (PeriodHasClock), even though
+        // this particular ruleset leaves Minutes unset — InspectDuration
+        // reads the sport's own flag, not whether this ruleset happened to
+        // fill Minutes in, so a clocked sport is never asked for an estimate.
+        var violations = await Policy().InspectAsync("taekwondo_kyorugi", ValidKyorugi(), CancellationToken.None);
+
+        violations.Should().NotContain(violation => violation.Property == "Config.Periods.EstimatedMinutes");
+    }
+
     // ---- Points --------------------------------------------------------
 
     [Fact]
@@ -323,6 +356,61 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
         var violations = await Policy().InspectAsync("football", noDraw, CancellationToken.None);
 
         violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_CumulativeRulesetWithEmptyPoints_IsAcceptedAsOptingOutOfAStandingsTable()
+    {
+        // Empty is not "forgot to fill it in" — it is a ruleset written for a
+        // competition that will never build a table from it (a straight
+        // knockout draw), and StandingsCalculator already prices an unlisted
+        // outcome at zero, so leaving all of them out changes nothing a
+        // table would ever read.
+        var noTable = ValidFootball() with { Points = new Dictionary<string, int>() };
+
+        var violations = await Policy().InspectAsync("football", noTable, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_SetsRulesetWithEmptyPoints_IsAcceptedAsOptingOutOfAStandingsTable()
+    {
+        var noTable = ValidWally() with { Points = new Dictionary<string, int>() };
+
+        var violations = await Policy().InspectAsync("wally", noTable, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_KyorugiRulesetWithEmptyPoints_IsAcceptedAsOptingOutOfAStandingsTable()
+    {
+        // Straight elimination Kyorugi: who advances is decided by
+        // MatchWinner, never by a table, so the organizer should not have to
+        // invent a price for a scoreline nothing will ever add up.
+        var noTable = ValidKyorugi() with { Points = new Dictionary<string, int>() };
+
+        var violations = await Policy().InspectAsync("taekwondo_kyorugi", noTable, CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_PartiallyPricedPoints_IsStillRejected_EmptyIsTheOnlyValidWayToOptOut()
+    {
+        // Pricing a win but leaving the loss out is not "half opting out" —
+        // it almost certainly means a table was intended and the reglamento
+        // was left incomplete. Only fully empty is read as a deliberate
+        // choice; see InspectAsync_CumulativeRulesetMissingLoss_IsRejected
+        // above, which already covers this shape but is restated here next
+        // to the opt-out tests so the boundary between the two is explicit.
+        var halfPriced = ValidFootball() with { Points = new Dictionary<string, int> { ["win"] = 3 } };
+
+        var violations = await Policy().InspectAsync("football", halfPriced, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Points");
     }
 
     // ---- Metrics -------------------------------------------------------

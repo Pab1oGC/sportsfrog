@@ -14,7 +14,11 @@ import { Iconify } from 'src/components/iconify';
  */
 export function EditDeleteActions({ onEdit, onDelete, editLabel = 'Editar', deleteLabel = 'Eliminar' }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    // width/height 100%: sin esto el Box mide justo lo que ocupan los dos
+    // botones, y "centrarlo" no hace nada porque ya es tan angosto como su
+    // contenido — el que tiene que centrarse es el contenido dentro de toda
+    // la celda de la grilla, no el Box dentro de si mismo.
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
       <Tooltip title={editLabel}>
         <IconButton size="small" onClick={onEdit}>
           <Iconify icon="eva:edit-fill" width={20} sx={{ color: 'text.secondary' }} />

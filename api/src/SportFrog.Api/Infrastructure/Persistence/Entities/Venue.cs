@@ -35,6 +35,15 @@ public sealed class Venue
     /// </summary>
     public string? Address { get; set; }
 
+    /// <summary>
+    /// A link to the venue on Google Maps (or any map service), shown as a
+    /// "how to get there" alongside <see cref="Address"/> — both on the
+    /// organization's own pages and on the public portal. Distinct from
+    /// <see cref="Address"/> because one is prose and the other is something
+    /// a visitor can actually tap.
+    /// </summary>
+    public string? MapsUrl { get; set; }
+
     /// <summary>Whether it is still offered when a fixture is being placed.</summary>
     public bool IsActive { get; set; } = true;
 

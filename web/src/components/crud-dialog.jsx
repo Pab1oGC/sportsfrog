@@ -8,11 +8,16 @@ import CircularProgress from '@mui/material/CircularProgress';
 
 /**
  * Diálogo CRUD genérico: acepta children como contenido.
+ *
+ * entityGender ('m' por defecto, 'f' para "sede", "inscripción", etc.)
+ * decide "Nuevo"/"Nueva" -- mismo criterio de genero que ya usa
+ * useCrudDialog para "eliminado"/"eliminada", asi que un llamador que ya lo
+ * calcula para el borrado no tiene que inventar un segundo valor aca.
  */
-export function CrudDialog({ open, editId, entityName, error, saving, onClose, onSave, children, maxWidth = 'sm' }) {
+export function CrudDialog({ open, editId, entityName, entityGender = 'm', error, saving, onClose, onSave, children, maxWidth = 'sm' }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth>
-      <DialogTitle>{editId ? 'Editar' : 'Nuevo'} {entityName}</DialogTitle>
+      <DialogTitle>{editId ? 'Editar' : (entityGender === 'f' ? 'Nueva' : 'Nuevo')} {entityName}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
         {error && <Alert severity="error" onClose={onClose}>{error}</Alert>}
         {children}

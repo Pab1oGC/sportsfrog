@@ -197,7 +197,23 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
                       "esta categoría. Nadie juega en dos equipos de una misma división."));
         }
 
-        if (category.MaxRosterSize is not { } cap)
+        // The ceiling the sport itself imposes, which a category may narrow
+        // and never widen: Kyorugi is fought one against one, so no roster
+        // size typed into a category can make a pair of them exist.
+        //
+        // Asked of the database rather than read off category.Competition.Sport
+        // because not every caller loads that navigation, and one arriving
+        // null would turn the rule into a silence — the failure mode this file
+        // avoids everywhere else. It is one indexed lookup on top of the few
+        // this policy already makes per call, which the import's own remark
+        // already accepts as the price of asking the real rules.
+        var sportCeiling = await database.Categories
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == category.Id)
+            .Select(candidate => candidate.Competition!.Sport!.MaxEntrySize)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (LowerOf(category.MaxRosterSize, sportCeiling) is not { } cap)
         {
             return;
         }
@@ -211,12 +227,32 @@ internal sealed class RosterPolicy(SportFrogDbContext database)
 
         if (registered + pending >= cap)
         {
+            // "Jugadores" solo en un deporte de equipo. Donde la unidad que
+            // compite es una persona o una pareja, el cupo de la categoría es
+            // su modalidad — individual, pareja, trío — y hablar de jugadores
+            // ahí nombra un plantel que no existe.
             violations.Add(new RosterViolation(
                 "AthleteId",
-                $"{team.Name} ya tiene los {cap} jugadores que admite esta categoría. Hay que " +
-                "retirar a alguien antes de inscribir a otra persona."));
+                team.IsIndividual
+                    ? $"{team.Name} ya está completa: esta categoría se compite de a {cap} " +
+                      $"{(cap == 1 ? "deportista" : "deportistas")}. Hay que retirar a alguien " +
+                      "antes de inscribir a otra persona."
+                    : $"{team.Name} ya tiene los {cap} jugadores que admite esta categoría. Hay " +
+                      "que retirar a alguien antes de inscribir a otra persona."));
         }
     }
+
+    /// <summary>
+    /// The stricter of two caps, where either may be absent.
+    /// </summary>
+    /// <remarks>
+    /// Absent on both sides means uncapped, which is what a team sport with
+    /// no squad limit set is: nothing to compare against, so nothing refused.
+    /// </remarks>
+    private static short? LowerOf(short? first, short? second) =>
+        first is null ? second
+        : second is null ? first
+        : Math.Min(first.Value, second.Value);
 
     /// <summary>
     /// Whether the shirt is free, or who is wearing it.

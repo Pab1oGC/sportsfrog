@@ -1,4 +1,5 @@
 using FluentValidation;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
@@ -64,9 +65,11 @@ public static class ScheduleMatch
     private static async Task<IResult> HandleAsync(
         Guid categoryId,
         Request request,
+        HttpContext context,
         SportFrogDbContext database,
         FixturePolicy policy,
         OrganizationContext organization,
+        IBackgroundJobClient jobs,
         CancellationToken cancellationToken)
     {
         var category = await database.Categories
@@ -90,8 +93,8 @@ public static class ScheduleMatch
         }
 
         var violations = await policy.InspectAsync(
-            categoryId, request.HomeTeamId, request.AwayTeamId, request.VenueSpaceId,
-            cancellationToken);
+            categoryId, request.HomeTeamId, request.AwayTeamId, request.VenueSpaceId, request.ScheduledAt,
+            excludingMatchId: null, cancellationToken);
 
         if (violations.Count > 0)
         {
@@ -136,6 +139,14 @@ public static class ScheduleMatch
                 detail: "Ese espacio ya está tomado a esa hora. Dos partidos no pueden compartir " +
                         "cancha, así que movés uno de los dos.",
                 statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // Only worth a notice when it actually says when or where — a
+        // fixture drawn with neither yet has nothing to tell either club.
+        if (request.ScheduledAt is not null || request.VenueSpaceId is not null)
+        {
+            RescheduleMatch.Notify(
+                context, jobs, organization.RequireOrganizationId(), organization.UserId ?? Guid.Empty, match.Id);
         }
 
         return Results.Created($"/matches/{match.Id}", new Response(match.Id));

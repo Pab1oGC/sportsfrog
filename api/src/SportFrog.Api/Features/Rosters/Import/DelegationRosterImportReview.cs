@@ -244,6 +244,17 @@ internal sealed class DelegationRosterImportReview(SportFrogDbContext database, 
                 + $"{Sex.Female} o {Sex.Male}, o quedar vacío.");
         }
 
+        // Mirrors ck_athletes_weight_positive: mismo chequeo que
+        // CreateAthlete/UpdateAthlete le hacen a un peso cargado a mano.
+        if (row.WeightText is not null && row.Weight is null)
+        {
+            problems.Add($"'{row.WeightText}' no es un peso.");
+        }
+        else if (row.Weight is <= 0)
+        {
+            problems.Add("El peso tiene que ser mayor que cero.");
+        }
+
         if (row.CategoryName is null)
         {
             problems.Add("La categoría es obligatoria.");
@@ -263,6 +274,7 @@ internal sealed class DelegationRosterImportReview(SportFrogDbContext database, 
         DocumentId = document,
         BirthDate = row.BirthDate ?? default,
         Gender = Sex.Normalize(row.Sex),
+        WeightKg = row.Weight,
         IsActive = true,
     };
 

@@ -32,6 +32,12 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
     private const short MaximumMinutes = 240;
 
     /// <summary>
+    /// An hour between periods is past anything a real competition leaves —
+    /// bounds here catch a slipped digit, not express a rule.
+    /// </summary>
+    private const short MaximumBreakMinutes = 60;
+
+    /// <summary>
     /// A win worth a hundred points is not a competition anyone is running,
     /// and a negative price for an outcome is a sanction rather than a rule
     /// of the table.
@@ -58,13 +64,46 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
                 .When(configuration => configuration.Periods.Minutes.HasValue)
                 .WithMessage($"Un período dura entre 1 y {MaximumMinutes} minutos, o se deja sin " +
                              "definir donde termina por marcador en lugar de por reloj.");
+
+            // Un descanso solo significa algo junto a un reloj: sin Minutes
+            // no hay tiempo entre períodos que declarar. Dos RuleFor
+            // separados a proposito en vez de encadenados en uno solo — con
+            // ambos en la misma cadena, justo despues del RuleFor de Minutes,
+            // FluentValidation descartaba las dos reglas en silencio.
+            RuleFor(configuration => configuration.Periods.BreakMinutes)
+                .Must(breakMinutes => !breakMinutes.HasValue)
+                .When(configuration => !configuration.Periods.Minutes.HasValue)
+                .WithMessage("El descanso entre períodos no aplica donde el período no corre " +
+                             "por reloj.");
+
+            RuleFor(configuration => configuration.Periods.BreakMinutes)
+                .InclusiveBetween((short)0, MaximumBreakMinutes)
+                .When(configuration => configuration.Periods.BreakMinutes.HasValue
+                    && configuration.Periods.Minutes.HasValue)
+                .WithMessage($"El descanso entre períodos dura entre 0 y {MaximumBreakMinutes} minutos.");
+
+            // Misma razón que el descanso: solo significa algo donde NO hay
+            // reloj, así que el par de reglas va en el mismo sentido inverso.
+            // Dos RuleFor separados a proposito, mismo motivo que arriba.
+            RuleFor(configuration => configuration.Periods.EstimatedMinutes)
+                .Must(estimatedMinutes => !estimatedMinutes.HasValue)
+                .When(configuration => configuration.Periods.Minutes.HasValue)
+                .WithMessage("La duración estimada no aplica donde el período corre por reloj: ahí se calcula sola.");
+
+            RuleFor(configuration => configuration.Periods.EstimatedMinutes)
+                .InclusiveBetween((short)1, MaximumMinutes)
+                .When(configuration => configuration.Periods.EstimatedMinutes.HasValue)
+                .WithMessage($"La duración estimada del partido va de 1 a {MaximumMinutes} minutos.");
         });
 
+        // Un mapa vacio es una eleccion, no un olvido: una competencia que se
+        // arma como llave directa nunca construye tabla de posiciones, y
+        // quien la organiza no tiene por que inventarle precio a un
+        // desenlace que ninguna tabla va a leer (ver RulesetPolicy.
+        // InspectPoints, que trata "vacio" y "todo tarifado" como las unicas
+        // dos formas validas de llegar hasta aca).
         RuleFor(configuration => configuration.Points)
             .NotNull().WithMessage("La regla de puntos es obligatoria.")
-            .Must(points => points.Count > 0)
-                .When(configuration => configuration.Points is not null)
-                .WithMessage("Un reglamento tiene que decir cuánto vale un resultado.")
             .Must(points => points.Values.All(value => value is >= 0 and <= MaximumPointValue))
                 .When(configuration => configuration.Points is not null)
                 .WithMessage($"Cada desenlace vale entre 0 y {MaximumPointValue} puntos.");
@@ -74,8 +113,14 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
 
         When(configuration => configuration.Tiebreakers is not null, () =>
         {
+            // Un desempate separa equipos empatados en puntos, y sin tabla de
+            // posiciones (Points vacio, ver el remark de RulesetConfiguration.
+            // Points) no hay equipos empatados que separar: exigir uno igual
+            // seria pedirle al organizador que resuelva un problema que su
+            // reglamento no va a tener.
             RuleFor(configuration => configuration.Tiebreakers)
                 .Must(tiebreakers => tiebreakers.Count > 0)
+                    .When(configuration => configuration.Points is { Count: > 0 })
                     .WithMessage("Se necesita al menos un desempate, o dos equipos igualados en " +
                                  "puntos no tienen un orden definido.")
                 .Must(tiebreakers => tiebreakers.Distinct(StringComparer.Ordinal).Count()

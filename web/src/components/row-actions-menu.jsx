@@ -49,7 +49,11 @@ export function RowActionsMenu({ primary, actions = [] }) {
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    // width/height 100%: sin esto el Box mide justo lo que ocupan sus
+    // botones y "centrarlo" no hace nada — lo que tiene que centrarse es el
+    // contenido dentro de toda la celda de la grilla, no el Box consigo
+    // mismo (ver el mismo fix en EditDeleteActions).
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
       {primaries.map((p, i) => (
         // El span es obligatorio cuando el boton puede estar disabled: un
         // elemento deshabilitado no dispara los eventos de mouse que el

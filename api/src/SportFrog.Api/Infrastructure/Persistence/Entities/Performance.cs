@@ -43,6 +43,34 @@ public sealed class Performance
     /// </summary>
     public int? Score { get; set; }
 
+    /// <summary>
+    /// Which mat this team performs on. Nullable for the same reason
+    /// <see cref="Match.VenueSpaceId"/> is: a slot still waiting to be
+    /// assigned is ordinary.
+    /// </summary>
+    public Guid? VenueSpaceId { get; set; }
+
+    /// <summary>
+    /// The day this team performs. A day rather than an instant, like
+    /// <see cref="Match.ScheduledAt"/> would be — see
+    /// <see cref="OrderNumber"/> for why an exact time is not asked for.
+    /// </summary>
+    public DateOnly? ScheduledOn { get; set; }
+
+    /// <summary>
+    /// This team's turn within <see cref="VenueSpaceId"/>'s running order for
+    /// <see cref="ScheduledOn"/>, 1-based.
+    /// </summary>
+    /// <remarks>
+    /// Not a clock time: a poomsae routine runs barely a minute, one after
+    /// another, and a start time nobody would actually keep to is no more
+    /// honest than not having one — the same reasoning that keeps a match's
+    /// own scheduling to an exact instant instead of a guessed duration,
+    /// applied the other way around here because a performance has no
+    /// duration worth guessing at all.
+    /// </remarks>
+    public short? OrderNumber { get; set; }
+
     /// <summary>Who first recorded the score, and when. See <see cref="Match.RecordedBy"/>.</summary>
     public Guid? RecordedBy { get; set; }
 
@@ -61,4 +89,5 @@ public sealed class Performance
     public Competition? Competition { get; set; }
     public Category? Category { get; set; }
     public Team? Team { get; set; }
+    public VenueSpace? VenueSpace { get; set; }
 }

@@ -112,20 +112,17 @@ public static class AdvanceBracket
 
         foreach (var match in last)
         {
-            if (match.WalkoverTeamId is { } awarded)
-            {
-                winners.Add(awarded);
-                continue;
-            }
+            var winner = MatchWinner.Resolve(
+                match.HomeTeamId,
+                match.AwayTeamId,
+                match.WalkoverTeamId,
+                match.HomeTotal,
+                match.AwayTotal,
+                match.PenaltyHomeScore,
+                match.PenaltyAwayScore);
 
-            if (match.HomeTotal == match.AwayTotal)
+            if (winner is null)
             {
-                if (match.PenaltyHomeScore is { } penaltyHome && match.PenaltyAwayScore is { } penaltyAway)
-                {
-                    winners.Add(penaltyHome > penaltyAway ? match.HomeTeamId : match.AwayTeamId);
-                    continue;
-                }
-
                 // A knockout has to produce somebody. A level result with no
                 // shootout recorded means the tie was not actually decided,
                 // and guessing a winner here would put a team into the next
@@ -136,7 +133,7 @@ public static class AdvanceBracket
                     statusCode: StatusCodes.Status409Conflict);
             }
 
-            winners.Add(match.HomeTotal > match.AwayTotal ? match.HomeTeamId : match.AwayTeamId);
+            winners.Add(winner.Value);
         }
 
         // Teams that entered and have never played: the byes of the opening

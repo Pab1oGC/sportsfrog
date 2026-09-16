@@ -18,7 +18,17 @@ public static class ReadPerformances
         int? Score,
 
         /// <summary>Null while the team has not yet performed — see <see cref="ClassificationRanking"/>.</summary>
-        int? Position);
+        int? Position,
+
+        Guid? VenueSpaceId,
+        string? VenueName,
+        string? SpaceName,
+
+        /// <summary>The day this team performs. See <see cref="Performance.ScheduledOn"/>.</summary>
+        DateOnly? ScheduledOn,
+
+        /// <summary>This team's turn in that mat's running order for that day.</summary>
+        short? OrderNumber);
 
     public sealed record Response(IReadOnlyList<Row> Rows);
 
@@ -47,13 +57,43 @@ public static class ReadPerformances
 
         var ranked = ClassificationRanking.Rank(entries);
 
+        // Where and when, kept apart from PerformancesQuery: ranking a
+        // classification stage and placing it in a running order are
+        // different questions, the same reason CalendarPlacement is
+        // separate from the draw — and PerformancesQuery is shared by two
+        // other readers (PromoteClassification, the public portal) that
+        // have no use for either.
+        var schedule = await database.Performances
+            .AsNoTracking()
+            .Where(performance => performance.CategoryId == categoryId)
+            .Select(performance => new
+            {
+                performance.Id,
+                performance.VenueSpaceId,
+                VenueName = performance.VenueSpace!.Venue!.Name,
+                SpaceName = performance.VenueSpace!.Name,
+                performance.ScheduledOn,
+                performance.OrderNumber,
+            })
+            .ToDictionaryAsync(row => row.Id, cancellationToken);
+
         return Results.Ok(new Response(
-            [.. ranked.Select(item => new Row(
-                item.Entry.PerformanceId,
-                item.Entry.TeamId,
-                item.Entry.TeamName,
-                item.Entry.Status,
-                item.Entry.Score,
-                item.Position))]));
+            [.. ranked.Select(item =>
+            {
+                schedule.TryGetValue(item.Entry.PerformanceId, out var slot);
+
+                return new Row(
+                    item.Entry.PerformanceId,
+                    item.Entry.TeamId,
+                    item.Entry.TeamName,
+                    item.Entry.Status,
+                    item.Entry.Score,
+                    item.Position,
+                    slot?.VenueSpaceId,
+                    slot?.VenueName,
+                    slot?.SpaceName,
+                    slot?.ScheduledOn,
+                    slot?.OrderNumber);
+            })]));
     }
 }

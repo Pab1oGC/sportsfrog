@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
@@ -18,20 +18,39 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Dialog from '@mui/material/Dialog';
 import { DataGrid } from '@mui/x-data-grid';
-import { alpha } from '@mui/material/styles';
+import { alpha, ThemeProvider, useTheme } from '@mui/material/styles';
 import useSWR from 'swr';
 import publicAxios from 'src/lib/public-axios';
 import { Iconify } from 'src/components/iconify';
 import { ColorModeToggle } from 'src/components/color-mode-toggle';
+import { useColorMode } from 'src/theme';
+import { buildPortalTheme, portalFontHref } from 'src/lib/portal-theme';
+import { PortalHero } from 'src/pages/public/portal-hero';
 import { FASES } from 'src/lib/phase-labels';
 import { PENDIENTE } from 'src/lib/match-status';
 import { etiquetasDesempate, columnasMarcador } from 'src/lib/tiebreaker-labels';
+import { embedSrc } from 'src/lib/google-maps-url';
 
 var publicFetcher = function(url) { return publicAxios.get(url).then(function(r) { return r.data; }); };
 var SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
 var SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado', walkover: 'Walkover', postponed: 'Aplazado' };
-var SL2 = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };
+// El orden de siempre, para el instante antes de que comp llegue -- nunca se
+// llega a dibujar con este valor (el "if (loadingComp) return" más abajo lo
+// corta primero), pero los hooks de esta pantalla corren sin condicion, así
+// que necesitan algo con que calcular mientras tanto. Una vez que comp
+// llega, el orden real es comp.portal.sectionOrder -- las mismas cuatro
+// claves y etiquetas por defecto que resuelve PortalSection.Resolve.
+var DEFAULT_SECTION_ORDER = [
+  { key: 'standings', label: 'Tabla de posiciones' },
+  { key: 'leaders', label: 'Líderes' },
+  { key: 'classification', label: 'Clasificación' },
+  { key: 'calendar', label: 'Calendario' },
+  { key: 'gallery', label: 'Fotos' },
+];
 
 export default function PublicCompetitionPage() {
   var params = useParams();
@@ -44,6 +63,29 @@ export default function PublicCompetitionPage() {
   var { data: comp, isLoading: loadingComp, error: errorComp } = useSWR(
     '/api/public/' + orgSlug + '/' + compSlug, publicFetcher
   );
+
+  // El tema del portal de esta competencia, sobre el tema de la app. Si la
+  // competencia no personalizó nada, buildPortalTheme devuelve el tema base
+  // intacto y la página se ve igual que siempre. El modo del visitante entra
+  // acá para que "sigue al visitante" funcione; una competencia que fijó
+  // claro u oscuro lo ignora dentro de buildPortalTheme.
+  var appTheme = useTheme();
+  var colorMode = useColorMode();
+  var portalTheme = useMemo(function() {
+    return buildPortalTheme({ base: appTheme, portal: comp && comp.portal, visitorMode: colorMode.mode });
+  }, [appTheme, comp, colorMode.mode]);
+  var headingFontHref = portalFontHref(comp && comp.portal && comp.portal.theme && comp.portal.theme.headingFont);
+
+  // El <body> lo pinta el CssBaseline del nivel de la app, fuera de este
+  // ThemeProvider: si el portal fijó un modo distinto al del panel, el fondo
+  // que se ve al hacer overscroll quedaría del otro color. Se acompaña a mano
+  // mientras esta página está montada.
+  useEffect(function() {
+    if (portalTheme === appTheme) return undefined;
+    var previo = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = portalTheme.palette.background.default;
+    return function() { document.body.style.backgroundColor = previo; };
+  }, [portalTheme, appTheme]);
 
   // Sin la opción de ver todas, siempre hay una categoría a la vista: se abre
   // en la primera apenas llegan. Mezclar categorías en una misma tabla o
@@ -60,29 +102,47 @@ export default function PublicCompetitionPage() {
   // Al reves que las dos anteriores: los planteles son privados salvo que se
   // hayan publicado a proposito (RNF-16), asi que su ausencia significa "no".
   var showRosters = shows.rosters === true;
+  // Solo tiene sentido en un deporte juzgado (poomsae, no todavia ningun
+  // otro) -- una tabla vacia en un deporte por tabla no es lo que el
+  // interruptor prometia mostrar u ocultar.
+  var showClassification = !!(comp && comp.isJudged) && shows.classification !== false;
+  var gallery = (comp && comp.portal && comp.portal.gallery) || [];
+  // Igual que Auspiciantes: una galeria vacia no tiene nada que publicar, asi
+  // que el interruptor por si solo no alcanza para mostrar la pestaña.
+  var showGallery = shows.gallery !== false && gallery.length > 0;
 
-  var tabCount = 0;
-  if (showStandings) tabCount++;
-  if (showLeaders) tabCount++;
-  tabCount++;
+  // El orden y el nombre de cada pestaña son cosa del backend
+  // (comp.portal.sectionOrder, siempre las cinco secciones, en algún orden
+  // -- ver PortalSection.Resolve). Acá solo se filtra por cuáles van
+  // ocultas, que sigue siendo un interruptor aparte y no parte del orden: el
+  // calendario nunca se filtra, no tiene interruptor.
+  var sectionOrder = (comp && comp.portal && comp.portal.sectionOrder) || DEFAULT_SECTION_ORDER;
+  var seccionVisible = {
+    standings: showStandings, leaders: showLeaders, classification: showClassification,
+    calendar: true, gallery: showGallery,
+  };
+  var seccionesVisibles = sectionOrder.filter(function(s) { return seccionVisible[s.key]; });
 
+  var tabCount = seccionesVisibles.length;
   var effectiveTab = tab;
   if (effectiveTab >= tabCount && tabCount > 0) effectiveTab = 0;
 
-  var standingsTabIdx = showStandings ? 0 : -1;
-  var leadersTabIdx = showLeaders ? (showStandings ? 1 : 0) : -1;
-  var calendarTabIdx = (showStandings ? 1 : 0) + (showLeaders ? 1 : 0);
+  var seccionActiva = seccionesVisibles[effectiveTab] ? seccionesVisibles[effectiveTab].key : null;
 
   var { data: standingsData, isLoading: loadingStandings } = useSWR(
-    comp && effectiveTab === standingsTabIdx && showStandings ? '/api/public/' + orgSlug + '/' + compSlug + '/standings' : null, publicFetcher
+    comp && seccionActiva === 'standings' ? '/api/public/' + orgSlug + '/' + compSlug + '/standings' : null, publicFetcher
   );
 
   var { data: leadersData, isLoading: loadingLeaders } = useSWR(
-    comp && effectiveTab === leadersTabIdx && showLeaders ? '/api/public/' + orgSlug + '/' + compSlug + '/leaders?top=10' : null, publicFetcher
+    comp && seccionActiva === 'leaders' ? '/api/public/' + orgSlug + '/' + compSlug + '/leaders?top=10' : null, publicFetcher
+  );
+
+  var { data: classificationData, isLoading: loadingClassification } = useSWR(
+    comp && seccionActiva === 'classification' ? '/api/public/' + orgSlug + '/' + compSlug + '/classification' : null, publicFetcher
   );
 
   var { data: calendarData, isLoading: loadingCalendar } = useSWR(
-    comp && effectiveTab === calendarTabIdx ? '/api/public/' + orgSlug + '/' + compSlug + '/matches' : null, publicFetcher
+    comp && seccionActiva === 'calendar' ? '/api/public/' + orgSlug + '/' + compSlug + '/matches' : null, publicFetcher
   );
 
   if (loadingComp) return (
@@ -103,55 +163,24 @@ export default function PublicCompetitionPage() {
   );
 
   var cats = comp.categories || [];
-  // Ausente en toda competencia que nunca abrió "Personalizar portal": el
+  // Ausente en toda competencia que nunca abrió el estudio de portal: el
   // resto de la pagina se dibuja exactamente como siempre.
   var portal = comp.portal || {};
   var sponsors = portal.sponsors || [];
-  var social = [
-    { key: 'instagram', href: portal.instagram, icon: 'mdi:instagram' },
-    { key: 'facebook', href: portal.facebook, icon: 'mdi:facebook' },
-    { key: 'whatsApp', href: portal.whatsApp, icon: 'mdi:whatsapp' },
-    { key: 'website', href: portal.website, icon: 'mdi:web' }
-  ].filter(function(s) { return s.href; });
+  var esquemaFijo = portal.theme && portal.theme.colorScheme && portal.theme.colorScheme !== 'auto';
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Navbar navigate={navigate} logoUrl={comp.organizationLogoUrl} />
-      <Box
-        sx={{
-          position: 'relative',
-          color: 'white',
-          py: { xs: 3, sm: 4 },
-          px: 3,
-          bgcolor: portal.accentColor || 'primary.main',
-          backgroundImage: portal.bannerUrl
-            ? 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.6)), url(' + portal.bannerUrl + ')'
-            : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        }}
-      >
-        <Container maxWidth="lg">
-          <Button size="small" sx={{ color: 'white', mb: 1, opacity: 0.8 }} onClick={function() { navigate('/public'); }} startIcon={<Iconify icon="eva:arrow-back-outline" />}>Volver</Button>
-          <Typography variant="h3" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' } }}>{comp.name}</Typography>
-          <Typography variant="subtitle1" sx={{ opacity: 0.9, mt: 0.5 }}>{comp.organizationName} &middot; {comp.season} &middot; {comp.sportName}</Typography>
-          {portal.description && (
-            <Typography variant="body2" sx={{ opacity: 0.95, mt: 1, maxWidth: 640 }}>{portal.description}</Typography>
-          )}
-          <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Chip label={SL2[comp.status] || comp.status} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
-            <Chip label={comp.format === 'league' ? 'Todos vs todos' : comp.format === 'knockout' ? 'Eliminacion' : 'Grupos'} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
-            {comp.startsOn && <Chip label={comp.startsOn + ' - ' + (comp.endsOn || '?')} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />}
-            {social.map(function(s) {
-              return (
-                <IconButton key={s.key} size="small" component="a" href={s.href} target="_blank" rel="noopener noreferrer" sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.15)' }}>
-                  <Iconify icon={s.icon} width={16} />
-                </IconButton>
-              );
-            })}
-          </Box>
-        </Container>
-      </Box>
+    <ThemeProvider theme={portalTheme}>
+      {/* React 19 iza este <link> al <head> y lo deduplica. Sin fuente propia
+          headingFontHref es null y no se dibuja nada. */}
+      {headingFontHref && <link rel="stylesheet" href={headingFontHref} precedence="portal-font" />}
+      {/* color: el <body> lo pinta el CssBaseline del nivel de la app y no
+          sigue a este ThemeProvider, así que el texto que hereda color (un
+          <Typography> sin prop `color`) se quedaría con el del panel. Fijarlo
+          acá hace que todo el portal herede el color del tema del portal. */}
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
+      <Navbar navigate={navigate} logoUrl={comp.organizationLogoUrl} showModeToggle={!esquemaFijo} />
+      <PortalHero comp={comp} portal={portal} moment={comp.moment} onBack={function() { navigate('/public'); }} />
       <Container maxWidth="lg" sx={{ py: 3 }}>
         {cats.length > 0 && (
           <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -161,19 +190,25 @@ export default function PublicCompetitionPage() {
           </Box>
         )}
         <Tabs value={effectiveTab} onChange={function(e, v) { setTab(v); }} sx={{ mb: 3 }}>
-          {showStandings && <Tab label="Tabla de posiciones" />}
-          {showLeaders && <Tab label="Lideres" />}
-          <Tab label="Calendario" />
+          {seccionesVisibles.map(function(s) { return <Tab key={s.key} label={s.label} />; })}
         </Tabs>
-        {effectiveTab === standingsTabIdx && showStandings && (
-          <StandingsView data={standingsData} loading={loadingStandings} selectedCatId={selectedCatId} sportInfo={comp} />
-        )}
-        {effectiveTab === leadersTabIdx && showLeaders && (
-          <LeadersView data={leadersData} loading={loadingLeaders} selectedCatId={selectedCatId} />
-        )}
-        {effectiveTab === calendarTabIdx && (
-          <CalendarView data={calendarData} loading={loadingCalendar} selectedCatId={selectedCatId} orgSlug={orgSlug} compSlug={compSlug} mostrarEventos={showRosters} />
-        )}
+        {seccionesVisibles.map(function(s, i) {
+          if (effectiveTab !== i) return null;
+          switch (s.key) {
+            case 'standings':
+              return <StandingsView key="standings" data={standingsData} loading={loadingStandings} selectedCatId={selectedCatId} sportInfo={comp} />;
+            case 'leaders':
+              return <LeadersView key="leaders" data={leadersData} loading={loadingLeaders} selectedCatId={selectedCatId} />;
+            case 'classification':
+              return <ClassificationView key="classification" data={classificationData} loading={loadingClassification} selectedCatId={selectedCatId} />;
+            case 'calendar':
+              return <CalendarView key="calendar" data={calendarData} loading={loadingCalendar} selectedCatId={selectedCatId} orgSlug={orgSlug} compSlug={compSlug} mostrarEventos={showRosters} />;
+            case 'gallery':
+              return <GalleryView key="gallery" photos={gallery} />;
+            default:
+              return null;
+          }
+        })}
 
         {sponsors.length > 0 && (
           <Box sx={{ mt: 5, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
@@ -195,7 +230,8 @@ export default function PublicCompetitionPage() {
           </Box>
         )}
       </Container>
-    </Box>
+      </Box>
+    </ThemeProvider>
   );
 }
 
@@ -214,7 +250,9 @@ function Navbar(props) {
           <Typography variant="h6" fontWeight={700}>SportFrog</Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }} />
-        <ColorModeToggle sx={{ mr: 0.5 }} />
+        {/* La competencia puede fijar claro u oscuro; ahí el interruptor no
+            haría nada y se esconde. */}
+        {props.showModeToggle !== false && <ColorModeToggle sx={{ mr: 0.5 }} />}
         <Button onClick={function() { props.navigate('/public'); }} sx={{ mr: 1 }}>Competiciones</Button>
         <Button variant="outlined" onClick={function() { props.navigate('/auth/jwt/sign-in'); }}>Iniciar sesion</Button>
       </Toolbar>
@@ -448,6 +486,159 @@ function Tablero(props) {
 }
 
 /* -------------------------------------------------------------------------
+   Clasificación
+
+   El equivalente de la tabla de posiciones para un deporte que no se decide
+   por partido sino por puntaje de jueces (poomsae, hoy el único). Cada
+   competidor actúa una vez y queda ordenado por puntaje; el que todavía no
+   actuó aparece al final, sin posición, en vez de faltar de la lista.
+   ------------------------------------------------------------------------- */
+
+function ClassificationView(props) {
+  var loading = props.loading;
+  var selectedCatId = props.selectedCatId;
+
+  if (loading) return <Cargando />;
+
+  var cats = (props.data && props.data.categories) || [];
+  if (selectedCatId) cats = cats.filter(function(c) { return c.categoryId === selectedCatId; });
+
+  if (cats.length === 0) {
+    return (
+      <Alert severity="info">
+        Todavía no hay clasificación para mostrar. Aparece apenas se abre la etapa de clasificación de la categoría.
+      </Alert>
+    );
+  }
+
+  var variasCategorias = cats.length > 1;
+
+  return cats.map(function(cat) {
+    return (
+      <Box key={cat.categoryId} sx={{ mb: 4 }}>
+        {variasCategorias && (
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>{cat.categoryName}</Typography>
+        )}
+        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+          <Stack divider={<Divider flexItem />}>
+            {cat.rows.map(function(r) {
+              var sinActuar = r.status === 'pending';
+              return (
+                <Box key={r.performanceId} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.1 }}>
+                  <Box
+                    sx={{
+                      width: 28, height: 28, flexShrink: 0, borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 700,
+                      bgcolor: MEDALLA[r.position] || 'action.selected',
+                      color: MEDALLA[r.position] ? 'white' : 'text.secondary'
+                    }}
+                  >
+                    {r.position || '—'}
+                  </Box>
+                  <Typography variant="body2" fontWeight={600} noWrap sx={{ flexGrow: 1, minWidth: 0 }} title={r.teamName}>
+                    {r.teamName}
+                  </Typography>
+                  {sinActuar ? (
+                    <Chip size="small" variant="outlined" label="Sin actuar" />
+                  ) : (
+                    <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1 }}>{r.score}</Typography>
+                  )}
+                </Box>
+              );
+            })}
+          </Stack>
+        </Paper>
+      </Box>
+    );
+  });
+}
+
+/* -------------------------------------------------------------------------
+   Galería
+
+   Fotos del propio evento -- partidos, la premiación, el público. En grilla,
+   y en grande al tocar una: no hace falta abrir cada una en una pestaña
+   nueva ni perder el lugar en la grilla para volver a la que sigue.
+   ------------------------------------------------------------------------- */
+
+function GalleryView(props) {
+  var photos = props.photos || [];
+  var [abierta, setAbierta] = useState(null);
+
+  if (photos.length === 0) {
+    return <Alert severity="info">Todavía no hay fotos para mostrar.</Alert>;
+  }
+
+  var actual = abierta != null ? photos[abierta] : null;
+
+  return (
+    <>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
+        {photos.map(function(p, i) {
+          return (
+            <Box
+              key={i}
+              onClick={function() { setAbierta(i); }}
+              title={p.caption || ''}
+              sx={{
+                cursor: 'pointer', borderRadius: 2, overflow: 'hidden', aspectRatio: '1 / 1', bgcolor: 'action.hover',
+              }}
+            >
+              <Box
+                component="img"
+                src={p.url}
+                alt={p.caption || ''}
+                sx={{
+                  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                  transition: 'transform 0.2s ease', '&:hover': { transform: 'scale(1.05)' },
+                }}
+              />
+            </Box>
+          );
+        })}
+      </Box>
+
+      <Dialog open={abierta != null} onClose={function() { setAbierta(null); }} maxWidth="md" fullWidth>
+        {actual && (
+          <Box sx={{ position: 'relative', bgcolor: 'common.black' }}>
+            <IconButton
+              onClick={function() { setAbierta(null); }}
+              aria-label="Cerrar"
+              sx={{ position: 'absolute', top: 8, right: 8, color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.6)' } }}
+            >
+              <Iconify icon="eva:close-outline" />
+            </IconButton>
+            {abierta > 0 && (
+              <IconButton
+                onClick={function() { setAbierta(abierta - 1); }}
+                aria-label="Anterior"
+                sx={{ position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)', color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.6)' } }}
+              >
+                <Iconify icon="eva:arrow-back-outline" />
+              </IconButton>
+            )}
+            {abierta < photos.length - 1 && (
+              <IconButton
+                onClick={function() { setAbierta(abierta + 1); }}
+                aria-label="Siguiente"
+                sx={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.6)' } }}
+              >
+                <Iconify icon="eva:arrow-forward-outline" />
+              </IconButton>
+            )}
+            <Box component="img" src={actual.url} alt={actual.caption || ''} sx={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
+            {actual.caption && (
+              <Typography variant="body2" sx={{ color: 'white', p: 1.5, textAlign: 'center' }}>{actual.caption}</Typography>
+            )}
+          </Box>
+        )}
+      </Dialog>
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------
    Calendario
 
    Un calendario se lee por jornada: qué se juega, contra quién y cómo terminó.
@@ -470,6 +661,10 @@ function CalendarView(props) {
   var mostrarEventos = props.mostrarEventos;
   var [eleccion, setEleccion] = useState(null);
   var [equipo, setEquipo] = useState('');
+  // "Lista" es el default: una categoria sin eliminatoria nunca ve el
+  // interruptor (hayLlave, mas abajo, lo esconde), y una que si la tiene abre
+  // igual en la vista de siempre en vez de cambiarle la pantalla a nadie.
+  var [vista, setVista] = useState('lista');
 
   var fixtures = (props.data && props.data.fixtures) || [];
   if (selectedCatId) fixtures = fixtures.filter(function(m) { return m.categoryId === selectedCatId; });
@@ -557,6 +752,14 @@ function CalendarView(props) {
     g.enCurso = g.pendientes > 0 && g.jugados > 0;
   });
 
+  // Solo las rondas de eliminatoria arman una llave — una jornada de grupos
+  // no tiene cruces que dibujar como árbol. Filtrada por equipo tampoco: el
+  // fixture de un solo equipo es una lista de partidos suyos, no una llave
+  // entera de la que ver el resto no aporta nada.
+  var gruposFase = grupos.filter(function(g) { return g.clave.indexOf('f:') === 0; });
+  var hayLlave = gruposFase.length > 0 && !deUnEquipo;
+  var vistaLlave = hayLlave && vista === 'llave';
+
   // La primera sin terminar. Si están todas terminadas, la última: el torneo
   // se acabó y lo que alguien viene a ver es cómo cerró.
   var actual = grupos.find(function(g) { return !g.terminada; }) || grupos[grupos.length - 1];
@@ -612,84 +815,205 @@ function CalendarView(props) {
         </TextField>
       )}
 
-      {/* Con un equipo elegido las jornadas dejan de servir como filtro: juega
-          una vez en cada una. Se muestra su fixture entero. */}
-      {!deUnEquipo && grupos.length > 1 && (
-        <Box sx={{ mb: 2 }}>
-          <Box
-            sx={{
-              display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center',
-              pb: 0.5
-            }}
-          >
-            {grupos.map(function(g) {
-              var seleccionada = elegida && g.clave === elegida.clave;
-              return (
-                <Chip
-                  key={g.clave}
-                  label={g.titulo.replace('Jornada ', 'J')}
-                  size="small"
-                  onClick={function() { setEleccion(g.clave); }}
-                  color={seleccionada ? 'primary' : g.enCurso ? 'warning' : 'default'}
-                  variant={seleccionada || g.enCurso ? 'filled' : 'outlined'}
-                  sx={{
-                    fontWeight: seleccionada ? 700 : 500,
-                    // Una jornada ya jugada se atenúa: sigue ahí para volver a
-                    // ella, pero no compite por la atención con la que viene.
-                    opacity: !seleccionada && g.terminada ? 0.55 : 1
-                  }}
-                />
-              );
-            })}
-          </Box>
-        </Box>
+      {hayLlave && (
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={vista}
+          onChange={function(e, v) { if (v) setVista(v); }}
+          sx={{ mb: 2, display: 'flex', width: { xs: '100%', sm: 'fit-content' } }}
+        >
+          <ToggleButton value="lista" sx={{ flex: { xs: 1, sm: 'initial' } }}>Lista</ToggleButton>
+          <ToggleButton value="llave" sx={{ flex: { xs: 1, sm: 'initial' } }}>Llave</ToggleButton>
+        </ToggleButtonGroup>
       )}
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {deUnEquipo
-          ? elEquipo.nombre + ' · ' + partidos.length + ' ' + (partidos.length === 1 ? 'partido' : 'partidos')
-            + ' · ' + jugadosTotal + ' con resultado'
-          : elegida
-            ? elegida.matches.length + ' ' + (elegida.matches.length === 1 ? 'partido' : 'partidos')
-              + ' · ' + elegida.jugados + ' con resultado'
-              + (elegida.terminada ? ' · jornada completa' : '')
-            : ''}
-      </Typography>
-
-      {visibles.filter(Boolean).map(function(g) {
-        return (
-          <Box key={g.clave} sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Typography
-                variant="overline"
-                color="text.secondary"
-                sx={{ fontWeight: 700, letterSpacing: 1 }}
+      {vistaLlave ? (
+        <Llave grupos={gruposFase} orgSlug={orgSlug} compSlug={compSlug} />
+      ) : (
+        <>
+          {/* Con un equipo elegido las jornadas dejan de servir como filtro:
+              juega una vez en cada una. Se muestra su fixture entero. */}
+          {!deUnEquipo && grupos.length > 1 && (
+            <Box sx={{ mb: 2 }}>
+              <Box
+                sx={{
+                  display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center',
+                  pb: 0.5
+                }}
               >
-                {g.titulo}
-              </Typography>
-              {g.enCurso && <Chip label="En juego" color="warning" size="small" sx={{ height: 20, fontSize: 11 }} />}
+                {grupos.map(function(g) {
+                  var seleccionada = elegida && g.clave === elegida.clave;
+                  return (
+                    <Chip
+                      key={g.clave}
+                      label={g.titulo.replace('Jornada ', 'J')}
+                      size="small"
+                      onClick={function() { setEleccion(g.clave); }}
+                      color={seleccionada ? 'primary' : g.enCurso ? 'warning' : 'default'}
+                      variant={seleccionada || g.enCurso ? 'filled' : 'outlined'}
+                      sx={{
+                        fontWeight: seleccionada ? 700 : 500,
+                        // Una jornada ya jugada se atenúa: sigue ahí para volver a
+                        // ella, pero no compite por la atención con la que viene.
+                        opacity: !seleccionada && g.terminada ? 0.55 : 1
+                      }}
+                    />
+                  );
+                })}
+              </Box>
             </Box>
-            <Stack spacing={1}>
-              {g.matches.map(function(m) {
-                return (
-                  <Partido
-                    key={m.id}
-                    m={m}
-                    mostrarCategoria={variasCategorias}
-                    destacado={elEquipo ? elEquipo.nombre : null}
-                    orgSlug={orgSlug}
-                    compSlug={compSlug}
-                    mostrarEventos={mostrarEventos}
-                  />
-                );
-              })}
-            </Stack>
-          </Box>
-        );
-      })}
+          )}
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {deUnEquipo
+              ? elEquipo.nombre + ' · ' + partidos.length + ' ' + (partidos.length === 1 ? 'partido' : 'partidos')
+                + ' · ' + jugadosTotal + ' con resultado'
+              : elegida
+                ? elegida.matches.length + ' ' + (elegida.matches.length === 1 ? 'partido' : 'partidos')
+                  + ' · ' + elegida.jugados + ' con resultado'
+                  + (elegida.terminada ? ' · jornada completa' : '')
+                : ''}
+          </Typography>
+
+          {visibles.filter(Boolean).map(function(g) {
+            return (
+              <Box key={g.clave} sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Typography
+                    variant="overline"
+                    color="text.secondary"
+                    sx={{ fontWeight: 700, letterSpacing: 1 }}
+                  >
+                    {g.titulo}
+                  </Typography>
+                  {g.enCurso && <Chip label="En juego" color="warning" size="small" sx={{ height: 20, fontSize: 11 }} />}
+                </Box>
+                <Stack spacing={1}>
+                  {g.matches.map(function(m) {
+                    return (
+                      <Partido
+                        key={m.id}
+                        m={m}
+                        mostrarCategoria={variasCategorias}
+                        destacado={elEquipo ? elEquipo.nombre : null}
+                        orgSlug={orgSlug}
+                        compSlug={compSlug}
+                        mostrarEventos={mostrarEventos}
+                      />
+                    );
+                  })}
+                </Stack>
+              </Box>
+            );
+          })}
+        </>
+      )}
     </Box>
   );
 }
+
+/** La llave de una eliminatoria, ronda por ronda: una columna por fase, ordenadas
+ * de la primera a la final. El alto de cada columna lo estira su fila (todas las
+ * columnas son hijas del mismo Box en fila), y "space-around" reparte los cruces
+ * dentro de ese alto — que es lo que hace que las columnas de rondas con menos
+ * cruces se vean más separadas: la misma convergencia visual de un árbol, sin
+ * dibujar una sola línea. */
+function Llave(props) {
+  var grupos = props.grupos;
+  var orgSlug = props.orgSlug;
+  var compSlug = props.compSlug;
+
+  // El campeón: la última ronda, cuando quedó en un solo cruce ya jugado.
+  var ultima = grupos[grupos.length - 1];
+  var final = ultima && ultima.matches.length === 1 ? ultima.matches[0] : null;
+  var finalJugada = final && final.homeTotal != null && final.awayTotal != null;
+  var campeon = null;
+
+  if (finalJugada) {
+    var penales = final.homeTotal === final.awayTotal && final.penaltyHomeScore != null;
+    var ganoLocal = penales ? final.penaltyHomeScore > final.penaltyAwayScore : final.homeTotal > final.awayTotal;
+    campeon = ganoLocal ? final.homeTeamName : final.awayTeamName;
+  }
+
+  return (
+    <Box>
+      {campeon && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5, p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
+          <Typography sx={{ fontSize: 24, lineHeight: 1 }}>🏆</Typography>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>{campeon}</Typography>
+            <Typography variant="caption" color="text.secondary">Campeón</Typography>
+          </Box>
+        </Box>
+      )}
+      <Box sx={{ display: 'flex', gap: { xs: 2, sm: 3 }, overflowX: 'auto', pb: 1 }}>
+        {grupos.map(function(g) {
+          return (
+            <Box key={g.clave} sx={{ minWidth: 210, width: 210, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mb: 1 }}>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, textAlign: 'center' }}>
+                  {g.titulo}
+                </Typography>
+                {g.enCurso && <Chip label="En juego" color="warning" size="small" sx={{ height: 18, fontSize: 10 }} />}
+              </Box>
+              <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: 2 }}>
+                {g.matches.map(function(m) {
+                  return <CruceLlave key={m.id} m={m} orgSlug={orgSlug} compSlug={compSlug} />;
+                })}
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+}
+
+/** Un cruce de la llave: los dos equipos, uno arriba del otro, con el marcador
+ * al costado — compacto a propósito, para que quepan varios por columna. */
+function CruceLlave(props) {
+  var m = props.m;
+  var jugado = m.homeTotal != null && m.awayTotal != null;
+  var enVivo = !jugado && m.status === 'in_progress' && m.liveHomeTotal != null && m.liveAwayTotal != null;
+  var huboPenales = jugado && m.homeTotal === m.awayTotal && m.penaltyHomeScore != null;
+  var ganoLocal = jugado && (huboPenales ? m.penaltyHomeScore > m.penaltyAwayScore : m.homeTotal > m.awayTotal);
+  var ganoVisita = jugado && (huboPenales ? m.penaltyAwayScore > m.penaltyHomeScore : m.awayTotal > m.homeTotal);
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1, borderRadius: 1.5 }}>
+      <FilaCruce nombre={m.homeTeamName} logo={m.homeClubLogoUrl} score={jugado ? m.homeTotal : enVivo ? m.liveHomeTotal : null} gano={ganoLocal} />
+      <Divider sx={{ my: 0.5 }} />
+      <FilaCruce nombre={m.awayTeamName} logo={m.awayClubLogoUrl} score={jugado ? m.awayTotal : enVivo ? m.liveAwayTotal : null} gano={ganoVisita} />
+      {huboPenales && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 0.5 }}>
+          ({m.penaltyHomeScore}-{m.penaltyAwayScore} pen)
+        </Typography>
+      )}
+      {enVivo && <Chip label="EN VIVO" color="warning" size="small" sx={{ mt: 0.5, width: '100%', fontSize: 10, height: 18 }} />}
+      {!jugado && !enVivo && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 0.5 }}>
+          {m.scheduledAt ? fechaCorta(m.scheduledAt) + ' · ' + hora(m.scheduledAt) : 'Por programar'}
+        </Typography>
+      )}
+    </Paper>
+  );
+}
+
+function FilaCruce(props) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+      <EscudoEquipo url={props.logo} />
+      <Typography variant="body2" noWrap title={props.nombre} sx={{ flexGrow: 1, minWidth: 0, fontWeight: props.gano ? 700 : 500 }}>
+        {props.nombre}
+      </Typography>
+      <Typography variant="body2" fontWeight={700} sx={{ minWidth: 16, textAlign: 'right' }}>
+        {props.score != null ? props.score : ''}
+      </Typography>
+    </Box>
+  );
+}
+
 function Partido(props) {
   var m = props.m;
   var jugado = m.homeTotal != null && m.awayTotal != null;
@@ -720,6 +1044,7 @@ function Partido(props) {
   // tiene sentido pedirla una vez que el partido empezó a jugarse.
   var puedeVerCronologia = props.mostrarEventos && (m.status === 'in_progress' || m.status === 'finished');
   var [expandido, setExpandido] = useState(false);
+  var [mapaAbierto, setMapaAbierto] = useState(false);
 
   return (
     <Paper
@@ -811,9 +1136,21 @@ function Partido(props) {
         }}
       >
         {cancha && (
-          <Typography variant="caption" color="text.secondary" noWrap title={cancha} sx={{ minWidth: 0 }}>
-            {cancha}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary" noWrap title={cancha} sx={{ minWidth: 0 }}>
+              {cancha}
+            </Typography>
+            {m.venueMapsUrl && (
+              <IconButton
+                size="small"
+                title="Ver el mapa"
+                onClick={(e) => { e.stopPropagation(); setMapaAbierto(true); }}
+                sx={{ p: 0.25 }}
+              >
+                <Iconify icon="mdi:map-marker" width={14} />
+              </IconButton>
+            )}
+          </Box>
         )}
         <Chip
           size="small"
@@ -840,7 +1177,58 @@ function Partido(props) {
     {puedeVerCronologia && expandido && (
       <Cronologia orgSlug={props.orgSlug} compSlug={props.compSlug} matchId={m.id} homeTeamName={m.homeTeamName} awayTeamName={m.awayTeamName} />
     )}
+    {m.venueMapsUrl && (
+      <MapaSedeDialog open={mapaAbierto} onClose={function() { setMapaAbierto(false); }} titulo={cancha} mapsUrl={m.venueMapsUrl} />
+    )}
     </Paper>
+  );
+}
+
+/**
+ * El mapa de una sede, incrustado en un dialogo en vez de abrirse en otra
+ * pestaña -- eso era todo lo que habia antes de que se pidiera verlo "en el
+ * portal" en si. El enlace que carga el organizador puede ser cualquier
+ * forma en que Google Maps entrega un lugar (un "compartir", un lugar, un
+ * enlace corto): la mayoria de esas paginas rechazan mostrarse dentro de un
+ * iframe ajeno, asi que en vez de usarlo tal cual se arma la URL de consulta
+ * que Google si permite incrustar (?q=...&output=embed). No hay forma de
+ * detectar en JavaScript si ese intento fallo -un bloqueo por iframe no
+ * dispara ningun evento- asi que el enlace para abrirlo en una pestaña
+ * aparte queda siempre visible debajo, no solo como respaldo silencioso.
+ */
+function MapaSedeDialog(props) {
+  return (
+    <Dialog open={props.open} onClose={props.onClose} maxWidth="sm" fullWidth>
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+          <Typography variant="subtitle1" fontWeight={600} noWrap title={props.titulo} sx={{ minWidth: 0 }}>
+            {props.titulo || 'Ubicación'}
+          </Typography>
+          <IconButton size="small" onClick={props.onClose} aria-label="Cerrar">
+            <Iconify icon="eva:close-outline" width={20} />
+          </IconButton>
+        </Box>
+        <Box
+          component="iframe"
+          src={embedSrc(props.mapsUrl)}
+          title={props.titulo || 'Mapa'}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          sx={{ width: '100%', height: { xs: 260, sm: 340 }, border: 0, borderRadius: 1, display: 'block' }}
+        />
+        <Button
+          component="a"
+          href={props.mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="small"
+          startIcon={<Iconify icon="mdi:map-marker" width={16} />}
+          sx={{ mt: 1 }}
+        >
+          Abrir en Google Maps
+        </Button>
+      </Box>
+    </Dialog>
   );
 }
 

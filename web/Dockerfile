@@ -16,10 +16,17 @@
 FROM node:22-alpine AS build
 WORKDIR /src
 
-# package*.json first, so the install layer is reused while dependencies
-# don't change — the same reasoning as api/Dockerfile's restore step.
-COPY package.json package-lock.json ./
-RUN npm ci
+# Corepack ships with Node and reads "packageManager" in package.json to
+# fetch the exact pnpm build the lockfile was made with — no separate
+# "npm install -g pnpm" step, and no drift between what's installed here
+# and what a developer runs locally.
+RUN corepack enable
+
+# package.json and the lockfile first, so the install layer is reused while
+# dependencies don't change — the same reasoning as api/Dockerfile's restore
+# step.
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
@@ -27,7 +34,7 @@ COPY . .
 # relative paths, which is exactly what nginx.conf's /api/ proxy expects —
 # see .env.example for the full reasoning. Baking in an absolute API URL
 # here would defeat the same-origin setup this image exists to provide.
-RUN npm run build
+RUN pnpm run build
 
 # -----------------------------------------------------------------------------
 FROM nginx:1.27-alpine AS runtime

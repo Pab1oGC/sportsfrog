@@ -23,6 +23,7 @@ import { useApi, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { useLastCompetition } from 'src/hooks/use-last-competition';
+import { DateField } from 'src/components/date-field';
 import { SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
 import { toast } from 'sonner';
 
@@ -347,8 +348,8 @@ export default function DocumentsPage() {
           )}
           {form.kind === 'credential' && (
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <TextField label="Vigente desde" type="date" value={form.validFrom} onChange={function(e) { setForm(Object.assign({}, form, { validFrom: e.target.value })); }} sx={{ flex: '1 1 160px' }} slotProps={{ inputLabel: { shrink: true } }} />
-              <TextField label="Vigente hasta" type="date" value={form.validTo} onChange={function(e) { setForm(Object.assign({}, form, { validTo: e.target.value })); }} sx={{ flex: '1 1 160px' }} slotProps={{ inputLabel: { shrink: true } }} />
+              <DateField label="Vigente desde" value={form.validFrom} onChange={function(e) { setForm(Object.assign({}, form, { validFrom: e.target.value })); }} sx={{ flex: '1 1 160px' }} />
+              <DateField label="Vigente hasta" value={form.validTo} onChange={function(e) { setForm(Object.assign({}, form, { validTo: e.target.value })); }} sx={{ flex: '1 1 160px' }} />
             </Box>
           )}
         </DialogContent>

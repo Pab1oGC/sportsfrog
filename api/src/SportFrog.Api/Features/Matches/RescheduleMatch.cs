@@ -1,9 +1,11 @@
 using FluentValidation;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Matches;
 
@@ -68,8 +70,11 @@ public static class RescheduleMatch
     private static async Task<IResult> HandleAsync(
         Guid id,
         Request request,
+        HttpContext context,
         SportFrogDbContext database,
         FixturePolicy policy,
+        OrganizationContext organization,
+        IBackgroundJobClient jobs,
         CancellationToken cancellationToken)
     {
         var match = await database.Matches.SingleOrDefaultAsync(
@@ -79,6 +84,12 @@ public static class RescheduleMatch
         {
             return Results.NotFound();
         }
+
+        // Whether this is actually a reprogramming and not, say, a note
+        // corrected on a fixture nobody moved — the only thing worth writing
+        // to a club about.
+        var scheduleChanged =
+            request.VenueSpaceId != match.VenueSpaceId || request.ScheduledAt != match.ScheduledAt;
 
         var teamsChanged =
             request.HomeTeamId != match.HomeTeamId || request.AwayTeamId != match.AwayTeamId;
@@ -92,8 +103,8 @@ public static class RescheduleMatch
         }
 
         var violations = await policy.InspectAsync(
-            match.CategoryId, request.HomeTeamId, request.AwayTeamId, request.VenueSpaceId,
-            cancellationToken);
+            match.CategoryId, request.HomeTeamId, request.AwayTeamId, request.VenueSpaceId, request.ScheduledAt,
+            excludingMatchId: id, cancellationToken);
 
         if (violations.Count > 0)
         {
@@ -126,6 +137,36 @@ public static class RescheduleMatch
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (scheduleChanged)
+        {
+            Notify(context, jobs, organization.RequireOrganizationId(), organization.UserId ?? Guid.Empty, id);
+        }
+
         return Results.NoContent();
     }
+
+    /// <summary>
+    /// Queued once the response has actually gone out — same reason as
+    /// <c>ImportAthletePhotos.Queue</c>: the transaction that moved this
+    /// fixture has to commit before a job reading it can see the new
+    /// schedule, and a request that rolls back afterwards must never have
+    /// already queued a notice about a change that never happened.
+    /// </summary>
+    /// <remarks>
+    /// Internal, not private: <see cref="ScheduleMatch"/> and
+    /// <see cref="Draw.ScheduleCalendar"/> both put a fixture on the
+    /// calendar for the first time rather than moving one, and a club told
+    /// its match moved deserves the same notice as a club told it was drawn
+    /// in the first place — there is nothing about the message that is
+    /// specific to a correction.
+    /// </remarks>
+    internal static void Notify(
+        HttpContext context, IBackgroundJobClient jobs, Guid organizationId, Guid userId, Guid matchId) =>
+        context.Response.OnCompleted(() =>
+        {
+            jobs.Enqueue<MatchRescheduleNotificationJob>(
+                job => job.RunAsync(organizationId, userId, matchId, CancellationToken.None));
+
+            return Task.CompletedTask;
+        });
 }

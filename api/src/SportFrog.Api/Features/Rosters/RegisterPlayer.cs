@@ -67,37 +67,17 @@ public static class RegisterPlayer
         OrganizationContext organization,
         CancellationToken cancellationToken)
     {
-        // Tracked, unlike most reads here: an individual-sport team's name
-        // may be rewritten below, and that has to ride along in the same
-        // SaveChanges as the registration it is a consequence of.
-        var team = await database.Teams
-            .Include(candidate => candidate.Category)
-                .ThenInclude(category => category!.Competition)
-            .SingleOrDefaultAsync(candidate => candidate.Id == teamId, cancellationToken);
-
-        if (team?.Category is not { Competition: { } competition } category)
+        if (await RosterTeamGate.OpenAsync(teamId, database, cancellationToken) is not { } opened)
         {
             return Results.NotFound();
         }
 
-        if (competition.Status is CompetitionState.Finished or CompetitionState.Cancelled)
+        if (opened.Refusal is { } refusal)
         {
-            // Registering into a competition that is over does not add a
-            // player to anything; it edits history. Mid-season is left open on
-            // purpose — squads change while a league runs, and refusing that
-            // would be refusing how the sport works.
-            return Results.Problem(
-                detail: "Esta competencia ya terminó, así que sus nóminas están cerradas.",
-                statusCode: StatusCodes.Status409Conflict);
+            return refusal;
         }
 
-        if (!team.IsActive)
-        {
-            return Results.Problem(
-                detail: $"{team.Name} se retiró de esta categoría, así que no está tomando " +
-                        "registros.",
-                statusCode: StatusCodes.Status409Conflict);
-        }
+        var (team, category) = (opened.Team!, opened.Category!);
 
         var athlete = await database.Athletes
             .AsNoTracking()

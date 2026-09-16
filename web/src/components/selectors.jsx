@@ -12,11 +12,11 @@ import TextField from '@mui/material/TextField';
 import { useApi } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 
-function SelectionField({ label, value, onChange, options, isLoading, disabled, fullWidth = true, size = 'medium', emptyLabel, helperText }) {
+function SelectionField({ label, value, onChange, options, isLoading, disabled, required, fullWidth = true, size = 'medium', emptyLabel, helperText }) {
   return (
-    <FormControl fullWidth={fullWidth} disabled={disabled || isLoading} size={size} sx={{ mb: 2 }}>
+    <FormControl fullWidth={fullWidth} disabled={disabled || isLoading} required={required} size={size} sx={{ mb: 2 }}>
       <InputLabel>{label}</InputLabel>
-      <Select label={label} value={value} onChange={onChange}
+      <Select label={label} value={value} onChange={onChange} required={required}
         endAdornment={isLoading ? <CircularProgress size={20} sx={{ mr: 2 }} /> : null}>
         <MenuItem value=""><em>{isLoading ? 'Cargando...' : (emptyLabel || 'Seleccionar...')}</em></MenuItem>
         {(options || []).map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
@@ -44,45 +44,63 @@ function SelectionTeam({ categoryId, value, onChange, ...props }) {
   return <SelectionField label="Equipo" value={value} onChange={onChange} options={options} isLoading={isLoading} disabled={!categoryId} {...props} />;
 }
 
-// Un multi-select, no un SelectionField mas: entrar a alguien a un deporte
-// individual es elegir uno, una pareja o un trio de una lista que puede ser
-// larga, y buscar por nombre a medida que se tipea es lo que ya usa el
-// buscador de jugador de EventsDialog para el mismo problema (elegir una
-// persona entre muchas). Reinventar esa busqueda dentro de un <Select>
-// hubiera sido peor UX y una segunda implementacion del mismo patron.
+// Un Autocomplete, no un SelectionField mas: elegir una persona entre una
+// lista que puede ser larga se hace buscando por nombre a medida que se
+// tipea, no scrolleando un <Select> -- mismo problema que ya resuelve el
+// buscador de jugador de EventsDialog. Reinventar esa busqueda dentro de un
+// <Select> hubiera sido peor UX y una segunda implementacion del mismo
+// patron.
+//
+// `multiple` (default true, el uso original: entrar a alguien a un deporte
+// individual es elegir uno, una pareja o un trio) cambia la forma de
+// value/onChange -- un array de ids yendo y viniendo, o un id suelto
+// (string, como cualquier otro campo de esta pagina) cuando es false. La
+// version simple existe para NominaPage: registrar un jugador es elegir una
+// sola persona, y antes de esto lo hacia con un <TextField select> comun sin
+// buscador -- localizar a alguien en una lista larga escribiendo el nombre
+// no era posible ahi, a diferencia de aca.
 //
 // Igual que SelectionClub, no filtra por activo: RosterPolicy ya rechaza un
-// deportista inactivo con su propio mensaje (ver EnrollIndividual), y
-// esconderlo aca duplicaria esa regla en dos lugares que podrian
-// desalinearse.
-function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText, disabled }) {
+// deportista inactivo con su propio mensaje (ver EnrollIndividual /
+// RegisterPlayer), y esconderlo aca duplicaria esa regla en dos lugares que
+// podrian desalinearse.
+function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText, disabled, multiple = true, required }) {
   const { data, isLoading } = useApi(endpoints.athletes);
   const athletes = data || [];
-  const seleccionados = value.map((id) => athletes.find((a) => a.id === id)).filter(Boolean);
+  const ids = multiple ? value : (value ? [value] : []);
+  const seleccionados = ids.map((id) => athletes.find((a) => a.id === id)).filter(Boolean);
 
   return (
     <Autocomplete
-      multiple
+      multiple={multiple}
       options={athletes}
       loading={isLoading}
       disabled={disabled}
       getOptionLabel={(a) => `${a.lastName}, ${a.firstName}`}
       isOptionEqualToValue={(a, b) => a.id === b.id}
-      value={seleccionados}
-      onChange={(_, seleccion) => onChange(seleccion.map((a) => a.id))}
+      value={multiple ? seleccionados : (seleccionados[0] || null)}
+      onChange={(_, seleccion) => onChange(multiple ? seleccion.map((a) => a.id) : (seleccion?.id || ''))}
       sx={{ mb: 2 }}
       renderInput={(params) => (
         <TextField
           {...params}
           label={label}
           placeholder="Nombre o apellido"
+          required={required}
           helperText={helperText}
-          slotProps={{ input: { ...params.InputProps, endAdornment: (
-            <>
-              {isLoading ? <CircularProgress size={18} sx={{ mr: 1 }} /> : null}
-              {params.InputProps.endAdornment}
-            </>
-          ) } }}
+          slotProps={{
+            ...params.slotProps,
+            // MUI v9: renderInput ya no manda `params.InputProps` (v5) --
+            // las props del input viven en `params.slotProps.input`. Se
+            // conserva el resto de params.slotProps (inputLabel, htmlInput)
+            // y solo se pisa endAdornment para agregarle el spinner.
+            input: { ...params.slotProps.input, endAdornment: (
+              <>
+                {isLoading ? <CircularProgress size={18} sx={{ mr: 1 }} /> : null}
+                {params.slotProps.input.endAdornment}
+              </>
+            ) },
+          }}
         />
       )}
     />

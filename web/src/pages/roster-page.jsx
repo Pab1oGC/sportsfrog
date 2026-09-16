@@ -1,13 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
 import Alert from '@mui/material/Alert';
 import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
 import Stepper from '@mui/material/Stepper';
 import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
@@ -17,14 +15,16 @@ import { useApi, apiPut, apiDelete } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
 import { useCrudDialog } from 'src/hooks/use-crud';
 import { endpoints, default as axios } from 'src/lib/axios';
+import { downloadBlob } from 'src/lib/download-blob';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
-import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionClub } from 'src/components/selectors';
+import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionAthletes } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
+import { esIndividual } from 'src/lib/sport-shape';
 import { toast } from 'sonner';
 
-const emptyForm = () => ({ athleteId: '', jerseyNumber: '', position: '' });
+const emptyForm = () => ({ athleteIds: [], jerseyNumber: '', position: '' });
 
 const PREVIEW_COLS = [
   { field: 'number', headerName: '#', width: 50 },
@@ -40,21 +40,61 @@ const PREVIEW_COLS = [
 
 export default function RosterPage() {
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const cascade = useCascade();
-  const { data: roster, mutate, isLoading } = useApi(cascade.teamId ? endpoints.roster(cascade.teamId) : null);
-  const { data: athletes } = useApi(endpoints.athletes);
+  const { data: sports } = useApi(endpoints.sports);
+
+  // Esta pantalla es la del plantel de un equipo: quien juega, con que
+  // dorsal y en que puesto. En un deporte individual no hay ninguna de esas
+  // tres cosas -- la unidad que compite es una persona (o una pareja), y
+  // administrarla entera, integrantes incluidos, es lo que hace
+  // Inscripciones. Tener las dos pantallas haciendo lo mismo con distinto
+  // nombre era exactamente lo que las volvia indistinguibles.
+  const comp = cascade.competiciones.find((c) => c.id === cascade.compId);
+  const sport = sports?.find((s) => comp && s.code === comp.sportCode);
+  const individual = esIndividual(sport);
+
+  // No se pide el plantel de una inscripcion individual: abajo esta pantalla
+  // no muestra la grilla para ese caso, asi que el pedido no tendria quien
+  // lo lea.
+  const rosterUrl = !individual && cascade.teamId ? endpoints.roster(cascade.teamId) : null;
+  const { data: roster, mutate, isLoading } = useApi(rosterUrl);
 
   // El alta/edicion de un registro de nomina es un CRUD comun; retirar y
   // anular no lo son (ver sus propios comentarios mas abajo), asi que solo
   // el primero pasa por useCrudDialog. Comparte la misma clave de useApi que
   // `roster` de arriba, asi que mutar desde aca tambien actualiza esa lista.
   const { open, editId, form, setForm, error, openCreate, openEdit, close, save } = useCrudDialog({
-    resourceUrl: cascade.teamId ? endpoints.roster(cascade.teamId) : null,
+    resourceUrl: rosterUrl,
+    // Elegir mas de uno pasa por RegisterPlayersBulk en vez de
+    // RegisterPlayer -- todo o nada, igual que ya promete la importacion por
+    // Excel: cinco personas revisadas de a una contra un cupo de tres
+    // dejarian pasar a las primeras tres y rechazarian a las ultimas dos por
+    // una razon que no tiene nada que ver con ellas. Funcion y no string
+    // porque a que direccion ir depende de cuantos terminen elegidos, y eso
+    // solo se sabe con el `form` mas reciente -- useCrudDialog lo resuelve
+    // en save(), igual que ya hace con mapToSend.
+    createUrl: (f) => (cascade.teamId
+      ? (f.athleteIds.length > 1 ? endpoints.rosterRegisterBulk(cascade.teamId) : endpoints.roster(cascade.teamId))
+      : null),
     emptyForm,
-    entityName: 'jugador',
+    entityName: 'deportista',
     buildUrl: (base, id) => endpoints.rosterEntry(id),
-    mapToForm: (entry) => ({ athleteId: entry.athleteId, jerseyNumber: entry.jerseyNumber || '', position: entry.position || '' }),
-    mapToSend: (f) => ({ jerseyNumber: f.jerseyNumber ? Number(f.jerseyNumber) : null, position: f.position || null, athleteId: f.athleteId }),
+    mapToForm: (entry) => ({ athleteIds: [], jerseyNumber: entry.jerseyNumber || '', position: entry.position || '' }),
+    mapToSend: (f, wasEdit) => {
+      if (wasEdit) {
+        // CorrectRegistration ni acepta un athleteId -- "la persona no se
+        // edita aca" es su propio contrato, ver el comentario del backend.
+        return { jerseyNumber: f.jerseyNumber ? Number(f.jerseyNumber) : null, position: f.position || null };
+      }
+      if (f.athleteIds.length > 1) {
+        // El alta multiple no pide dorsal ni posicion: son por persona, y no
+        // hay uno solo que pedir para varios a la vez. Se cargan despues,
+        // editando cada registro.
+        return { athleteIds: f.athleteIds };
+      }
+      return { athleteId: f.athleteIds[0], jerseyNumber: f.jerseyNumber ? Number(f.jerseyNumber) : null, position: f.position || null };
+    },
   });
 
   const [impOpen, setImpOpen] = useState(false);
@@ -127,31 +167,81 @@ export default function RosterPage() {
     }},
   ];
 
+  // Los filtros se muestran igual en los dos casos: son los que dejan
+  // cambiar de competencia sin tener que salir de la pantalla, y por lo
+  // tanto los que permiten salir del aviso de abajo eligiendo una
+  // competencia de un deporte de equipo.
+  const filtros = (
+    <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
+      <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
+      {!individual && (
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <SelectionTeam categoryId={cascade.catId} value={cascade.teamId} onChange={(e) => cascade.setTeamId(e.target.value)} required />
+        </Box>
+      )}
+    </Box>
+  );
+
+  // Todos los hooks ya corrieron: de aca para abajo solo cambia que se
+  // dibuja, nunca cuantos hooks se llaman.
+  if (individual) {
+    return (
+      <Box>
+        <PageHeader title="Nomina" />
+        {filtros}
+        <Alert
+          severity="info"
+          action={(
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => navigate(`/dashboard/teams${cascade.compId ? `?competition=${cascade.compId}` : ''}`)}
+            >
+              Ir a Inscripciones
+            </Button>
+          )}
+        >
+          {comp?.name ? `${comp.name} es de un deporte individual` : 'Esta competencia es de un deporte individual'}: cada
+          deportista compite por su cuenta, así que no hay un plantel que armar. Las inscripciones y sus integrantes se
+          administran desde Inscripciones.
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
-      <PageHeader title="Nomina de jugadores">
+      <PageHeader title="Nomina">
         <Button variant="outlined" startIcon={<Iconify icon="eva:download-outline" />} onClick={downloadTemplate} disabled={!cascade.teamId}>Plantilla</Button>
         <Button variant="outlined" startIcon={<Iconify icon="eva:upload-outline" />} onClick={() => { setImpFile(null); setImpResult(null); setImpStep(0); setImpOpen(true); }} disabled={!cascade.teamId}>Importar Excel</Button>
         <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={openCreate} disabled={!cascade.teamId}>Registrar</Button>
       </PageHeader>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-        <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required /></Box>
-        <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCategory competitionId={cascade.compId} value={cascade.catId} onChange={(e) => cascade.setCatId(e.target.value)} required /></Box>
-        <Box sx={{ flex: 1, minWidth: 200 }}><SelectionTeam categoryId={cascade.catId} value={cascade.teamId} onChange={(e) => cascade.setTeamId(e.target.value)} required /></Box>
-      </Box>
+      {filtros}
       {cascade.teamId && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{active.length} activo(s) / {(roster || []).length} total</Typography>}
       <DataGrid rows={roster || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
 
-      <CrudDialog open={open} editId={editId} entityName="Jugador" error={error} onClose={close} onSave={save}>
+      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={save}>
         {!editId && (
-          <TextField select label="Deportista" value={form.athleteId} onChange={(e) => setForm({ ...form, athleteId: e.target.value })} fullWidth required>
-            <MenuItem value="">Seleccionar</MenuItem>
-            {(athletes || []).map((a) => <MenuItem key={a.id} value={a.id}>{a.lastName}, {a.firstName}</MenuItem>)}
-          </TextField>
+          <SelectionAthletes
+            label="Deportistas"
+            value={form.athleteIds}
+            onChange={(athleteIds) => setForm({ ...form, athleteIds })}
+            helperText="Elegí uno para registrarlo con dorsal y posición, o varios para registrarlos juntos de una."
+            required
+          />
         )}
-        <TextField label="Numero de camiseta" type="number" value={form.jerseyNumber} onChange={(e) => setForm({ ...form, jerseyNumber: e.target.value })} fullWidth />
-        <TextField label="Posicion" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth />
+        {/* Dorsal y posicion son por persona: no hay uno solo que pedir
+            cuando se elige mas de un deportista a la vez
+            (RegisterPlayersBulk ni los acepta). Se cargan despues, editando
+            cada registro. */}
+        {(editId || form.athleteIds.length <= 1) && (
+          <>
+            <TextField label="Numero de camiseta" type="number" value={form.jerseyNumber} onChange={(e) => setForm({ ...form, jerseyNumber: e.target.value })} fullWidth />
+            <TextField label="Posicion" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth />
+          </>
+        )}
       </CrudDialog>
 
       <ExcelImportDialog open={impOpen} onClose={() => setImpOpen(false)} step={impStep} file={impFile} result={impResult} loading={impLoading}
@@ -198,15 +288,4 @@ function ExcelImportDialog({ open, onClose, step, file, result, loading, onFileC
       )}
     </Box>
   );
-}
-
-function downloadBlob(res, fallback) {
-  const url = window.URL.createObjectURL(res.data);
-  const a = document.createElement('a');
-  a.href = url;
-  const disp = res.headers?.['content-disposition'] || '';
-  const match = /filename\*=UTF-8''([^;]+)/i.exec(disp) || /filename="?([^";]+)"?/i.exec(disp);
-  a.download = match ? decodeURIComponent(match[1] || match[0]) : fallback;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }

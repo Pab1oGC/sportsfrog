@@ -20,6 +20,9 @@ internal sealed class PerformanceConfiguration : IEntityTypeConfiguration<Perfor
         builder.Property(x => x.TeamId).HasColumnName("team_id");
         builder.Property(x => x.Status).HasColumnName("status");
         builder.Property(x => x.Score).HasColumnName("score");
+        builder.Property(x => x.VenueSpaceId).HasColumnName("venue_space_id");
+        builder.Property(x => x.ScheduledOn).HasColumnName("scheduled_on");
+        builder.Property(x => x.OrderNumber).HasColumnName("order_number");
         builder.Property(x => x.RecordedBy).HasColumnName("recorded_by");
         builder.Property(x => x.RecordedAt).HasColumnName("recorded_at");
         builder.Property(x => x.ModifiedBy).HasColumnName("modified_by");
@@ -42,6 +45,15 @@ internal sealed class PerformanceConfiguration : IEntityTypeConfiguration<Perfor
             .IsUnique()
             .HasFilter("deleted_at IS NULL");
 
+        // One performance per mat, per day, per turn — matching
+        // uq_performance_running_order. The running-order equivalent of
+        // Match's own VenueSpaceId+ScheduledAt uniqueness.
+        builder.HasIndex(x => new { x.VenueSpaceId, x.ScheduledOn, x.OrderNumber })
+            .IsUnique()
+            .HasFilter(
+                "venue_space_id IS NOT NULL AND scheduled_on IS NOT NULL "
+                + "AND order_number IS NOT NULL AND deleted_at IS NULL");
+
         // Visible while the row and the competition above it are, same as
         // Match — a withdrawn competition takes its classification stage
         // with it.
@@ -54,5 +66,6 @@ internal sealed class PerformanceConfiguration : IEntityTypeConfiguration<Perfor
             .WithMany()
             .HasForeignKey(x => x.TeamId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.VenueSpace).WithMany().HasForeignKey(x => x.VenueSpaceId);
     }
 }

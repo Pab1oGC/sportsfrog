@@ -1,20 +1,24 @@
 using SkiaSharp;
 
-namespace SportFrog.Api.Features.Documents;
+namespace SportFrog.Api.Infrastructure.Storage;
 
 /// <summary>
-/// A face to print when the athlete does not have one on file.
+/// A face to draw when a person does not have one on file.
 /// </summary>
 /// <remarks>
 /// A credential batch used to skip anybody without a photograph outright —
 /// reasonable when the alternative was a hole where the face goes, but it
 /// meant one missing upload for a twelve-year-old held up every other card in
 /// the batch too, and a coach chasing down a photo before anyone on the team
-/// could be credentialed. A generic silhouette is the better trade: the
-/// operator still sees who is missing a real photograph (the card looks
-/// obviously placeholder, and nothing here hides that), but the batch finishes
-/// and the other three hundred and ninety-nine people are not held hostage by
-/// the one who has not sent a picture yet.
+/// could be credentialed. A generic silhouette is the better trade: whoever
+/// is reading still sees who is missing a real photograph (the placeholder
+/// looks obviously like one, and nothing here hides that), but a credential
+/// batch finishes and a player's own report still renders without either
+/// being held hostage by a photograph nobody has sent yet — see
+/// <see cref="Features.Reports.AthleteReportQuery"/> and
+/// <see cref="Features.Documents.IssueDocumentsJob"/>, the two places that
+/// answer "what photo do I draw for this person" and agree on this same
+/// placeholder for the same reason.
 ///
 /// Drawn once, in code, rather than shipped as an image file: a placeholder
 /// that looks the same for every organization needs no upload, no
@@ -32,7 +36,7 @@ internal static class DefaultAvatar
 
     private static readonly Lazy<byte[]> Cached = new(Draw);
 
-    /// <summary>The placeholder, encoded once and reused for every card that needs it.</summary>
+    /// <summary>The placeholder, encoded once and reused for every reader that needs it.</summary>
     public static byte[] Bytes => Cached.Value;
 
     private static byte[] Draw()

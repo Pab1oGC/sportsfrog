@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Http;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -20,7 +21,7 @@ namespace SportFrog.Api.Features.Venues;
 /// </remarks>
 public static class ManageVenues
 {
-    public sealed record Request(string Name, string? Address, bool IsActive);
+    public sealed record Request(string Name, string? Address, string? MapsUrl, bool IsActive);
 
     public sealed record Response(Guid Id);
 
@@ -28,6 +29,7 @@ public static class ManageVenues
         Guid Id,
         string Name,
         string? Address,
+        string? MapsUrl,
         bool IsActive,
         int SpaceCount);
 
@@ -42,7 +44,17 @@ public static class ManageVenues
             RuleFor(request => request.Address)
                 .MaximumLength(250)
                 .When(request => request.Address is not null);
+
+            RuleFor(request => request.MapsUrl)
+                .MaximumLength(500)
+                .Must(BeAWebLink)
+                .WithMessage("El enlace de Google Maps debe ser una URL http o https válida.")
+                .When(request => !string.IsNullOrWhiteSpace(request.MapsUrl));
         }
+
+        private static bool BeAWebLink(string? mapsUrl) =>
+            Uri.TryCreate(mapsUrl, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     public static IEndpointRouteBuilder MapVenues(this IEndpointRouteBuilder routes)
@@ -64,6 +76,15 @@ public static class ManageVenues
             .RequireRole(MembershipRole.Viewer)
             .WithName("ReadVenue")
             .WithSummary("Reads one venue.");
+
+        // Registered before /venues/{id:guid} in this file for readability,
+        // though ASP.NET Core would route "resolve-maps-link" here either
+        // way — literal segments always outrank a route parameter regardless
+        // of registration order.
+        routes.MapGet("/venues/resolve-maps-link", ResolveMapsLinkAsync)
+            .RequireRole(MembershipRole.Admin)
+            .WithName("ResolveVenueMapsLink")
+            .WithSummary("Follows a shortened Google Maps link to find the coordinates it hides.");
 
         routes.MapPut("/venues/{id:guid}", UpdateAsync)
             .RequireRole(MembershipRole.Admin)
@@ -99,6 +120,7 @@ public static class ManageVenues
             OrgId = organization.RequireOrganizationId(),
             Name = name,
             Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
+            MapsUrl = string.IsNullOrWhiteSpace(request.MapsUrl) ? null : request.MapsUrl.Trim(),
             IsActive = request.IsActive,
         };
 
@@ -155,6 +177,54 @@ public static class ManageVenues
         return venue is null ? Results.NotFound() : Results.Ok(venue);
     }
 
+    public sealed record ResolvedLink(string ResolvedUrl);
+
+    /// <summary>
+    /// Only Google's own short-link hosts. The location picker reads a
+    /// venue's coordinates out of whatever Maps link an admin pasted, but a
+    /// short link (the shape "Compartir" hands out from the Maps app) hides
+    /// them behind a redirect that only the server can follow — a browser
+    /// fetch to another origin cannot read where a cross-origin redirect
+    /// landed. Restricting the host is what keeps that useful trip from
+    /// becoming a way to make this server fetch an arbitrary address on an
+    /// admin's behalf, internal network included.
+    /// </summary>
+    private static readonly HashSet<string> ShortLinkHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "maps.app.goo.gl",
+        "goo.gl",
+    };
+
+    private static async Task<IResult> ResolveMapsLinkAsync(
+        string url,
+        IHttpClientFactory httpClientFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+            || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
+            || !ShortLinkHosts.Contains(parsed.Host))
+        {
+            return Results.BadRequest();
+        }
+
+        var client = httpClientFactory.CreateClient("MapsLinkResolver");
+
+        try
+        {
+            // Headers only: the redirect chain is all this needs, and the
+            // destination is a full Maps page nothing here has to download.
+            using var response = await client.GetAsync(parsed, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            return Results.Ok(new ResolvedLink(response.RequestMessage?.RequestUri?.ToString() ?? url));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            return Results.Problem(
+                detail: "No se pudo seguir ese enlace.",
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
     private static async Task<IResult> UpdateAsync(
         Guid id,
         Request request,
@@ -181,6 +251,7 @@ public static class ManageVenues
 
         venue.Name = name;
         venue.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+        venue.MapsUrl = string.IsNullOrWhiteSpace(request.MapsUrl) ? null : request.MapsUrl.Trim();
 
         // Deactivating is not removing: the ground stops being offered for new
         // fixtures, its spaces stop with it, and everything played there keeps
@@ -246,6 +317,7 @@ public static class ManageVenues
             venue.Id,
             venue.Name,
             venue.Address,
+            venue.MapsUrl,
             venue.IsActive,
             venue.Spaces.Count));
 }

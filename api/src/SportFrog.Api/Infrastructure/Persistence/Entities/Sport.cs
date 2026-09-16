@@ -29,6 +29,31 @@ public sealed class Sport
 
     public short DefaultPeriods { get; set; }
 
+    /// <summary>
+    /// Whether one period of this sport is timed at all. Independent of
+    /// <see cref="ScoreMode"/>: a volleyball set and a taekwondo asalto are
+    /// both decided by <see cref="Rules.ScoreMode.Sets"/>, but a set has no
+    /// clock and an asalto runs two minutes on one — "how the result of a
+    /// period is decided" and "whether it can also run out of time" are two
+    /// different facts about a sport.
+    /// </summary>
+    public bool PeriodHasClock { get; set; } = true;
+
+    /// <summary>
+    /// The standard clock length of one period, in minutes — a reglamento
+    /// form's starting point, not a rule anyone is held to. Null exactly
+    /// where <see cref="PeriodHasClock"/> is false: there is no standard
+    /// length to suggest for a period that does not run on a clock.
+    /// </summary>
+    public short? DefaultMinutes { get; set; }
+
+    /// <summary>
+    /// The standard rest between periods, in minutes — a reglamento form's
+    /// starting point, same as <see cref="DefaultMinutes"/>. Null exactly
+    /// where that one is null: no clock, no rest between periods to suggest.
+    /// </summary>
+    public short? DefaultBreakMinutes { get; set; }
+
     /// <summary>What one unit of score is called: goal, point.</summary>
     public required string ScoringUnit { get; set; }
 
@@ -41,6 +66,26 @@ public sealed class Sport
     /// team's club.
     /// </summary>
     public bool IsIndividual { get; set; }
+
+    /// <summary>
+    /// How many athletes may make up one entry in this sport.
+    /// </summary>
+    /// <remarks>
+    /// Not the same question as <see cref="IsIndividual"/>, which only says
+    /// that the unit entering is a person rather than a club. Kyorugi is
+    /// fought one against one and a pair cannot exist; Poomsae runs
+    /// individual, pair and trio under that same flag — see
+    /// <c>IndividualTeamName</c>, which already reads naturally for all
+    /// three.
+    ///
+    /// Null for a team sport: there is no ceiling the sport itself imposes,
+    /// the squad size is the category's business. Where both are set, the cap
+    /// that applies is the lower of this and
+    /// <see cref="Category.MaxRosterSize"/> — a Poomsae category for pairs
+    /// narrows the sport's trio ceiling to two, and nothing a category says
+    /// can widen it past the sport.
+    /// </remarks>
+    public short? MaxEntrySize { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

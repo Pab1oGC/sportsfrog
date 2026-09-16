@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -15,6 +16,9 @@ import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
 import { ScoreCell } from 'src/pages/performances/score-cell';
 import { PromoteClassificationDialog } from 'src/pages/performances/promote-classification-dialog';
+import { ScheduleDialog } from 'src/pages/performances/schedule-dialog';
+import { BulkOrderDialog } from 'src/pages/performances/bulk-order-dialog';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
 
 const STATUS_LABEL = { pending: 'Pendiente', scored: 'Puntuado' };
 const STATUS_COLOR = { pending: 'default', scored: 'success' };
@@ -29,7 +33,12 @@ const STATUS_COLOR = { pending: 'default', scored: 'success' };
  */
 export default function PerformancesPage() {
   const confirm = useConfirm();
-  const cascade = useCascade();
+  const [searchParams] = useSearchParams();
+  // Preseleccionada al llegar desde "Ver clasificación" en Tabla de
+  // Posiciones: esa pantalla, para una categoria juzgada, no tiene nada
+  // propio que mostrar -- ver StandingsPage. Sin esta señal en la URL,
+  // useCascade recuerda la ultima competencia usada en cualquier pantalla.
+  const cascade = useCascade(searchParams.get('competition'));
   const { data: sports } = useApi(endpoints.sports);
 
   const comp = cascade.competiciones.find((c) => c.id === cascade.compId);
@@ -46,6 +55,9 @@ export default function PerformancesPage() {
 
   const [opening, setOpening] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [schedRow, setSchedRow] = useState(null);
+  const [schedOpen, setSchedOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Una categoria sin clasificacion abierta todavia lee un array vacio, no
   // un 404 -- ver ReadPerformances en el backend. "Abierta" es exactamente
@@ -84,6 +96,15 @@ export default function PerformancesPage() {
     { field: 'status', headerName: 'Estado', width: 120, sortable: false, renderCell: ({ value }) => (
       <Chip label={STATUS_LABEL[value] || value} color={STATUS_COLOR[value] || 'default'} size="small" />
     ) },
+    { field: 'venueName', headerName: 'Tapete', width: 160, sortable: false, renderCell: ({ row }) =>
+      row.venueName ? `${row.venueName}${row.spaceName ? ' — ' + row.spaceName : ''}` : '--' },
+    { field: 'scheduledOn', headerName: 'Día / Turno', width: 150, sortable: false, renderCell: ({ row }) =>
+      row.scheduledOn ? `${row.scheduledOn}${row.orderNumber ? ` · turno ${row.orderNumber}` : ''}` : '--' },
+    { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', sortable: false, renderCell: ({ row }) => (
+      <RowActionsMenu
+        primary={{ icon: 'eva:calendar-outline', label: 'Ubicar en el orden', color: 'text.secondary', onClick: () => { setSchedRow(row); setSchedOpen(true); } }}
+      />
+    ) },
   ];
 
   return (
@@ -102,6 +123,11 @@ export default function PerformancesPage() {
             disabled={!todosPuntuados}
           >
             Sortear eliminatoria
+          </Button>
+        )}
+        {cascade.catId && juzgado && abierta && (
+          <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-outline" />} onClick={() => setBulkOpen(true)}>
+            Reprogramar en bloque
           </Button>
         )}
       </PageHeader>
@@ -139,6 +165,10 @@ export default function PerformancesPage() {
         catId={cascade.catId}
         onPromoted={mutate}
       />
+
+      <ScheduleDialog open={schedOpen} onClose={() => setSchedOpen(false)} row={schedRow} mutate={mutate} />
+
+      <BulkOrderDialog open={bulkOpen} onClose={() => setBulkOpen(false)} rows={rows} mutate={mutate} />
     </Box>
   );
 }

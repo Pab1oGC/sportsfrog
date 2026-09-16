@@ -4,6 +4,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Validation;
+using SportFrog.Domain.ValueObjects;
 
 namespace SportFrog.Api.Features.Clubs;
 
@@ -18,7 +19,7 @@ public static class UpdateClub
     /// </summary>
     private const string RemoveLogo = "";
 
-    public sealed record Request(string Name, string? ShortName, string? LogoUrl, bool IsActive);
+    public sealed record Request(string Name, string? ShortName, string? LogoUrl, string? ContactEmail, bool IsActive);
 
     internal sealed class Validator : AbstractValidator<Request>
     {
@@ -37,6 +38,11 @@ public static class UpdateClub
                 .Must(InlinePhoto.IsAcceptable)
                 .When(request => request.LogoUrl != RemoveLogo)
                 .WithMessage(InlinePhoto.Requirement);
+
+            RuleFor(request => request.ContactEmail)
+                .Must(email => Email.TryParse(email, out _))
+                .When(request => !string.IsNullOrWhiteSpace(request.ContactEmail))
+                .WithMessage("El correo de contacto no tiene un formato válido.");
         }
     }
 
@@ -99,6 +105,7 @@ public static class UpdateClub
 
         club.Name = name;
         club.ShortName = request.ShortName?.Trim();
+        club.ContactEmail = string.IsNullOrWhiteSpace(request.ContactEmail) ? null : request.ContactEmail.Trim();
 
         // Deactivating is not deleting: an inactive club keeps its history and
         // stops being offered for new competitions.

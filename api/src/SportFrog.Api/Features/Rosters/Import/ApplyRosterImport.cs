@@ -173,6 +173,7 @@ public static class ApplyRosterImport
         DocumentId = row.Document!,
         BirthDate = row.BirthDate!.Value,
         Gender = Sex.Normalize(row.Sex),
+        WeightKg = row.Weight,
         GuardianName = row.Guardian,
         GuardianPhone = row.GuardianPhone,
     };

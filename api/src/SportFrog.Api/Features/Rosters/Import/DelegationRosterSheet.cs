@@ -9,6 +9,8 @@ internal sealed record DelegationSheetRow(
     DateOnly? BirthDate,
     string? BirthDateText,
     string? Sex,
+    decimal? Weight,
+    string? WeightText,
     string? CategoryName,
     string? Guardian,
     string? GuardianPhone);
@@ -50,7 +52,7 @@ internal static class DelegationRosterSheet
     /// <summary>Where the competition and club's identity is stamped, out of the way.</summary>
     public const string MarkerSheet = "sportfrog";
 
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const int HeaderRow = 1;
 
@@ -73,6 +75,9 @@ internal static class DelegationRosterSheet
     public static readonly SheetColumn Sex =
         new("Sexo", "F o M. Obligatorio solo si la categoría elegida admite uno de los dos.", Required: false);
 
+    public static readonly SheetColumn Weight =
+        new("Peso (kg)", "Peso más reciente, en kilogramos. Obligatorio solo si la categoría elegida admite un rango de peso.", Required: false);
+
     public static readonly SheetColumn Category =
         new("Categoría", "En qué categoría de esta competencia compite. Tiene que ser una de las de la lista, escrita igual.", Required: true);
 
@@ -86,11 +91,15 @@ internal static class DelegationRosterSheet
     /// <remarks>
     /// No jersey, no position: neither means anything for an individual
     /// sport, and a column the system does not read is worse than no
-    /// column — somebody fills it in believing it did something.
+    /// column — somebody fills it in believing it did something. Weight is
+    /// the opposite case: several individual sports (taekwondo among them)
+    /// draw their categories along a weight window, so leaving it off would
+    /// make every row that creates a new athlete fail that category's check
+    /// for a reason the sheet gave no way to fix.
     /// </remarks>
     public static readonly IReadOnlyList<SheetColumn> Columns =
     [
-        Document, LastName, FirstName, BirthDate, Sex, Category, Guardian, GuardianPhone,
+        Document, LastName, FirstName, BirthDate, Sex, Weight, Category, Guardian, GuardianPhone,
     ];
 
     /// <summary>Rows of the hidden sheet that says what this workbook is.</summary>
