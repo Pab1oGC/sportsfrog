@@ -64,6 +64,17 @@ public static class ReadPublicCompetition
         /// </summary>
         bool IsJudged,
 
+        /// <summary>
+        /// Whether the unit that plays is a person rather than a club —
+        /// taekwondo, not yet any other sport in the catalog. The public
+        /// page reads this to know whether its "por equipo" filter should
+        /// say "Equipo" or "Deportista": a team row in an individual sport
+        /// already carries one athlete's own name (see
+        /// <c>Teams.IndividualTeamName</c>), so calling it a team is the
+        /// one thing on this page that would read as wrong to a spectator.
+        /// </summary>
+        bool IsIndividual,
+
         string Format,
         CompetitionState Status,
         DateOnly? StartsOn,
@@ -73,7 +84,18 @@ public static class ReadPublicCompetition
         Portal Portal,
         PortalMoment Moment);
 
-    public sealed record Sections(bool Standings, bool Leaders, bool Rosters, bool Classification, bool Gallery);
+    /// <param name="Bracket">
+    /// Whether this competition has at least one match with a knockout
+    /// phase, anywhere across its categories. No organizer switch controls
+    /// this one, the same way none controls the calendar — an empty tab
+    /// would just be the "Sin datos de posiciones" bug this mirrors,
+    /// worn by a different section, so the tab does not exist at all until
+    /// a bracket genuinely does. The category a visitor happens to have
+    /// selected can still be the one without a phase; that reads as an
+    /// empty bracket, not a missing tab, the same way a judged category
+    /// with nothing scored yet still has a Classification tab.
+    /// </param>
+    public sealed record Sections(bool Standings, bool Leaders, bool Rosters, bool Classification, bool Gallery, bool Bracket);
 
     public sealed record CategorySummary(
         Guid Id,
@@ -149,9 +171,33 @@ public static class ReadPublicCompetition
     /// Who won, once that question has one honest answer. See
     /// <see cref="ResolveChampionAsync"/> for exactly when it does.
     /// </param>
-    public sealed record PortalMoment(DateTimeOffset? NextMatchAt, int LiveMatchCount, ChampionSummary? Champion);
+    /// <param name="LiveMatch">
+    /// The one match under way right now, for the Live hero variant — only
+    /// answered when <paramref name="LiveMatchCount"/> is exactly 1. See
+    /// <see cref="ResolveLiveMatchAsync"/> for exactly when it does; the same
+    /// "don't guess which one" rule <see cref="ResolveChampionAsync"/> already
+    /// follows for the champion.
+    /// </param>
+    public sealed record PortalMoment(
+        DateTimeOffset? NextMatchAt, int LiveMatchCount, ChampionSummary? Champion, LiveMatchSummary? LiveMatch);
 
     public sealed record ChampionSummary(string TeamName, string? LogoUrl);
+
+    /// <summary>
+    /// The teams and score of the one match a competition has in progress
+    /// right now. <see cref="HomeScore"/>/<see cref="AwayScore"/> stay null
+    /// for a sport whose <see cref="ScoreMode"/> is not
+    /// <see cref="ScoreMode.Cumulative"/> — sets and judged scores have no
+    /// running tally to show mid-match, only the teams are worth naming.
+    /// </summary>
+    public sealed record LiveMatchSummary(
+        string CategoryName,
+        string HomeTeamName,
+        string? HomeClubLogoUrl,
+        string AwayTeamName,
+        string? AwayClubLogoUrl,
+        int? HomeScore,
+        int? AwayScore);
 
     public static IEndpointRouteBuilder MapReadPublicCompetition(
         this IEndpointRouteBuilder routes)
@@ -189,6 +235,7 @@ public static class ReadPublicCompetition
                         PeriodLabel = candidate.Sport.PeriodLabel,
                         IsPlayedInSets = candidate.Sport.ScoreMode == ScoreMode.Sets,
                         IsJudged = candidate.Sport.ScoreMode == ScoreMode.Judged,
+                        IsIndividual = candidate.Sport.IsIndividual,
                         candidate.Format,
                         candidate.Status,
                         candidate.StartsOn,
@@ -269,6 +316,16 @@ public static class ReadPublicCompetition
                 var moment = await MomentAsync(
                     database, store, resolved, competition.Status, categories, cancellationToken);
 
+                // Competition-wide, not per category: the tab either exists
+                // or it does not, and which category a visitor happens to
+                // have selected is a question for what's inside it, not for
+                // whether it's there at all — see Sections.Bracket.
+                var hasBracket = await database.Matches
+                    .AsNoTracking()
+                    .AnyAsync(
+                        match => match.CompetitionId == resolved.CompetitionId && match.Phase != null,
+                        cancellationToken);
+
                 return new Response(
                     competition.Organization.Name,
                     organizationLogoUrl,
@@ -280,6 +337,7 @@ public static class ReadPublicCompetition
                     competition.PeriodLabel,
                     competition.IsPlayedInSets,
                     competition.IsJudged,
+                    competition.IsIndividual,
                     competition.Format,
                     competition.Status,
                     competition.StartsOn,
@@ -290,12 +348,20 @@ public static class ReadPublicCompetition
                     // shown, rosters not. A competition published without
                     // ever opening its settings still has a page worth
                     // reading, and its rosters still stay private.
+                    //
+                    // Standings is refused outright for a knockout-only
+                    // competition, regardless of the organizer's own
+                    // switch: single elimination has no group stage to
+                    // tabulate, so the switch has nothing honest to turn on
+                    // (see the same rule in StandingsQuery, which answers
+                    // null for the same reason).
                     new Sections(
-                        shows?.ShowStandings ?? true,
+                        competition.Format != CompetitionFormat.Knockout && (shows?.ShowStandings ?? true),
                         shows?.ShowLeaders ?? true,
                         shows?.ShowRosters ?? false,
                         shows?.ShowClassification ?? true,
-                        shows?.ShowGallery ?? true),
+                        shows?.ShowGallery ?? true,
+                        hasBracket),
                     categories,
                     new Portal(
                         bannerUrl,
@@ -345,7 +411,7 @@ public static class ReadPublicCompetition
                 .Select(match => match.ScheduledAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            return new PortalMoment(nextMatchAt, 0, null);
+            return new PortalMoment(nextMatchAt, 0, null, null);
         }
 
         if (status == CompetitionState.InProgress)
@@ -357,7 +423,13 @@ public static class ReadPublicCompetition
                         && match.Status == MatchState.InProgress,
                     cancellationToken);
 
-            return new PortalMoment(null, liveMatchCount, null);
+            // Which one, not just how many — only worth asking when there is
+            // exactly one to name. See ResolveLiveMatchAsync.
+            var liveMatch = liveMatchCount == 1
+                ? await ResolveLiveMatchAsync(database, store, resolved, cancellationToken)
+                : null;
+
+            return new PortalMoment(null, liveMatchCount, null, liveMatch);
         }
 
         // A champion is only ever answered for a competition with exactly
@@ -369,10 +441,10 @@ public static class ReadPublicCompetition
             var champion = await ResolveChampionAsync(
                 database, store, resolved, categories[0].Id, cancellationToken);
 
-            return new PortalMoment(null, 0, champion);
+            return new PortalMoment(null, 0, champion, null);
         }
 
-        return new PortalMoment(null, 0, null);
+        return new PortalMoment(null, 0, null, null);
     }
 
     /// <summary>
@@ -436,25 +508,33 @@ public static class ReadPublicCompetition
             }
 
             var final = finalists[0];
+
+            if (final.HomeTeamId is not { } homeId || final.AwayTeamId is not { } awayId)
+            {
+                // A knockout drawn in full books its final before it knows
+                // who reaches it. Nobody to crown until the semifinals say so.
+                return null;
+            }
+
             var winner = MatchWinner.Resolve(
-                final.HomeTeamId,
-                final.AwayTeamId,
+                homeId,
+                awayId,
                 final.WalkoverTeamId,
                 final.HomeTotal,
                 final.AwayTotal,
                 final.PenaltyHomeScore,
                 final.PenaltyAwayScore);
 
-            if (winner == final.HomeTeamId)
+            if (winner == homeId)
             {
                 return new ChampionSummary(
-                    final.HomeTeamName, await LinkAsync(store, resolved.OrganizationId, final.HomeLogoKey, cancellationToken));
+                    final.HomeTeamName!, await LinkAsync(store, resolved.OrganizationId, final.HomeLogoKey, cancellationToken));
             }
 
-            if (winner == final.AwayTeamId)
+            if (winner == awayId)
             {
                 return new ChampionSummary(
-                    final.AwayTeamName, await LinkAsync(store, resolved.OrganizationId, final.AwayLogoKey, cancellationToken));
+                    final.AwayTeamName!, await LinkAsync(store, resolved.OrganizationId, final.AwayLogoKey, cancellationToken));
             }
 
             return null;
@@ -472,6 +552,89 @@ public static class ReadPublicCompetition
             store, resolved.OrganizationId, standings!.LogoKeys.GetValueOrDefault(leader.TeamId), cancellationToken);
 
         return new ChampionSummary(leader.TeamName, logoUrl);
+    }
+
+    /// <summary>
+    /// The one match this competition has in progress right now, for the
+    /// Live hero variant. Only ever called when there is exactly one — see
+    /// the caller in <see cref="MomentAsync"/> — the same unambiguous-only
+    /// rule <see cref="ResolveChampionAsync"/> already follows for the
+    /// champion.
+    /// </summary>
+    /// <remarks>
+    /// The score is computed with <see cref="LiveScore.Compute"/>, the same
+    /// engine <c>ReadMatches</c> and <c>ReadPublicCalendar</c> already use
+    /// and already test on their own — not reimplemented a third time here.
+    /// Gated on <see cref="ScoreMode.Cumulative"/> for the same reason
+    /// <c>ReadPublicCalendar.LiveTotalsAsync</c> is: a sport decided by sets
+    /// or by judges has no running tally to show mid-match, so the teams are
+    /// named and the score stays null instead of showing a false 0-0.
+    /// </remarks>
+    private static async Task<LiveMatchSummary?> ResolveLiveMatchAsync(
+        SportFrogDbContext database,
+        ObjectStore store,
+        PublicCompetition resolved,
+        CancellationToken cancellationToken)
+    {
+        var match = await database.Matches
+            .AsNoTracking()
+            .Where(candidate => candidate.CompetitionId == resolved.CompetitionId
+                && candidate.Status == MatchState.InProgress)
+            .Select(candidate => new
+            {
+                candidate.Id,
+                candidate.HomeTeamId,
+                HomeTeamName = candidate.HomeTeam!.Name,
+                HomeLogoKey = candidate.HomeTeam.Club!.LogoUrl,
+                candidate.AwayTeamId,
+                AwayTeamName = candidate.AwayTeam!.Name,
+                AwayLogoKey = candidate.AwayTeam.Club!.LogoUrl,
+                CategoryName = candidate.Category!.Name,
+                ScoreMode = candidate.Competition!.Sport!.ScoreMode,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (match is null)
+        {
+            return null;
+        }
+
+        int? homeScore = null;
+        int? awayScore = null;
+
+        if (match.ScoreMode == ScoreMode.Cumulative)
+        {
+            var events = await database.PlayerEvents
+                .AsNoTracking()
+                .Where(recorded => recorded.MatchId == match.Id && recorded.Metric!.AffectsScore)
+                .Select(recorded => new
+                {
+                    TeamId = recorded.RosterEntry!.TeamId,
+                    recorded.Metric!.ScorePoints,
+                    recorded.Metric.CountsForOpponent,
+                    recorded.Quantity,
+                })
+                .ToListAsync(cancellationToken);
+
+            // In progress implies both teams are already named.
+            var totals = LiveScore.Compute(
+                events.Select(recorded => new ScoringEvent(
+                    recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
+                match.HomeTeamId!.Value,
+                match.AwayTeamId!.Value);
+
+            homeScore = totals.Home;
+            awayScore = totals.Away;
+        }
+
+        return new LiveMatchSummary(
+            match.CategoryName,
+            match.HomeTeamName,
+            await LinkAsync(store, resolved.OrganizationId, match.HomeLogoKey, cancellationToken),
+            match.AwayTeamName,
+            await LinkAsync(store, resolved.OrganizationId, match.AwayLogoKey, cancellationToken),
+            homeScore,
+            awayScore);
     }
 
     /// <summary>A picture's signed link, or null for a key that was never set.</summary>

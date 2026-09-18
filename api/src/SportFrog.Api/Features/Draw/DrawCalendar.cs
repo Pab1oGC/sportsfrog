@@ -45,6 +45,13 @@ public static class DrawCalendar
     /// Teams that advance without playing, when a knockout entry list is not
     /// a power of two.
     /// </param>
+    /// <remarks>
+    /// A pure knockout draws every round at once, so <paramref name="Created"/>
+    /// and <paramref name="Rounds"/> cover the whole bracket, not only the
+    /// one round about to be played — <paramref name="Phase"/> is still that
+    /// first round's, since that is the one worth naming to whoever just
+    /// drew it.
+    /// </remarks>
     public sealed record Response(
         int Created,
         int Replaced,
@@ -147,6 +154,50 @@ public static class DrawCalendar
             // everywhere else, and a redraw is the ordinary case rather than
             // a correction of one.
             match.DeletedAt = now;
+        }
+
+        // A pure knockout draws every round at once — dates and venues for
+        // the whole bracket can be booked before a ball is kicked, since
+        // every entrant is already known. League and Groups have nothing to
+        // gain from this seam: a league already draws its whole calendar in
+        // one call to Draw, and a knockout promoted from a group stage does
+        // not know its entrants yet, so it still advances one round at a
+        // time through AdvanceBracket once that stage decides them.
+        if (draw is IPlansEntireBracket fullBracket)
+        {
+            var plan = fullBracket.DrawFull(teams);
+
+            // Assigned up front so a later round's HomeSourceMatchId/
+            // AwaySourceMatchId can point at an earlier one's id before any
+            // of them exist as a row — nothing else needs these to be
+            // stable before SaveChangesAsync.
+            var ids = plan.Select(_ => Guid.NewGuid()).ToList();
+
+            database.Matches.AddRange(plan.Select((planned, index) => new Match
+            {
+                Id = ids[index],
+                OrgId = organization.RequireOrganizationId(),
+                CompetitionId = competition.Id,
+                CategoryId = categoryId,
+                HomeTeamId = planned.Home.TeamId,
+                AwayTeamId = planned.Away.TeamId,
+                HomeSourceMatchId = planned.Home.SourceMatchIndex is { } homeSource ? ids[homeSource] : null,
+                AwaySourceMatchId = planned.Away.SourceMatchIndex is { } awaySource ? ids[awaySource] : null,
+                RoundNumber = (short)planned.Round,
+                Phase = planned.Phase,
+                Status = MatchState.Scheduled,
+            }));
+
+            await database.SaveChangesAsync(cancellationToken);
+
+            var firstRound = plan.Count(match => match.Round == 1);
+
+            return Results.Ok(new Response(
+                plan.Count,
+                existing.Count,
+                plan.Max(match => match.Round),
+                plan[0].Phase,
+                teams.Count - firstRound * 2));
         }
 
         var (drawn, phase, byes) = draw.Draw(teams, request.Legs);

@@ -312,6 +312,84 @@ public sealed class ResultPolicyTests
         violations.Should().BeEmpty();
     }
 
+    // ---- Events derived into periods (kyorugi, via RecordResult) -------
+    //
+    // RecordResult.HandleFromEventsAsync feeds LiveScore.ComputePlayedPeriods'
+    // own output straight into this same Policy.Inspect — this is that
+    // pipeline, exercised with the events a live-recorded bout actually
+    // produces (point, gam-jeom), not periods typed in by hand like every
+    // test above.
+
+    private static readonly Guid Home = Guid.NewGuid();
+    private static readonly Guid Away = Guid.NewGuid();
+
+    private static ScoringEvent Point(Guid teamId, short period, int worth = 1) =>
+        new(teamId, ScorePoints: worth, CountsForOpponent: false, Quantity: 1, PeriodNumber: period);
+
+    private static ScoringEvent GamJeom(Guid againstTeamId, short period) =>
+        new(againstTeamId, ScorePoints: 1, CountsForOpponent: true, Quantity: 1, PeriodNumber: period);
+
+    [Fact]
+    public void Inspect_Sets_BoutWonInTwoAsaltos_DerivedFromEvents_IsAccepted()
+    {
+        // Home takes asalto 1 on points, asalto 2 on a gam-jeom against
+        // away — decided two-nil, nothing recorded for a third asalto that
+        // was never fought.
+        var events = new[]
+        {
+            Point(Home, period: 1, worth: 5),
+            GamJeom(Away, period: 2),
+        };
+
+        var periods = LiveScore.ComputePlayedPeriods(events, maxPeriodCount: 3, Home, Away);
+
+        var violations = Policy.Inspect(Sets(3), periods);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Inspect_Sets_BoutWonInTwoAsaltos_ReadWithComputePeriodsInstead_IsWronglyRejected()
+    {
+        // The same events as above, but read the way ComputePeriods reads a
+        // cumulative sport's — every configured period, whether or not
+        // anything was recorded for it. Asalto 3 comes back 0-0, which
+        // Inspect correctly refuses as an impossible tie, for a bout that
+        // was actually decided cleanly two rounds earlier. This is exactly
+        // the bug ComputePlayedPeriods exists to fix — kept here so nobody
+        // "simplifies" HandleFromEventsAsync back to the one method it
+        // already uses for cumulative sports.
+        var events = new[]
+        {
+            Point(Home, period: 1, worth: 5),
+            GamJeom(Away, period: 2),
+        };
+
+        var periods = LiveScore.ComputePeriods(events, periodCount: 3, Home, Away);
+
+        var violations = Policy.Inspect(Sets(3), periods);
+
+        violations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Inspect_Sets_BoutGoingTheFullThreeAsaltos_DerivedFromEvents_IsAccepted()
+    {
+        var events = new[]
+        {
+            Point(Home, period: 1, worth: 4),
+            Point(Away, period: 2, worth: 6),
+            Point(Home, period: 3, worth: 2),
+            GamJeom(Away, period: 3),
+        };
+
+        var periods = LiveScore.ComputePlayedPeriods(events, maxPeriodCount: 3, Home, Away);
+
+        var violations = Policy.Inspect(Sets(3), periods);
+
+        violations.Should().BeEmpty();
+    }
+
     // ---- Judged ------------------------------------------------------
 
     [Fact]

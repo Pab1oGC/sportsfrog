@@ -8,7 +8,7 @@ import { Snackbar } from "src/components/snackbar";
 import { ConfirmProvider } from "src/components/confirm-dialog";
 import { RouterProvider, createBrowserRouter } from "react-router";
 import { routesSection } from "src/routes/sections";
-import { ColorModeProvider } from "src/theme";
+import { AppThemeProvider } from "src/theme";
 
 const router = createBrowserRouter(routesSection);
 
@@ -19,7 +19,7 @@ dayjs.locale("es");
 
 export default function App() {
   return (
-    <ColorModeProvider>
+    <AppThemeProvider>
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
         <ConfirmProvider>
           <AuthProvider>
@@ -31,6 +31,6 @@ export default function App() {
           </AuthProvider>
         </ConfirmProvider>
       </LocalizationProvider>
-    </ColorModeProvider>
+    </AppThemeProvider>
   );
 }

@@ -34,9 +34,19 @@ public sealed class PortalThemeResolveTests
         resolved.HeadingFont.Should().Be("inter");
         resolved.Corners.Should().Be("soft");
         resolved.HeroStyle.Should().Be("solid");
-        resolved.ColorScheme.Should().Be("auto");
+        resolved.Density.Should().Be("normal");
+        resolved.Decoration.Should().Be("none");
+        resolved.ContentFigure.Should().Be("none");
+        resolved.ShowLogoBackground.Should().BeTrue();
+        resolved.HeroLayout.Should().Be("standard");
+        resolved.HeroVariant.Should().Be("standard");
+        resolved.StandingsVariant.Should().Be("standard");
+        resolved.MatchCardVariant.Should().Be("standard");
+        resolved.BracketVariant.Should().Be("standard");
         resolved.PrimaryContrast.Should().BeNull();
         resolved.Surface.Should().BeNull();
+        resolved.HeroGradientTo.Should().BeNull();
+        resolved.ContentFigureColor.Should().BeNull();
     }
 
     [Fact]
@@ -64,9 +74,22 @@ public sealed class PortalThemeResolveTests
             HeadingFont = "oswald",
             Corners = "sharp",
             HeroStyle = "gradient",
+            HeroGradientTo = "#134E4A",
+            // El único bool acá -- false, no el default, para que este test
+            // ("se conserva cada elección") de verdad distinga "se guardó
+            // false" de "nunca se tocó y cayó en true".
+            ShowLogoBackground = false,
             FocusX = 30,
             FocusY = 70,
-            ColorScheme = "dark",
+            Density = "compact",
+            Decoration = "bold",
+            ContentFigure = "wave",
+            ContentFigureColor = "#0EA5E9",
+            HeroLayout = "centered",
+            HeroVariant = "editorial",
+            StandingsVariant = "cards",
+            MatchCardVariant = "matchup",
+            BracketVariant = "detailed",
         };
 
         var resolved = PortalTheme.Resolve(new PublicSettings { Theme = theme });
@@ -79,9 +102,19 @@ public sealed class PortalThemeResolveTests
             HeadingFont: "oswald",
             Corners: "sharp",
             HeroStyle: "gradient",
+            HeroGradientTo: "#134E4A",
+            ShowLogoBackground: false,
             FocusX: 30,
             FocusY: 70,
-            ColorScheme: "dark"));
+            Density: "compact",
+            Decoration: "bold",
+            ContentFigure: "wave",
+            ContentFigureColor: "#0EA5E9",
+            HeroLayout: "centered",
+            HeroVariant: "editorial",
+            StandingsVariant: "cards",
+            MatchCardVariant: "matchup",
+            BracketVariant: "detailed"));
     }
 
     [Fact]
@@ -122,6 +155,126 @@ public sealed class PortalThemeResolveTests
         });
 
         resolved!.HeadingFont.Should().Be("inter");
+    }
+
+    [Theory]
+    [InlineData("cramped")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenDensityIsUnknownOrBlank(string? badDensity)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", Density = badDensity },
+        });
+
+        resolved!.Density.Should().Be("normal");
+    }
+
+    [Theory]
+    [InlineData("glitter")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenDecorationIsUnknownOrBlank(string? badDecoration)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", Decoration = badDecoration },
+        });
+
+        resolved!.Decoration.Should().Be("none");
+    }
+
+    [Theory]
+    [InlineData("confetti")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenContentFigureIsUnknownOrBlank(string? badFigure)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", ContentFigure = badFigure },
+        });
+
+        resolved!.ContentFigure.Should().Be("none");
+    }
+
+    [Theory]
+    [InlineData("diagonal")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenHeroLayoutIsUnknownOrBlank(string? badLayout)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", HeroLayout = badLayout },
+        });
+
+        resolved!.HeroLayout.Should().Be("standard");
+    }
+
+    [Theory]
+    [InlineData("broadcast")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenHeroVariantIsUnknownOrBlank(string? badVariant)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", HeroVariant = badVariant },
+        });
+
+        resolved!.HeroVariant.Should().Be("standard");
+    }
+
+    [Theory]
+    [InlineData("spreadsheet")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenStandingsVariantIsUnknownOrBlank(string? badVariant)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", StandingsVariant = badVariant },
+        });
+
+        resolved!.StandingsVariant.Should().Be("standard");
+    }
+
+    [Theory]
+    [InlineData("wide")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenMatchCardVariantIsUnknownOrBlank(string? badVariant)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", MatchCardVariant = badVariant },
+        });
+
+        resolved!.MatchCardVariant.Should().Be("standard");
+    }
+
+    [Theory]
+    [InlineData("tree")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void Resolve_FallsBackToTheDefault_WhenBracketVariantIsUnknownOrBlank(string? badVariant)
+    {
+        var resolved = PortalTheme.Resolve(new PublicSettings
+        {
+            Theme = new PortalTheme { Primary = "#000000", BracketVariant = badVariant },
+        });
+
+        resolved!.BracketVariant.Should().Be("standard");
     }
 
     [Fact]

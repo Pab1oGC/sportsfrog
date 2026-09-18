@@ -97,13 +97,19 @@ public static class LiveScore
 
     /// <summary>
     /// A match's periods, tallied from its events instead of typed in by
-    /// hand.
+    /// hand — every configured period, whether or not anything was recorded
+    /// for it.
     /// </summary>
     /// <remarks>
-    /// Only sound for a cumulative-score sport: <see cref="Compute"/> already
-    /// only ever sees events whose metric affects the score, which under
-    /// <see cref="ScoreMode.Sets"/> is none of them, and a match decided by
-    /// sets was never going to be finished this way regardless.
+    /// Sound for a cumulative-score sport because every configured period is
+    /// played out in full regardless of what either side has scored — a
+    /// football match plays both halves at 5-0 exactly as it would at 0-0.
+    /// Most metrics under <see cref="ScoreMode.Sets"/> still affect nothing
+    /// (a volleyball point is a statistic, never summed into the match), but
+    /// where one does — a taekwondo kyorugi point or gam-jeom — a bout that
+    /// is already decided does not go on to a period nobody fought, which is
+    /// exactly what this method cannot tell from "nothing recorded" alone.
+    /// <see cref="ComputePlayedPeriods"/> is the one sound for that case.
     ///
     /// An event with no period recorded, or one outside the range this sport
     /// actually plays, is folded into the first period rather than dropped.
@@ -122,6 +128,51 @@ public static class LiveScore
         var periods = new List<PeriodScore>(periodCount);
 
         for (short period = 1; period <= periodCount; period++)
+        {
+            var totals = Compute(byPeriod[period], homeTeamId, awayTeamId);
+            periods.Add(new PeriodScore { Period = period, Home = totals.Home, Away = totals.Away });
+        }
+
+        return periods;
+    }
+
+    /// <summary>
+    /// A match's periods, tallied from its events, up to the last one
+    /// anything was actually recorded for — the counterpart to
+    /// <see cref="ComputePeriods"/> for a sport where the periods themselves
+    /// decide the match (<see cref="ScoreMode.Sets"/>) and stop the moment
+    /// one side has taken enough of them.
+    /// </summary>
+    /// <remarks>
+    /// A taekwondo kyorugi bout won in two asaltos never fights a third —
+    /// nobody records a point or a gam-jeom for it, and <see cref="ComputePeriods"/>
+    /// would report that silence as a 0-0 tie rather than as "not reached",
+    /// which <see cref="SportFrog.Api.Features.Matches.SetsResultShape"/>
+    /// then correctly refuses as an impossible period. Reading "the highest
+    /// period number with any event" as "how many were actually fought"
+    /// avoids that: a period genuinely fought to a scoreless draw is
+    /// indistinguishable from one never reached either way, but that
+    /// ambiguity is not new here — a scorer typing the result in by hand
+    /// runs into the exact same wall, since <c>SetsResultShape</c> refuses a
+    /// tied period regardless of where the numbers came from.
+    ///
+    /// Periods with no event at all — none recorded, not even a scoreless
+    /// one — are not reported, which is different from
+    /// <see cref="ComputePeriods"/>, and deliberately so: a cumulative
+    /// sport's unplayed period is a data gap, a sets-mode sport's is the
+    /// bout being over.
+    /// </remarks>
+    public static IReadOnlyList<PeriodScore> ComputePlayedPeriods(
+        IEnumerable<ScoringEvent> events,
+        int maxPeriodCount,
+        Guid homeTeamId,
+        Guid awayTeamId)
+    {
+        var byPeriod = events.ToLookup(recorded => Clamp(recorded.PeriodNumber, maxPeriodCount));
+        var playedCount = byPeriod.Count == 0 ? 0 : byPeriod.Max(group => group.Key);
+        var periods = new List<PeriodScore>(playedCount);
+
+        for (short period = 1; period <= playedCount; period++)
         {
             var totals = Compute(byPeriod[period], homeTeamId, awayTeamId);
             periods.Add(new PeriodScore { Period = period, Home = totals.Home, Away = totals.Away });

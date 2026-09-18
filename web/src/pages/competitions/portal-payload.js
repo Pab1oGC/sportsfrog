@@ -36,6 +36,9 @@ export function readPortalForm(row) {
     showLeaders: pub.showLeaders !== false,
     showClassification: pub.showClassification !== false,
     showRosters: !!pub.showRosters,
+    // Misma razón que showRosters (RNF-16): la foto de un deportista es un
+    // dato mas sensible que su nombre, así que apagada por defecto también.
+    showAthletePhotos: !!pub.showAthletePhotos,
     showGallery: pub.showGallery !== false,
 
     // Las imágenes viajan como clave de almacenamiento; currentBannerUrl /
@@ -60,9 +63,26 @@ export function readPortalForm(row) {
       // competencia que subió banner con el editor viejo no lo pierde),
       // "color plano" si no. Mismo criterio que PortalTheme.Resolve.
       heroStyle: t.heroStyle || (pub.bannerKey ? 'image' : 'solid'),
+      // Vacío: el segundo color del degradado se calcula solo (el principal
+      // oscurecido), igual que antes de que este campo existiera. Solo
+      // importa cuando heroStyle es "gradient", pero no depende de leerlo
+      // para saber eso -- heroBackground ya lo ignora en cualquier otro caso.
+      heroGradientTo: t.heroGradientTo || '',
       focusX: t.focusX != null ? t.focusX : 50,
       focusY: t.focusY != null ? t.focusY : 50,
-      colorScheme: t.colorScheme || 'auto',
+      density: t.density || 'normal',
+      decoration: t.decoration || 'none',
+      contentFigure: t.contentFigure || 'none',
+      // Vacío: sigue al principal, igual criterio que Secundario.
+      contentFigureColor: t.contentFigureColor || '',
+      // Igual criterio que showStandings/showGallery en el nivel de arriba:
+      // prendido salvo que se haya apagado a propósito.
+      showLogoBackground: t.showLogoBackground !== false,
+      heroLayout: t.heroLayout || 'standard',
+      heroVariant: t.heroVariant || 'standard',
+      standingsVariant: t.standingsVariant || 'standard',
+      matchCardVariant: t.matchCardVariant || 'standard',
+      bracketVariant: t.bracketVariant || 'standard',
     },
 
     description: pub.description || '',
@@ -100,6 +120,7 @@ export function buildPortalPayload(f) {
     showLeaders: f.showLeaders,
     showClassification: f.showClassification,
     showRosters: f.showRosters,
+    showAthletePhotos: f.showAthletePhotos,
     showGallery: f.showGallery,
     bannerKey: f.bannerKey || null,
     logoKey: f.logoKey || null,
@@ -162,9 +183,22 @@ function portalThemePayload(f) {
     headingFont: t.headingFont && t.headingFont !== 'inter' ? t.headingFont : null,
     corners: t.corners && t.corners !== 'soft' ? t.corners : null,
     heroStyle: t.heroStyle && t.heroStyle !== defaultHero ? t.heroStyle : null,
+    heroGradientTo: t.heroGradientTo || null,
     focusX: t.focusX != null && t.focusX !== 50 ? t.focusX : null,
     focusY: t.focusY != null && t.focusY !== 50 ? t.focusY : null,
-    colorScheme: t.colorScheme && t.colorScheme !== 'auto' ? t.colorScheme : null,
+    density: t.density && t.density !== 'normal' ? t.density : null,
+    decoration: t.decoration && t.decoration !== 'none' ? t.decoration : null,
+    contentFigure: t.contentFigure && t.contentFigure !== 'none' ? t.contentFigure : null,
+    contentFigureColor: t.contentFigureColor || null,
+    // false explícito solo cuando se apagó -- true es el default, y un
+    // false acá no debe ser indistinguible de "nunca se tocó" (Object.values
+    // más abajo lo trataría como "nada personalizado" si fuera null).
+    showLogoBackground: t.showLogoBackground === false ? false : null,
+    heroLayout: t.heroLayout && t.heroLayout !== 'standard' ? t.heroLayout : null,
+    heroVariant: t.heroVariant && t.heroVariant !== 'standard' ? t.heroVariant : null,
+    standingsVariant: t.standingsVariant && t.standingsVariant !== 'standard' ? t.standingsVariant : null,
+    matchCardVariant: t.matchCardVariant && t.matchCardVariant !== 'standard' ? t.matchCardVariant : null,
+    bracketVariant: t.bracketVariant && t.bracketVariant !== 'standard' ? t.bracketVariant : null,
   };
   return Object.values(body).some((v) => v !== null) ? body : null;
 }

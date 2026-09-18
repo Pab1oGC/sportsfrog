@@ -138,7 +138,7 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
             // The portal theme. Every field optional — a theme that only
             // named a font is valid — so each rule only runs When that one
             // field was given. The four colours share the accent colour's
-            // pattern; the four choice fields are matched against the same
+            // pattern; the eleven choice fields are matched against the same
             // allow-lists the public page defaults from, so a stale client
             // sending a value that was later renamed is told the options
             // rather than silently ignored.
@@ -179,10 +179,55 @@ internal sealed class CompetitionContractValidator : AbstractValidator<Competiti
                     .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.HeroStyle))
                     .WithMessage($"Estilo de portada desconocido. Disponibles: {string.Join(", ", PortalTheme.HeroStyles.Order(StringComparer.Ordinal))}.");
 
-                RuleFor(contract => contract.Settings!.Public!.Theme!.ColorScheme)
-                    .Must(value => PortalTheme.ColorSchemes.Contains(value!))
-                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.ColorScheme))
-                    .WithMessage($"Modo de color desconocido. Disponibles: {string.Join(", ", PortalTheme.ColorSchemes.Order(StringComparer.Ordinal))}.");
+                RuleFor(contract => contract.Settings!.Public!.Theme!.HeroGradientTo)
+                    .Matches(HexColour)
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.HeroGradientTo))
+                    .WithMessage("El segundo color del degradado se escribe como #rrggbb.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.Density)
+                    .Must(value => PortalTheme.Densities.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.Density))
+                    .WithMessage($"Densidad desconocida. Disponibles: {string.Join(", ", PortalTheme.Densities.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.Decoration)
+                    .Must(value => PortalTheme.Decorations.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.Decoration))
+                    .WithMessage($"Decoración desconocida. Disponibles: {string.Join(", ", PortalTheme.Decorations.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.ContentFigure)
+                    .Must(value => PortalTheme.ContentFigures.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.ContentFigure))
+                    .WithMessage($"Figura de fondo desconocida. Disponibles: {string.Join(", ", PortalTheme.ContentFigures.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.ContentFigureColor)
+                    .Matches(HexColour)
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.ContentFigureColor))
+                    .WithMessage("El color de la figura se escribe como #rrggbb.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.HeroLayout)
+                    .Must(value => PortalTheme.HeroLayouts.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.HeroLayout))
+                    .WithMessage($"Layout de portada desconocido. Disponibles: {string.Join(", ", PortalTheme.HeroLayouts.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.HeroVariant)
+                    .Must(value => PortalTheme.HeroVariants.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.HeroVariant))
+                    .WithMessage($"Variante de portada desconocida. Disponibles: {string.Join(", ", PortalTheme.HeroVariants.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.StandingsVariant)
+                    .Must(value => PortalTheme.StandingsVariants.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.StandingsVariant))
+                    .WithMessage($"Variante de tabla desconocida. Disponibles: {string.Join(", ", PortalTheme.StandingsVariants.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.MatchCardVariant)
+                    .Must(value => PortalTheme.MatchCardVariants.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.MatchCardVariant))
+                    .WithMessage($"Variante de tarjeta de partido desconocida. Disponibles: {string.Join(", ", PortalTheme.MatchCardVariants.Order(StringComparer.Ordinal))}.");
+
+                RuleFor(contract => contract.Settings!.Public!.Theme!.BracketVariant)
+                    .Must(value => PortalTheme.BracketVariants.Contains(value!))
+                    .When(contract => !string.IsNullOrEmpty(contract.Settings!.Public!.Theme!.BracketVariant))
+                    .WithMessage($"Variante de llave desconocida. Disponibles: {string.Join(", ", PortalTheme.BracketVariants.Order(StringComparer.Ordinal))}.");
 
                 RuleFor(contract => contract.Settings!.Public!.Theme!.FocusX)
                     .InclusiveBetween(0, 100)

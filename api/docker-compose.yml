@@ -65,6 +65,12 @@ services:
     restart: "no"
     environment:
       SPORTFROG_MIGRATIONS_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${SPORTFROG_OWNER_USER};Password=${SPORTFROG_OWNER_PASSWORD}"
+      # Read only by the SeedPlatformOwner migration, to create the one
+      # account allowed to register new organizations (POST /organizations
+      # is no longer anonymous). No default: a fresh database with nobody
+      # able to pass that check could never create the first one either.
+      PLATFORM_ADMIN_EMAIL: "${PLATFORM_ADMIN_EMAIL}"
+      PLATFORM_ADMIN_PASSWORD: "${PLATFORM_ADMIN_PASSWORD}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -137,6 +143,22 @@ services:
       Storage__Bucket: "sportfrog"
       Storage__AccessKey: ${MINIO_ROOT_USER}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
+      # Optional: EmailSenderFactory falls back to NullEmailSender (logs
+      # instead of sending) whenever Smtp__Host arrives empty, which is what
+      # happened here before this block existed — .env had real values, but
+      # nothing forwarded them into this container, so the app never saw
+      # them. Host/Username/Password/FromAddress/FromName default to empty
+      # so an installation that never fills these in keeps logging instead
+      # of failing to boot; Port and UseStartTls default to SmtpOptions' own
+      # values rather than blank, since an empty string can't bind to the
+      # int/bool the options class declares.
+      Smtp__Host: ${Smtp__Host:-}
+      Smtp__Port: ${Smtp__Port:-587}
+      Smtp__Username: ${Smtp__Username:-}
+      Smtp__Password: ${Smtp__Password:-}
+      Smtp__UseStartTls: ${Smtp__UseStartTls:-true}
+      Smtp__FromAddress: ${Smtp__FromAddress:-}
+      Smtp__FromName: ${Smtp__FromName:-SportFrog}
     ports:
       - "${API_PORT}:8080"
     depends_on:
@@ -165,6 +187,31 @@ services:
     depends_on:
       - api
 
+  # HTTPS de cara al publico. Escucha 80/443, pide y renueva el certificado
+  # solo contra DOMAIN (ver Caddyfile), y reenvia todo al contenedor "web"
+  # por la red interna de Compose -- nadie de afuera le habla directo a
+  # "web" ni a "api". DOMAIN tiene que apuntar por DNS a este servidor antes
+  # de levantar esto, o el challenge de Let's Encrypt falla.
+  caddy:
+    profiles: ["production"]
+    image: caddy:2-alpine
+    container_name: sportfrog-caddy
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+      CADDY_EMAIL: ${CADDY_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+
 volumes:
   postgres-data:
   minio-data:
+  caddy-data:
+  caddy-config:

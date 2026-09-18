@@ -72,6 +72,13 @@ public sealed record ScheduleSettings
 /// published competition with none of them has nothing to publish. Rosters
 /// default to hidden: naming the children on a team is a decision someone
 /// has to make on purpose.
+///
+/// <see cref="ShowStandings"/> is the organizer's own switch, but it is not
+/// the last word: the public read (<c>ReadPublicCompetition</c>) refuses
+/// the section outright for a <see cref="CompetitionFormat.Knockout"/>
+/// competition regardless of it, because single elimination has no group
+/// stage for a table to describe — the switch would otherwise turn on a
+/// page with nothing honest to show.
 /// </remarks>
 public sealed record PublicSettings
 {
@@ -94,6 +101,28 @@ public sealed record PublicSettings
     public bool ShowClassification { get; init; } = true;
 
     public bool ShowRosters { get; init; }
+
+    /// <summary>
+    /// Whether an individual-sport competitor's own photo may appear on the
+    /// public bracket, next to their name and club.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, unlike almost everything else in this record. An
+    /// athlete's photograph is not the same class of fact as their name: it
+    /// stays private everywhere else in this system (see
+    /// <c>ReadPublicRoster</c>'s own remarks on RNF-16), and taekwondo — the
+    /// one individual sport in the catalog today — runs youth categories.
+    /// Publishing a minor's photo on an unauthenticated page is a decision
+    /// this switch hands to the organization that actually holds consent for
+    /// it, never a default this platform reaches for on its own. The public
+    /// read (<c>ReadPublicCalendar</c>) also refuses a photo outright for a
+    /// team of more than one athlete — poomsae runs pairs and trios under the
+    /// same "is individual" flag as a lone kyorugi fighter, and "the
+    /// competitor's photo" is not one well-defined thing there — so this
+    /// switch alone is not the last word either, the same shape of rule as
+    /// <see cref="ShowStandings"/> above.
+    /// </remarks>
+    public bool ShowAthletePhotos { get; init; }
 
     /// <summary>
     /// Whether the event's own photo gallery — <see cref="Gallery"/> —
@@ -144,8 +173,7 @@ public sealed record PublicSettings
     /// <summary>
     /// The full visual system the public page is dressed in: colours beyond a
     /// single accent, the display font its headings are set in, how square its
-    /// corners are, how the cover renders, and whether the page follows the
-    /// visitor's light/dark preference or is pinned.
+    /// corners are, and how the cover renders.
     /// </summary>
     /// <remarks>
     /// Absent means the plain SportFrog theme every competition had before
@@ -265,7 +293,10 @@ public sealed record GalleryPhoto
 /// fallbacks.
 ///
 /// The closed-set fields (<see cref="HeadingFont"/>, <see cref="Corners"/>,
-/// <see cref="HeroStyle"/>, <see cref="ColorScheme"/>) are plain strings
+/// <see cref="HeroStyle"/>, <see cref="Density"/>,
+/// <see cref="Decoration"/>, <see cref="HeroLayout"/>, <see cref="HeroVariant"/>,
+/// <see cref="StandingsVariant"/>, <see cref="MatchCardVariant"/>,
+/// <see cref="BracketVariant"/>) are plain strings
 /// checked against an allow-list by the contract validator, the same way
 /// <see cref="CompetitionFormat"/> and the capture level are — an unknown
 /// value is answered with the list of accepted ones, not a bare 400.
@@ -293,7 +324,7 @@ public sealed record PortalTheme
 
     /// <summary>
     /// The page background behind the content, as "#rrggbb". Absent means the
-    /// base theme's own near-white (or near-black in dark mode).
+    /// base theme's own near-white.
     /// </summary>
     public string? Surface { get; init; }
 
@@ -309,6 +340,30 @@ public sealed record PortalTheme
 
     /// <summary>How the cover renders — one of <see cref="HeroStyles"/>.</summary>
     public string? HeroStyle { get; init; }
+
+    /// <summary>
+    /// The second colour of the cover's fade, as "#rrggbb", when
+    /// <see cref="HeroStyle"/> is <c>gradient</c>. Absent means the fade is
+    /// worked out automatically — <see cref="Primary"/> darkened — the same
+    /// gradient this field didn't exist to override before.
+    /// </summary>
+    public string? HeroGradientTo { get; init; }
+
+    /// <summary>
+    /// Whether the competition's own logo, in the cover, sits on a solid
+    /// backdrop. Defaults to <c>true</c> — the look every competition had
+    /// before this field existed. Turned off for a mark that already reads
+    /// fine on its own (already opaque, or designed to sit directly on a
+    /// colour), where a second frame behind it would be a frame around a
+    /// frame.
+    /// </summary>
+    /// <remarks>
+    /// Only the competition's logo — never <see cref="Primary"/>-derived
+    /// colour, never the organization's own logo in the navigation bar, and
+    /// never a closed set like <see cref="HeroStyle"/>: this one is either
+    /// on or it is not.
+    /// </remarks>
+    public bool ShowLogoBackground { get; init; } = true;
 
     /// <summary>
     /// Where the banner keeps its subject when the cover is cropped narrower
@@ -328,10 +383,111 @@ public sealed record PortalTheme
     public double? FocusY { get; init; }
 
     /// <summary>
-    /// Whether the public page follows the visitor's light/dark preference
-    /// (<c>auto</c>) or is pinned to one — one of <see cref="ColorSchemes"/>.
+    /// How much air the whole page gets — section spacing, card padding,
+    /// the type scale — one of <see cref="Densities"/>.
     /// </summary>
-    public string? ColorScheme { get; init; }
+    /// <remarks>
+    /// Applied as a single multiplier on the page's spacing unit, not as a
+    /// per-component setting: every section of the public page reads its own
+    /// padding and gaps off that one number, so this one field reaches the
+    /// whole page instead of needing a density knob on each section.
+    /// </remarks>
+    public string? Density { get; init; }
+
+    /// <summary>
+    /// The decorative texture behind the cover's text — one of
+    /// <see cref="Decorations"/>. Absent or <c>none</c> draws nothing.
+    /// </summary>
+    /// <remarks>
+    /// One motif (diagonal lines), two intensities — not a library of
+    /// patterns to choose from. It sits behind the cover's text and never
+    /// changes it, the same way a stadium scoreboard's texture never
+    /// competes with the score printed on it.
+    /// </remarks>
+    public string? Decoration { get; init; }
+
+    /// <summary>
+    /// The decorative shape tiled behind the page's content — everything
+    /// below the cover — as one of <see cref="ContentFigures"/>. Absent or
+    /// <c>none</c> draws nothing.
+    /// </summary>
+    /// <remarks>
+    /// Never the cover: <see cref="Decoration"/> already owns that surface,
+    /// and the two are independent so a competition can have one without
+    /// the other. Rendered as a single-colour silhouette of whichever piece
+    /// of artwork was chosen — <see cref="ContentFigureColor"/> is that
+    /// colour, not a second choice of shape.
+    /// </remarks>
+    public string? ContentFigure { get; init; }
+
+    /// <summary>
+    /// The colour <see cref="ContentFigure"/> is tinted, as "#rrggbb".
+    /// Absent means it tracks <see cref="Primary"/> — same fallback as
+    /// <see cref="Secondary"/>, for the same reason: most competitions that
+    /// turn this on want it in their own colour, not a second one to pick.
+    /// </summary>
+    public string? ContentFigureColor { get; init; }
+
+    /// <summary>How the cover's text is arranged — one of <see cref="HeroLayouts"/>.</summary>
+    /// <remarks>
+    /// A second arrangement of the same pieces the cover already draws
+    /// (name, status, countdown, champion) — not a second cover design.
+    /// Independent from whether the cover is shown dense (the studio's
+    /// narrow preview) or full width (the public page): a competition that
+    /// chose <c>centered</c> sees it centered in both places.
+    /// </remarks>
+    public string? HeroLayout { get; init; }
+
+    /// <summary>
+    /// Which cover the page is actually built from — one of
+    /// <see cref="HeroVariants"/>. <c>standard</c> is the two-piece cover
+    /// every other field here still describes (colours, <see cref="HeroLayout"/>,
+    /// <see cref="Decoration"/>...); the other three are a different
+    /// composition of the same underlying facts, not a restyling of the
+    /// same one.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HeroLayout"/> only matters for <c>standard</c> — the other
+    /// three fix their own arrangement and ignore it, the same way
+    /// <see cref="FocusX"/> only matters for <c>image</c>. <c>live</c> shows
+    /// the competition's own current match when there is exactly one in
+    /// progress; with zero or more than one, it falls back to
+    /// <c>standard</c> rather than guess which to show — the public read
+    /// resolves that fact, this field only says the organiser asked for it
+    /// when available.
+    /// </remarks>
+    public string? HeroVariant { get; init; }
+
+    /// <summary>
+    /// Which layout the standings table renders in — one of
+    /// <see cref="StandingsVariants"/>. <c>standard</c> is today's
+    /// <c>DataGrid</c>; the other two are a different arrangement of the
+    /// same rows, not a restyling of the same table.
+    /// </summary>
+    /// <remarks>
+    /// The rule that a public table is never reorderable by a visitor — the
+    /// ranking is the ruleset's answer, not a spreadsheet — holds for every
+    /// variant by construction: <c>cards</c> and <c>editorial</c> have no
+    /// column headers to click in the first place.
+    /// </remarks>
+    public string? StandingsVariant { get; init; }
+
+    /// <summary>
+    /// Which layout a match's card renders in, in the calendar — one of
+    /// <see cref="MatchCardVariants"/>. Never reaches the knockout bracket
+    /// (<c>Llave</c>/<c>CruceLlave</c> on the public page), which has its
+    /// own independent <see cref="BracketVariant"/>.
+    /// </summary>
+    public string? MatchCardVariant { get; init; }
+
+    /// <summary>
+    /// Which layout a knockout tie renders in, inside the bracket — one of
+    /// <see cref="BracketVariants"/>. Independent from
+    /// <see cref="MatchCardVariant"/>: the bracket's own champion banner
+    /// and column scroll never change, only the tie card inside each
+    /// column.
+    /// </summary>
+    public string? BracketVariant { get; init; }
 
     /// <summary>The display faces a heading may be set in. <c>inter</c> is the body font — no extra load.</summary>
     public static readonly IReadOnlySet<string> Fonts = new HashSet<string>(StringComparer.Ordinal)
@@ -355,10 +511,56 @@ public sealed record PortalTheme
         "solid", "gradient", "image",
     };
 
-    /// <summary><c>auto</c> follows the visitor; <c>light</c> and <c>dark</c> pin the page.</summary>
-    public static readonly IReadOnlySet<string> ColorSchemes = new HashSet<string>(StringComparer.Ordinal)
+    /// <summary><c>compact</c> tightens the page's spacing unit, <c>spacious</c> loosens it. <c>normal</c> is the base theme's own value.</summary>
+    public static readonly IReadOnlySet<string> Densities = new HashSet<string>(StringComparer.Ordinal)
     {
-        "auto", "light", "dark",
+        "compact", "normal", "spacious",
+    };
+
+    /// <summary>How strong the cover's decorative texture reads. <c>none</c> draws nothing.</summary>
+    public static readonly IReadOnlySet<string> Decorations = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "none", "subtle", "bold",
+    };
+
+    /// <summary>
+    /// Which shape tiles behind the page's content — see
+    /// <see cref="ContentFigure"/>. <c>none</c> draws nothing; the rest name
+    /// one piece of artwork each, not a style applied to all of them.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ContentFigures = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "none", "wave", "curve-line", "shiny-overlay", "colored-patterns", "contour-line",
+    };
+
+    /// <summary><c>standard</c> is the two-column cover; <c>centered</c> stacks everything in the middle.</summary>
+    public static readonly IReadOnlySet<string> HeroLayouts = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "standard", "centered",
+    };
+
+    /// <summary>Which cover composition the page renders — see <see cref="HeroVariant"/>.</summary>
+    public static readonly IReadOnlySet<string> HeroVariants = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "standard", "scoreboard", "editorial", "live",
+    };
+
+    /// <summary>Which standings layout the page renders — see <see cref="StandingsVariant"/>.</summary>
+    public static readonly IReadOnlySet<string> StandingsVariants = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "standard", "cards", "editorial",
+    };
+
+    /// <summary>Which match card layout the calendar renders — see <see cref="MatchCardVariant"/>.</summary>
+    public static readonly IReadOnlySet<string> MatchCardVariants = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "standard", "compact", "matchup",
+    };
+
+    /// <summary>Which tie card layout the bracket renders — see <see cref="BracketVariant"/>.</summary>
+    public static readonly IReadOnlySet<string> BracketVariants = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "standard", "compact", "detailed",
     };
 
     /// <summary>The primary colour a page falls back to when nothing set one at all.</summary>
@@ -402,9 +604,19 @@ public sealed record PortalTheme
             HeadingFont: OneOf(theme?.HeadingFont, Fonts, "inter"),
             Corners: OneOf(theme?.Corners, CornerStyles, "soft"),
             HeroStyle: OneOf(theme?.HeroStyle, HeroStyles, defaultHero),
+            HeroGradientTo: NullIfBlank(theme?.HeroGradientTo),
+            ShowLogoBackground: theme?.ShowLogoBackground ?? true,
             FocusX: InRange(theme?.FocusX, 50),
             FocusY: InRange(theme?.FocusY, 50),
-            ColorScheme: OneOf(theme?.ColorScheme, ColorSchemes, "auto"));
+            Density: OneOf(theme?.Density, Densities, "normal"),
+            Decoration: OneOf(theme?.Decoration, Decorations, "none"),
+            ContentFigure: OneOf(theme?.ContentFigure, ContentFigures, "none"),
+            ContentFigureColor: NullIfBlank(theme?.ContentFigureColor),
+            HeroLayout: OneOf(theme?.HeroLayout, HeroLayouts, "standard"),
+            HeroVariant: OneOf(theme?.HeroVariant, HeroVariants, "standard"),
+            StandingsVariant: OneOf(theme?.StandingsVariant, StandingsVariants, "standard"),
+            MatchCardVariant: OneOf(theme?.MatchCardVariant, MatchCardVariants, "standard"),
+            BracketVariant: OneOf(theme?.BracketVariant, BracketVariants, "standard"));
     }
 
     /// <summary>A 0-100 axis, or the default when absent or somehow out of range.</summary>
@@ -437,9 +649,11 @@ public sealed record PortalTheme
 /// <summary>
 /// A <see cref="PortalTheme"/> with every choice made: the shape the public
 /// page renders from, handed straight out by the public competition read.
-/// Only the two genuinely optional colours stay nullable — the page derives
-/// one from contrast and lets the other fall through to the base theme, and
-/// both of those are the browser's job, not this record's.
+/// Only the genuinely optional colours stay nullable — the page derives
+/// <see cref="PrimaryContrast"/> from contrast, lets <see cref="Surface"/>
+/// fall through to the base theme, and works <see cref="HeroGradientTo"/>
+/// and <see cref="ContentFigureColor"/> out from <see cref="Primary"/> — all
+/// four are the browser's job, not this record's.
 /// </summary>
 public sealed record ResolvedPortalTheme(
     string Primary,
@@ -449,9 +663,19 @@ public sealed record ResolvedPortalTheme(
     string HeadingFont,
     string Corners,
     string HeroStyle,
+    string? HeroGradientTo,
+    bool ShowLogoBackground,
     double FocusX,
     double FocusY,
-    string ColorScheme);
+    string Density,
+    string Decoration,
+    string ContentFigure,
+    string? ContentFigureColor,
+    string HeroLayout,
+    string HeroVariant,
+    string StandingsVariant,
+    string MatchCardVariant,
+    string BracketVariant);
 
 /// <summary>
 /// One of the public page's own sections, as it is stored: which one
@@ -479,19 +703,24 @@ public sealed record PortalSection
     /// calendar, and the event's own photo gallery — the whole set.
     /// </summary>
     /// <remarks>
-    /// The calendar is in this list because its position is still an
-    /// organizer's choice — a competition that is really about the fixture
-    /// can lead with it — but not because it can be turned off: unlike the
-    /// other four, nothing in <see cref="PublicSettings"/> can hide it, and
-    /// <see cref="Resolve"/> does not try to guess a reason one should.
+    /// The calendar and the bracket are in this list because their position
+    /// is still an organizer's choice — a competition that is really about
+    /// the fixture can lead with it — but not because either can be turned
+    /// off: nothing in <see cref="PublicSettings"/> can hide the calendar,
+    /// and the bracket has no switch of its own either — it shows up only
+    /// once the public read finds at least one match with a knockout phase,
+    /// the same way <c>classification</c> only really applies to a judged
+    /// category. <see cref="Resolve"/> does not try to guess a reason either
+    /// one should be hidden beyond that.
     ///
-    /// "gallery" was added after the other four — new keys append rather
-    /// than replace, which is what lets a competition's list saved before it
-    /// existed still resolve to all five instead of leaving the gallery out.
+    /// "gallery" and "bracket" were each added after the ones before them —
+    /// new keys append rather than replace, which is what lets a
+    /// competition's list saved before either existed still resolve to the
+    /// full set instead of leaving the new one out.
     /// </remarks>
     public static readonly IReadOnlySet<string> Keys = new HashSet<string>(StringComparer.Ordinal)
     {
-        "standings", "leaders", "classification", "calendar", "gallery",
+        "standings", "leaders", "classification", "calendar", "gallery", "bracket",
     };
 
     private static readonly IReadOnlyDictionary<string, string> DefaultLabels = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -501,10 +730,11 @@ public sealed record PortalSection
         ["classification"] = "Clasificación",
         ["calendar"] = "Calendario",
         ["gallery"] = "Fotos",
+        ["bracket"] = "Llave",
     };
 
-    /// <summary>The order every competition had before "gallery" existed, which is still where a new one appends.</summary>
-    private static readonly string[] DefaultOrder = ["standings", "leaders", "classification", "calendar", "gallery"];
+    /// <summary>The order every competition had before "gallery"/"bracket" existed, which is still where a new one appends.</summary>
+    private static readonly string[] DefaultOrder = ["standings", "leaders", "classification", "calendar", "gallery", "bracket"];
 
     /// <summary>
     /// The sections to render, in order, each with the name it will

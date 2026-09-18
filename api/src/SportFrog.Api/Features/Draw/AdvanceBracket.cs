@@ -112,9 +112,12 @@ public static class AdvanceBracket
 
         foreach (var match in last)
         {
+            // Every match reaching this loop was drawn one round at a time,
+            // which never leaves a side undefined — that is the whole
+            // difference between this path and a bracket drawn in full.
             var winner = MatchWinner.Resolve(
-                match.HomeTeamId,
-                match.AwayTeamId,
+                match.HomeTeamId!.Value,
+                match.AwayTeamId!.Value,
                 match.WalkoverTeamId,
                 match.HomeTotal,
                 match.AwayTotal,

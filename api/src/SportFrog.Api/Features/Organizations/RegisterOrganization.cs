@@ -14,9 +14,14 @@ namespace SportFrog.Api.Features.Organizations;
 /// <summary>
 /// Registers an organization together with the user who owns it (RF-01).
 ///
-/// This is how an organizer enters the platform, so it is the one operation
-/// that necessarily runs with no session and no organization context: both
-/// are what it creates.
+/// Self-service sign-up is not offered today: every organization is brought
+/// onto the platform by SportFrog itself, from the one account
+/// <c>SeedPlatformOwner</c> seeds for exactly that (see
+/// <see cref="PlatformAuthority"/>). The operation still runs with no
+/// organization context — the one it creates does not exist yet, so there is
+/// nothing to act "inside" — but it is no longer anonymous: refusing it here
+/// with a plain 401/403 is what keeps this the one place a stray or leaked
+/// account cannot mint an organization for itself.
 /// </summary>
 public static class RegisterOrganization
 {
@@ -73,9 +78,12 @@ public static class RegisterOrganization
     public static IEndpointRouteBuilder MapRegisterOrganization(this IEndpointRouteBuilder routes)
     {
         routes.MapPost("/organizations", HandleAsync)
-            // Nobody has an account yet, and the organization this would be
-            // scoped to is the one being created.
-            .AllowAnonymous()
+            // Authenticated, but deliberately not .RequireRole(): that
+            // extension checks the role held in the organization the request
+            // acts in, and this request does not act in one — the
+            // organization it creates does not exist until it runs. Checked
+            // by hand instead, against the one organization allowed to
+            // create others (PlatformAuthority), inside the handler.
             .WithoutOrganizationContext()
             .RequireRateLimiting(RateLimitPolicies.Authentication)
             .WithName(nameof(RegisterOrganization))
@@ -86,10 +94,33 @@ public static class RegisterOrganization
 
     private static async Task<IResult> HandleAsync(
         Request request,
+        HttpContext httpContext,
         SportFrogDbContext database,
         BCryptPasswordHasher passwordHasher,
         CancellationToken cancellationToken)
     {
+        // Same 401 the entry channel already gives every other endpoint that
+        // requires a session — this one only differs in never establishing
+        // an organization context, so it has to ask for a session itself.
+        if (httpContext.User.Identity?.IsAuthenticated != true)
+        {
+            return Results.Problem(
+                detail: "Se requiere autenticación.",
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var platformRole = await PlatformAuthority.RoleForAsync(
+            httpContext.User, database, cancellationToken);
+
+        if (platformRole is not { } role || !role.Reaches(MembershipRole.Admin))
+        {
+            // Same wording .RequireRole() uses for the equivalent refusal —
+            // nothing about which role would have been enough.
+            return Results.Problem(
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
         var slug = Slug.Normalize(request.Slug);
 
         // A soft-deleted organization still holds its slug, and a soft-deleted

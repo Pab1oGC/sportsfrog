@@ -182,4 +182,134 @@ public sealed class BracketTests
         // is talked about by its round number instead.
         Bracket.Phase(matches, round).Should().Be($"ronda {round}");
     }
+
+    // ---- Drawing every round at once, before anything is played ----------
+
+    [Fact]
+    public void FullDraw_PowerOfTwoField_ProducesEveryRoundDownToTheFinal()
+    {
+        var plan = Bracket.FullDraw(Teams(8));
+
+        plan.Should().HaveCount(4 + 2 + 1);
+        plan.Count(match => match.Round == 1).Should().Be(4);
+        plan.Count(match => match.Round == 2).Should().Be(2);
+        plan.Count(match => match.Round == 3).Should().Be(1);
+    }
+
+    [Fact]
+    public void FullDraw_FirstRound_MatchesWhatFirstRoundAloneWouldGive()
+    {
+        var teams = Teams(8);
+        var plan = Bracket.FullDraw(teams);
+        var (expected, _) = Bracket.FirstRound(teams);
+
+        var firstRound = plan.Where(match => match.Round == 1).ToList();
+
+        firstRound.Should().HaveCount(expected.Count);
+
+        for (var i = 0; i < expected.Count; i++)
+        {
+            firstRound[i].Home.TeamId.Should().Be(expected[i].HomeTeamId);
+            firstRound[i].Away.TeamId.Should().Be(expected[i].AwayTeamId);
+        }
+    }
+
+    [Fact]
+    public void FullDraw_RoundTwo_PairsTheWinnersOfConsecutiveFirstRoundMatches()
+    {
+        var plan = Bracket.FullDraw(Teams(8));
+        var roundTwo = plan.Where(match => match.Round == 2).ToList();
+
+        roundTwo[0].Home.SourceMatchIndex.Should().Be(0);
+        roundTwo[0].Away.SourceMatchIndex.Should().Be(1);
+        roundTwo[1].Home.SourceMatchIndex.Should().Be(2);
+        roundTwo[1].Away.SourceMatchIndex.Should().Be(3);
+    }
+
+    [Fact]
+    public void FullDraw_TheFinal_IsFedByTheTwoSemifinals()
+    {
+        var plan = Bracket.FullDraw(Teams(8));
+        var final = plan.Last();
+
+        final.Round.Should().Be(3);
+        final.Phase.Should().Be("final");
+        final.Home.SourceMatchIndex.Should().Be(4);
+        final.Away.SourceMatchIndex.Should().Be(5);
+    }
+
+    [Fact]
+    public void FullDraw_ByesEnterRoundTwoAsAlreadyKnownTeams_NotAsAFeederMatch()
+    {
+        // Five entrants round up to eight: three byes and one match in
+        // round one. The byes are not fed by anything — they walk straight
+        // into round two as the teams they already are.
+        var teams = Teams(5);
+        var (_, byes) = Bracket.FirstRound(teams);
+        var plan = Bracket.FullDraw(teams);
+
+        var roundTwo = plan.Where(match => match.Round == 2).ToList();
+        var slots = roundTwo.SelectMany(match => new[] { match.Home, match.Away }).ToList();
+
+        roundTwo.Should().HaveCount(2);
+        slots.Count(slot => slot.TeamId is not null).Should().Be(3);
+        slots.Where(slot => slot.TeamId is not null).Select(slot => slot.TeamId!.Value)
+            .Should().BeEquivalentTo(byes);
+        slots.Count(slot => slot.SourceMatchIndex is not null).Should().Be(1);
+    }
+
+    [Fact]
+    public void FullDraw_ElevenEntrants_ProducesFourRoundsEndingInAFinal()
+    {
+        // Sixteen-slot bracket: three real matches in round one, then four,
+        // two and one — the byes computed once are never recomputed.
+        var plan = Bracket.FullDraw(Teams(11));
+
+        plan.Select(match => match.Round).Distinct().Should().Equal(1, 2, 3, 4);
+        plan.Count(match => match.Round == 2).Should().Be(4);
+        plan.Count(match => match.Round == 3).Should().Be(2);
+        plan.Count(match => match.Round == 4).Should().Be(1);
+        plan.Last().Phase.Should().Be("final");
+    }
+
+    [Fact]
+    public void FullDraw_TwoEntrants_IsJustTheFinal()
+    {
+        var teams = Teams(2);
+        var plan = Bracket.FullDraw(teams);
+
+        plan.Should().ContainSingle();
+        plan[0].Phase.Should().Be("final");
+        plan[0].Home.TeamId.Should().Be(teams[0]);
+        plan[0].Away.TeamId.Should().Be(teams[1]);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void FullDraw_FewerThanTwoEntrants_ProducesNothing(int count)
+    {
+        Bracket.FullDraw(Teams(count)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FullDraw_EveryFeederReference_PointsToAnEarlierMatchInTheSameList()
+    {
+        // A slot can only ever be fed by a match already drawn before it —
+        // never by itself or by one still to come.
+        var plan = Bracket.FullDraw(Teams(11));
+
+        for (var i = 0; i < plan.Count; i++)
+        {
+            if (plan[i].Home.SourceMatchIndex is { } homeSource)
+            {
+                homeSource.Should().BeLessThan(i);
+            }
+
+            if (plan[i].Away.SourceMatchIndex is { } awaySource)
+            {
+                awaySource.Should().BeLessThan(i);
+            }
+        }
+    }
 }

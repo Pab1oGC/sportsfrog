@@ -5,14 +5,14 @@ namespace SportFrog.Domain.Tests.Competitions;
 
 /// <summary>
 /// <see cref="PortalSection.Resolve"/> turns whatever a competition stored —
-/// short, out of order, or absent entirely — into the five sections the
+/// short, out of order, or absent entirely — into the six sections the
 /// public page actually renders, each named and in a definite order. The
 /// contract that matters: nothing is ever lost, and a competition that
 /// never touched this keeps the order it has always had.
 /// </summary>
 public sealed class PortalSectionResolveTests
 {
-    private static readonly string[] DefaultOrder = ["standings", "leaders", "classification", "calendar", "gallery"];
+    private static readonly string[] DefaultOrder = ["standings", "leaders", "classification", "calendar", "gallery", "bracket"];
 
     [Fact]
     public void Resolve_ReturnsTheDefaultOrderAndLabels_WhenNothingWasStored()
@@ -21,7 +21,7 @@ public sealed class PortalSectionResolveTests
 
         resolved.Select(s => s.Key).Should().Equal(DefaultOrder);
         resolved.Select(s => s.Label).Should().Equal(
-            "Tabla de posiciones", "Líderes", "Clasificación", "Calendario", "Fotos");
+            "Tabla de posiciones", "Líderes", "Clasificación", "Calendario", "Fotos", "Llave");
     }
 
     [Fact]
@@ -33,9 +33,9 @@ public sealed class PortalSectionResolveTests
         ]);
 
         // El calendario y la tabla, en el orden guardado; lideres,
-        // clasificacion y fotos, que la lista no nombro, al final en el
-        // orden de siempre.
-        resolved.Select(s => s.Key).Should().Equal("calendar", "standings", "leaders", "classification", "gallery");
+        // clasificacion, fotos y llave, que la lista no nombro, al final en
+        // el orden de siempre.
+        resolved.Select(s => s.Key).Should().Equal("calendar", "standings", "leaders", "classification", "gallery", "bracket");
     }
 
     [Fact]
@@ -78,11 +78,11 @@ public sealed class PortalSectionResolveTests
     {
         // Una lista de un solo elemento -- la que quedaria si alguien la
         // editara a mano hasta dejar solo una fila -- sigue resolviendo a
-        // las cinco secciones.
+        // las seis secciones.
         var resolved = PortalSection.Resolve([new PortalSection { Key = "leaders" }]);
 
         resolved.Select(s => s.Key).Should().BeEquivalentTo(DefaultOrder);
-        resolved.Should().HaveCount(5);
+        resolved.Should().HaveCount(6);
     }
 
     [Fact]
@@ -98,7 +98,26 @@ public sealed class PortalSectionResolveTests
             new PortalSection { Key = "calendar" },
         ]);
 
-        resolved.Select(s => s.Key).Should().Equal("leaders", "standings", "classification", "calendar", "gallery");
-        resolved.Last().Label.Should().Be("Fotos");
+        resolved.Select(s => s.Key).Should().Equal("leaders", "standings", "classification", "calendar", "gallery", "bracket");
+        resolved[4].Label.Should().Be("Fotos");
+        resolved.Last().Label.Should().Be("Llave");
+    }
+
+    [Fact]
+    public void Resolve_AppendsBracket_ForAListSavedBeforeItExisted()
+    {
+        // El mismo caso de arriba, un paso más adelante en el tiempo: una
+        // competencia guardó su orden con las cinco secciones que existían
+        // antes de que "bracket" existiera -- "gallery" incluida.
+        var resolved = PortalSection.Resolve([
+            new PortalSection { Key = "gallery" },
+            new PortalSection { Key = "calendar" },
+            new PortalSection { Key = "standings" },
+            new PortalSection { Key = "leaders" },
+            new PortalSection { Key = "classification" },
+        ]);
+
+        resolved.Select(s => s.Key).Should().Equal("gallery", "calendar", "standings", "leaders", "classification", "bracket");
+        resolved.Last().Label.Should().Be("Llave");
     }
 }

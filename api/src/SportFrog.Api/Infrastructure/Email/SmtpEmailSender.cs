@@ -17,13 +17,20 @@ internal sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<Smt
 {
     private readonly SmtpOptions _options = options.Value;
 
-    public async Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
+    public async Task SendAsync(string to, string subject, string body, string? htmlBody, CancellationToken cancellationToken)
     {
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
         message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = body };
+
+        // multipart/alternative when there's an HTML part to offer: a client
+        // that renders HTML shows that, one that doesn't (or a spam filter
+        // reading only the text half) still gets the same plain body this
+        // sent before EmailTemplate existed.
+        message.Body = htmlBody is null
+            ? new TextPart("plain") { Text = body }
+            : new BodyBuilder { TextBody = body, HtmlBody = htmlBody }.ToMessageBody();
 
         using var client = new SmtpClient();
 

@@ -75,6 +75,18 @@ public static class AwardWalkover
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (!match.HasBothTeams)
+        {
+            // A knockout drawn in full names this fixture's round and phase
+            // before it names its teams — one or both sides are still
+            // "whoever wins another match", and there is nobody yet to
+            // award it to.
+            return Results.Problem(
+                detail: "Este partido todavía no tiene los dos equipos definidos: espera a que " +
+                        "termine el partido anterior de la llave.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
         if (request.WinnerTeamId != match.HomeTeamId && request.WinnerTeamId != match.AwayTeamId)
         {
             // The award has to go to one of the two sides, and naming a third
@@ -133,6 +145,7 @@ public static class AwardWalkover
             match.ModifiedAt = now;
         }
 
+        await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(new Response(match.HomeTotal.Value, match.AwayTotal.Value));

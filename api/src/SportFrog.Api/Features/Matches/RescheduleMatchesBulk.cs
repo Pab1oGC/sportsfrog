@@ -163,8 +163,16 @@ public static class RescheduleMatchesBulk
 
         // Team names are cosmetic — only for the message a conflict prints —
         // so they are read separately and only for the teams this batch
-        // actually involves, rather than widening the query above.
-        var teamIds = matches.Values.SelectMany(match => new[] { match.HomeTeamId, match.AwayTeamId }).ToHashSet();
+        // actually involves, rather than widening the query above. A
+        // knockout slot drawn in full can still be missing one or both —
+        // "whoever wins another match" has no name yet, and no conflict of
+        // its own to be part of, so it is dropped here rather than carried
+        // through as a team nothing names.
+        var teamIds = matches.Values
+            .SelectMany(match => new[] { match.HomeTeamId, match.AwayTeamId })
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .ToHashSet();
 
         var teamNames = await database.Teams
             .AsNoTracking()
@@ -202,11 +210,13 @@ public static class RescheduleMatchesBulk
             .GroupBy(entry => entry.TeamId)
             .ToDictionary(group => group.Key, group => (IReadOnlyCollection<Guid>)group.Select(entry => entry.AthleteId).ToHashSet());
 
-        HashSet<Guid> AthletesOf(Guid homeTeamId, Guid awayTeamId) =>
+        HashSet<Guid> AthletesOf(Guid? homeTeamId, Guid? awayTeamId) =>
         [
-            .. athleteIdsByTeam.GetValueOrDefault(homeTeamId, []),
-            .. athleteIdsByTeam.GetValueOrDefault(awayTeamId, []),
+            .. homeTeamId is { } home ? athleteIdsByTeam.GetValueOrDefault(home, []) : [],
+            .. awayTeamId is { } away ? athleteIdsByTeam.GetValueOrDefault(away, []) : [],
         ];
+
+        string NameOf(Guid? teamId) => teamId is { } id ? teamNames.GetValueOrDefault(id, "?") : "Por definir";
 
         var moved = new List<(int Index, ScheduledSlot Slot)>(request.Moves.Count);
 
@@ -217,8 +227,8 @@ public static class RescheduleMatchesBulk
 
             moved.Add((i, new ScheduledSlot(
                 match.Id,
-                match.HomeTeamId, teamNames.GetValueOrDefault(match.HomeTeamId, "?"),
-                match.AwayTeamId, teamNames.GetValueOrDefault(match.AwayTeamId, "?"),
+                match.HomeTeamId, NameOf(match.HomeTeamId),
+                match.AwayTeamId, NameOf(match.AwayTeamId),
                 move.VenueSpaceId, move.ScheduledAt,
                 AthletesOf(match.HomeTeamId, match.AwayTeamId))));
         }
@@ -234,7 +244,8 @@ public static class RescheduleMatchesBulk
             .Where(match => match.ScheduledAt != null)
             .Where(match => match.Status != MatchState.Cancelled && match.Status != MatchState.Postponed)
             .Where(match => (match.VenueSpaceId != null && spaceIds.Contains(match.VenueSpaceId.Value))
-                || relevantTeamIds.Contains(match.HomeTeamId) || relevantTeamIds.Contains(match.AwayTeamId))
+                || (match.HomeTeamId != null && relevantTeamIds.Contains(match.HomeTeamId.Value))
+                || (match.AwayTeamId != null && relevantTeamIds.Contains(match.AwayTeamId.Value)))
             .Select(match => new
             {
                 match.Id,
@@ -250,7 +261,8 @@ public static class RescheduleMatchesBulk
         var conflicts = BulkRescheduleConflicts.Find(
             moved,
             [.. others.Select(match => new ScheduledSlot(
-                match.Id, match.HomeTeamId, match.HomeTeamName, match.AwayTeamId, match.AwayTeamName,
+                match.Id, match.HomeTeamId, match.HomeTeamName ?? "Por definir",
+                match.AwayTeamId, match.AwayTeamName ?? "Por definir",
                 match.VenueSpaceId, match.ScheduledAt, AthletesOf(match.HomeTeamId, match.AwayTeamId)))]);
 
         if (conflicts.Count > 0)

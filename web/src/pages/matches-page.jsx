@@ -36,6 +36,8 @@ import { WalkoverDialog } from 'src/pages/matches/walkover-dialog';
 import { PenaltiesDialog } from 'src/pages/matches/penalties-dialog';
 import { EventsDialog } from 'src/pages/matches/events-dialog';
 import { BulkRescheduleDialog } from 'src/pages/matches/bulk-reschedule-dialog';
+import { buildLiveActions } from 'src/pages/matches/live-actions';
+import { buildFixtureActions } from 'src/pages/matches/fixture-actions';
 
 const SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
 const SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado', walkover: 'Walkover', postponed: 'Aplazado' };
@@ -47,6 +49,12 @@ const SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finali
  * su propio archivo bajo
  * `matches/`, con su propio formulario; lo que sigue viviendo acá es lo que
  * de verdad es de la página entera:
+ *
+ *   - las acciones de la columna "actions" de la grilla se arman con
+ *     `buildLiveActions`/`buildFixtureActions` (matches/live-actions.js,
+ *     matches/fixture-actions.js) en vez de un arreglo inline: partido en
+ *     vivo y fixture son dos motivos de cambio distintos, y cada builder
+ *     solo sabe del suyo.
  *
  *   - `selMatch`: que fila esta operando la fila seleccionada, porque cinco
  *     diálogos distintos (reprogramar, resultado, walkover, penales,
@@ -268,10 +276,11 @@ export default function MatchesPage() {
 
   const openEdit = (m) => { setSelMatch(m); setError(''); setEditOpen(true); };
 
-  // Solo tiene sentido donde el marcador se arma sumando goles (futbol,
-  // basquet): en un deporte por sets un punto no mueve el marcador (no hay
-  // nada que sumar), asi que ahi sigue haciendo falta cargar el resultado a
-  // mano — ver el boton condicionado a sportInfo?.isPlayedInSets mas abajo.
+  // Solo tiene sentido donde el deporte tiene algun evento que suma al
+  // marcador (goles en futbol/basquet, punto/gam-jeom en taekwondo
+  // kyorugi): sin eso no hay nada que sumar, y ahi sigue haciendo falta
+  // cargar el resultado a mano — ver tieneEventoDeMarcador() en
+  // live-actions.js, que es lo que condiciona el boton mas abajo.
   const doFinishFromEvents = async (m) => {
     const marcador = `${m.liveHomeTotal ?? 0} - ${m.liveAwayTotal ?? 0}`;
     const ok = await confirm(`Finalizar el partido ${marcador}, segun los eventos cargados?`, { confirmLabel: 'Finalizar' });
@@ -313,7 +322,11 @@ export default function MatchesPage() {
     // queda vacia en cada fila, columna que nunca dice nada.
     formato !== 'league' && { field: 'phase', headerName: 'Fase', width: 130, renderCell: ({ value }) => value ? nombreFase(value) : '--' },
 
-    { field: 'homeTeamName', headerName: 'Local', flex: 1, minWidth: 120 },
+    // Un cuadro de eliminacion directa sorteado completo de una reserva
+    // fecha y cancha para una ronda futura sin saber todavia quien la juega
+    // -- homeTeamName llega null en ese caso, y homePlaceholder trae
+    // "Ganador de <fase>" para no dejar la celda en blanco.
+    { field: 'homeTeamName', headerName: 'Local', flex: 1, minWidth: 120, renderCell: ({ row }) => row.homeTeamName || <Typography variant="body2" color="text.secondary" fontStyle="italic">{row.homePlaceholder || 'Por definir'}</Typography> },
     // El marcador oficial (homeTotal/awayTotal) queda null hasta que se
     // carga el Resultado, aunque ya haya goles cargados como eventos — son
     // dos pasos separados a proposito. Mientras el partido esta en curso, se
@@ -321,63 +334,46 @@ export default function MatchesPage() {
     // esos eventos) para no dejar la grilla en blanco mientras se juega.
     { field: 'homeTotal', headerName: '', width: 30, renderCell: ({ row }) => row.homeTotal != null ? row.homeTotal : row.liveHomeTotal != null ? <span title="Marcador en vivo, a partir de los eventos cargados" style={{ color: 'var(--mui-palette-warning-main)', fontWeight: 600 }}>{row.liveHomeTotal}</span> : '' },
     { field: 'awayTotal', headerName: '', width: 30, renderCell: ({ row }) => row.awayTotal != null ? row.awayTotal : row.liveAwayTotal != null ? <span title="Marcador en vivo, a partir de los eventos cargados" style={{ color: 'var(--mui-palette-warning-main)', fontWeight: 600 }}>{row.liveAwayTotal}</span> : '' },
-    { field: 'awayTeamName', headerName: 'Visitante', flex: 1, minWidth: 120 },
+    { field: 'awayTeamName', headerName: 'Visitante', flex: 1, minWidth: 120, renderCell: ({ row }) => row.awayTeamName || <Typography variant="body2" color="text.secondary" fontStyle="italic">{row.awayPlaceholder || 'Por definir'}</Typography> },
     { field: 'penalties', headerName: '', width: 90, sortable: false, renderCell: ({ row }) =>
       row.penaltyHomeScore != null
         ? <Typography variant="caption" color="text.secondary">({row.penaltyHomeScore}-{row.penaltyAwayScore} pen)</Typography>
         : '' },
     { field: 'venueName', headerName: 'Sede', width: 160, renderCell: ({ row }) => row.venueName ? `${row.venueName}${row.spaceName ? ' — ' + row.spaceName : ''}` : '--' },
     { field: 'status', headerName: 'Estado', width: 110, renderCell: ({ value }) => <Chip label={SL[value] || value} color={SC[value] || 'default'} size="small" /> },
-    { field: 'actions', headerName: 'Acciones', width: 110, align: 'center', headerAlign: 'center', renderCell: ({ row: m }) => (
-      <RowActionsMenu
-        primary={[
-          { icon: 'eva:calendar-outline', label: 'Reprogramar', color: 'text.secondary', onClick: () => openEdit(m) },
-          { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => delMatch(m.id) },
-        ]}
-        actions={[
-          m.status === 'scheduled' && { icon: 'eva:play-circle-fill', label: 'Iniciar', color: 'warning.main', onClick: () => doStatus(m.id, 'in_progress') },
+    { field: 'actions', headerName: 'Acciones', width: 150, align: 'center', headerAlign: 'center', renderCell: ({ row: m }) => {
+      // Partido en vivo (arrancar, cargar eventos, cerrarlo) y fixture
+      // (walkover, reabrir) son dos responsabilidades distintas sobre la
+      // misma fila -- cada una en su propio archivo bajo matches/ (ver ahi
+      // el porque), compuestas aca con un separador entre las dos para que
+      // el corte tambien se note en el menu, no solo en el codigo.
+      const live = buildLiveActions(m, {
+        sportInfo, setSelMatch, setError, setResOpen, setPoOpen, doStatus, doFinishFromEvents,
+      }).filter(Boolean);
+      const fixture = buildFixtureActions(m, { setSelMatch, setError, setWoOpen, doStatus }).filter(Boolean);
 
-          // Futbol, basquet: los goles ya se cargaron como eventos mientras se
-          // jugaba, asi que "Finalizar" cierra el partido con esa cuenta en
-          // un solo click — pedir el mismo numero otra vez a mano no suma
-          // nada. Un deporte por sets (voley) no tiene forma de derivarlo de
-          // los eventos (un punto no mueve el marcador ahi), asi que ese
-          // sigue pidiendo el resultado a mano.
-          // sportInfo && !isPlayedInSets, no solo !isPlayedInSets: mientras
-          // todavia esta cargando (sportInfo undefined) el boton seguro es
-          // el manual, igual que antes de tener este campo.
-          m.status === 'in_progress' && sportInfo && !sportInfo.isPlayedInSets && {
-            icon: 'eva:checkmark-circle-fill', label: 'Finalizar con el marcador de los eventos', color: 'success.main',
-            onClick: () => doFinishFromEvents(m),
-          },
-          m.status === 'in_progress' && (!sportInfo || sportInfo.isPlayedInSets) && {
-            icon: 'eva:checkmark-circle-fill', label: 'Resultado', color: 'success.main',
-            onClick: () => { setSelMatch(m); setError(''); setResOpen(true); },
-          },
-          m.status === 'scheduled' && {
-            icon: 'eva:alert-triangle-fill', label: 'Walkover', color: 'warning.main',
-            onClick: () => { setSelMatch(m); setError(''); setWoOpen(true); },
-          },
-
-          // Solo tiene sentido en una eliminatoria (fase != null) y con el
-          // partido ya empatado: en todo lo demas un empate es un resultado
-          // valido y no hay nada que desempatar.
-          m.status === 'finished' && m.phase && m.homeTotal === m.awayTotal && {
-            icon: 'eva:radio-button-on-outline', label: 'Desempate por penales', color: 'secondary.main',
-            onClick: () => { setSelMatch(m); setError(''); setPoOpen(true); },
-          },
-          (m.status === 'finished' || m.status === 'in_progress') && {
-            icon: 'eva:film-outline', label: 'Eventos', color: 'info.main',
-            onClick: () => { setSelMatch(m); setError(''); setEvOpen(true); },
-          },
-          m.status === 'in_progress' && { icon: 'eva:close-circle-fill', label: 'Cancelar', color: 'error.main', onClick: () => doStatus(m.id, 'cancelled') },
-          ['cancelled', 'walkover', 'postponed'].includes(m.status) && {
-            icon: 'eva:refresh-outline', label: 'Reabrir (vuelve a programado)', color: 'info.main',
-            onClick: () => doStatus(m.id, 'scheduled'),
-          },
-        ].filter(Boolean)}
-      />
-    )},
+      return (
+        <RowActionsMenu
+          primary={[
+            { icon: 'eva:calendar-outline', label: 'Reprogramar', color: 'text.secondary', onClick: () => openEdit(m) },
+            // Suelto, no en el "..." con el resto de live-actions: esta se
+            // abre una vez por gol/tarjeta/punto mientras el partido esta en
+            // curso (o se revisa terminado), no una vez por partido -- ese
+            // uso repetido es lo que justifica el click de menos.
+            (m.status === 'finished' || m.status === 'in_progress') && {
+              icon: 'eva:film-outline', label: 'Eventos', color: 'info.main',
+              onClick: () => { setSelMatch(m); setError(''); setEvOpen(true); },
+            },
+            { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => delMatch(m.id) },
+          ]}
+          actions={[
+            ...live,
+            live.length > 0 && fixture.length > 0 && { divider: true },
+            ...fixture,
+          ].filter(Boolean)}
+        />
+      );
+    }},
   ].filter(Boolean);
 
   return (
@@ -394,7 +390,14 @@ export default function MatchesPage() {
             Promover a eliminatoria
           </Button>
         )}
-        {cascade.catId && (formato === 'knockout' || formato === 'groups') && <Button variant="outlined" startIcon={<Iconify icon="eva:arrow-forward-outline" />} onClick={doAdvance} disabled={loading}>Siguiente ronda</Button>}
+        {/* Solo "groups": ahi PromoteGroupStage dibuja unicamente la ronda 1
+            de la eliminatoria y AdvanceBracket sigue siendo el unico camino
+            para la siguiente. Un knockout puro ya no lo necesita -- se
+            sortea completo de una vez (ver Bracket.FullDraw via
+            KnockoutCalendarDraw.DrawFull), asi que este boton ahi solo
+            llevaba al mismo rechazo de siempre ("todavia no hay resultado")
+            porque esa ronda ya existe con sus equipos por definir. */}
+        {cascade.catId && formato === 'groups' && <Button variant="outlined" startIcon={<Iconify icon="eva:arrow-forward-outline" />} onClick={doAdvance} disabled={loading}>Siguiente ronda</Button>}
         {cascade.catId && <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-outline" />} onClick={() => { setError(''); setBulkOpen(true); }} disabled={loading}>Reprogramar en bloque</Button>}
         {cascade.catId && rondasDisponibles.length > 0 && (
           <TextField

@@ -380,6 +380,20 @@ dotnet user-secrets set "Storage:AccessKey" "..." --project src/SportFrog.Api
 dotnet user-secrets set "Storage:SecretKey" "..." --project src/SportFrog.Api
 ```
 
+El correo saliente es igual, pero opcional: `EmailSenderFactory` prueba
+`Smtp:Host` y, si llega vacío, cae en `NullEmailSender` — registra en el log
+lo que hubiera mandado y sigue, en vez de fallar. `.env` solo alimenta al
+contenedor `api` de Compose (ver su bloque `environment:`); corriendo
+`dotnet run` directo, como en el bloque de arriba, hace falta lo mismo que ya
+pide `ConnectionStrings__*` — el valor tiene que estar en el entorno del
+proceso, no solo en el archivo — o `dotnet user-secrets`:
+
+```bash
+dotnet user-secrets set "Smtp:Host" "smtp.gmail.com" --project src/SportFrog.Api
+dotnet user-secrets set "Smtp:Username" "tu-direccion@gmail.com" --project src/SportFrog.Api
+dotnet user-secrets set "Smtp:Password" "el-app-password-de-16-caracteres" --project src/SportFrog.Api
+```
+
 ---
 
 ## Estructura

@@ -50,7 +50,11 @@ export function EditDialog({ open, onClose, selMatch, mutate, loading, setLoadin
       <DialogTitle>Reprogramar Partido</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
         {error && <Alert severity="error">{error}</Alert>}
-        {selMatch && <Alert severity="info">{selMatch.homeTeamName} vs {selMatch.awayTeamName}</Alert>}
+        {selMatch && (
+          <Alert severity="info">
+            {selMatch.homeTeamName || selMatch.homePlaceholder || 'Por definir'} vs {selMatch.awayTeamName || selMatch.awayPlaceholder || 'Por definir'}
+          </Alert>
+        )}
         <SelectionSpace value={form.venueSpaceId} onChange={(e) => setForm({ ...form, venueSpaceId: e.target.value })} />
         <TextField label="Fecha y hora" type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         <TextField

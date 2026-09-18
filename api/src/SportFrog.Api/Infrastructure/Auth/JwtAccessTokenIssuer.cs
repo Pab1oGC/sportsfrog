@@ -141,6 +141,25 @@ public sealed class JwtAccessTokenIssuer
     }
 
     /// <summary>
+    /// The account a validated token names — its "sub" claim, parsed.
+    /// </summary>
+    /// <remarks>
+    /// Every principal reaching a handler already carries one:
+    /// <see cref="Validate"/> refuses a token whose subject is missing or
+    /// unparseable before it is ever handed back. For an operation that acts
+    /// on the caller's own account rather than on an organization — changing
+    /// a password, for instance — this is the identity to act on, the same
+    /// way <see cref="FindRole"/> is the authority to check for one scoped
+    /// to an organization.
+    /// </remarks>
+    public static Guid CurrentUserId(ClaimsPrincipal principal)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        return Guid.Parse(principal.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+    }
+
+    /// <summary>
     /// Lowercase, matching the labels of the database's
     /// <c>membership_role</c> enum, so the same word means the same thing in
     /// a token, in a log line and in a row.

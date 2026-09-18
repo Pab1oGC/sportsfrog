@@ -103,6 +103,20 @@ internal static class StandingsQuery
             return null;
         }
 
+        // A knockout-only category has no group stage at all — every match
+        // is a single-elimination tie, not a round of a table. Folding those
+        // into a standings table would count a bracket win as if it were a
+        // league result (three points for winning a quarterfinal, the same
+        // three for winning a group match), which answers a question the
+        // category never asked. The public page shows the bracket instead;
+        // see Sections.Standings in ReadPublicCompetition, which refuses the
+        // section outright for this format rather than show a table with
+        // nothing honest to say.
+        if (category.Format == CompetitionFormat.Knockout)
+        {
+            return null;
+        }
+
         // Every team entered, including one that withdrew: it keeps what it
         // played and keeps its place in the table, which is exactly why
         // withdrawing is a flag and not a deletion.
@@ -136,8 +150,10 @@ internal static class StandingsQuery
             .Where(match => match.Status == MatchState.Finished
                 || match.Status == MatchState.Walkover)
             .Where(match => match.HomeTotal != null && match.AwayTotal != null)
+            // Finished or walkover already implies both teams were named —
+            // neither is reachable otherwise.
             .Select(match => new PlayedMatch(
-                match.HomeTeamId, match.AwayTeamId, match.HomeTotal!.Value, match.AwayTotal!.Value))
+                match.HomeTeamId!.Value, match.AwayTeamId!.Value, match.HomeTotal!.Value, match.AwayTotal!.Value))
             .ToListAsync(cancellationToken);
 
         return new StandingsResult(

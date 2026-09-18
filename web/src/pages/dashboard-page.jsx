@@ -17,7 +17,7 @@ function StatCard({ title, value, icon, color }) {
           sx={{
             width: 48, height: 48, borderRadius: 2, flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            bgcolor: (t) => alpha(t.palette[color].main, t.palette.mode === 'dark' ? 0.18 : 0.12),
+            bgcolor: (t) => alpha(t.palette[color].main, 0.12),
             transition: 'transform 0.2s ease',
             '.MuiCard-root:hover &': { transform: 'scale(1.08)' },
           }}

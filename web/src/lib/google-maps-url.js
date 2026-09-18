@@ -62,15 +62,20 @@ export function linkFromLatLng(lat, lng) {
 // las paginas normales de Maps lo rechazan (X-Frame-Options), asi que un
 // enlace pegado a mano en vez de generado por el selector rara vez funciona
 // tal cual dentro de un iframe. Si se pueden leer coordenadas se arma un
-// enlace de consulta limpio con output=embed (que si se deja incrustar); si
-// no, se intenta con el enlace entero como texto de busqueda -- funciona a
-// veces, no hay forma de saberlo de antemano sin cargarlo.
+// enlace de consulta limpio con output=embed (que si se deja incrustar).
+//
+// Si no se pueden leer -un enlace corto sin resolver, un enlace de "lugar
+// por nombre" sin coordenadas visibles- null, no una adivinanza: se
+// intento en algun momento pasarle a Google la URL entera como si fuera
+// un texto de busqueda (?q=<url>&output=embed), y eso es precisamente lo
+// que produce el error de Google "no se pudo mostrar el contenido
+// personalizado" mas un mapa del mundo sin zoom -no un respaldo silencioso,
+// un error visible- asi que ya no se intenta. Quien llama a esta funcion
+// decide que mostrar en su lugar (ver MapaSedeDialog).
 export function embedSrc(mapsUrl) {
   if (!mapsUrl) return null;
   if (mapsUrl.includes('/maps/embed')) return mapsUrl;
 
   var coords = parseLatLng(mapsUrl);
-  return coords
-    ? 'https://www.google.com/maps?q=' + coords.lat + ',' + coords.lng + '&output=embed'
-    : 'https://www.google.com/maps?q=' + encodeURIComponent(mapsUrl) + '&output=embed';
+  return coords ? 'https://www.google.com/maps?q=' + coords.lat + ',' + coords.lng + '&output=embed' : null;
 }

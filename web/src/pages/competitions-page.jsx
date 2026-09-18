@@ -43,10 +43,14 @@ const FORMATO_INFO = {
 
 // La personalizacion del portal (colores, tipografia, portada, redes,
 // auspiciantes) se edita en su propia pantalla con vista previa -- el estudio
-// de portal, /dashboard/competitions/:id/portal. Aca solo quedan los tres
-// interruptores de secciones, que son de una linea. La lectura y el armado
-// del cuerpo settings.public los comparte con el estudio en portal-payload.js
-// para que los dos no se pisen.
+// de portal, /dashboard/competitions/:id/portal. Se llega ahi de dos formas:
+// el icono de paleta suelto en la fila (directo, sin abrir el dialogo -- ver
+// columna "actions" mas abajo), o el mismo atajo adentro del accordion
+// "Portal publico" del dialogo de edicion (util si ya se esta ahi por otro
+// motivo). Aca en el dialogo solo quedan los tres interruptores de
+// secciones, que son de una linea. La lectura y el armado del cuerpo
+// settings.public los comparte con el estudio en portal-payload.js para que
+// los dos no se pisen.
 const emptyForm = () => ({
   name: '', slug: '', season: '', format: 'league', rulesetId: '', captureLevel: 'basic',
   bufferMinutes: '', scheduleSpaceIds: [],
@@ -212,7 +216,7 @@ export default function CompetitionsPage() {
         </IconButton>
       </Tooltip>
     )},
-    { field: 'actions', headerName: 'Acciones', width: 110, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
+    { field: 'actions', headerName: 'Acciones', width: 150, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
       const next = NEXT_STATUS[row.status] || [];
       const icons = { scheduled: 'eva:calendar-outline', in_progress: 'eva:play-circle-fill', finished: 'eva:checkmark-circle-fill', draft: 'eva:edit-fill', cancelled: 'eva:close-circle-fill' };
       const colors = { scheduled: 'info', in_progress: 'warning', finished: 'success', draft: 'default', cancelled: 'error' };
@@ -220,6 +224,12 @@ export default function CompetitionsPage() {
         <RowActionsMenu
           primary={[
             { icon: 'eva:edit-fill', label: 'Editar', onClick: () => openDialog(row) },
+            // Sacado del "..." y puesto suelto a pedido -- "muy oculta" seguia
+            // siendo la queja aun a un clic del menu. El color propio (en vez
+            // de heredar el gris de Editar/Eliminar) es lo que hace que la
+            // etiqueta no haga falta leerla para notar que hay una tercera
+            // accion nueva ahi.
+            { icon: 'mdi:palette-outline', label: 'Personalizar portal', color: 'secondary.main', onClick: () => navigate(`/dashboard/competitions/${row.id}/portal`) },
             { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => remove(row.id) },
           ]}
           actions={[

@@ -417,6 +417,7 @@ api.MapPromoteGroupStage();
 api.MapPromoteClassification();
 
 api.MapReadPublicCompetitions();
+api.MapReadPublicRecentResults();
 api.MapReadPublicCompetition();
 api.MapReadPublicCompetitionPreview();
 api.MapReadPublicTables();
@@ -433,6 +434,7 @@ api.MapDeleteAthlete();
 api.MapSignIn();
 api.MapRenewSession();
 api.MapSignOut();
+api.MapChangePassword();
 
 app.MapGet("/health", () => Results.Ok())
     .AllowAnonymous()

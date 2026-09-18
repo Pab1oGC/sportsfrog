@@ -77,6 +77,17 @@ public static class ChangeMatchStatus
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (target is MatchState.InProgress && !match.HasBothTeams)
+        {
+            // A knockout drawn in full names this fixture's round and phase
+            // before it names its teams — starting it before then would put
+            // a match "in progress" between two sides nobody can name yet.
+            return Results.Problem(
+                detail: "Este partido todavía no tiene los dos equipos definidos: espera a que " +
+                        "termine el partido anterior de la llave.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
         if (!MatchLifecycle.CanMove(match.Status, target))
         {
             var destinations = MatchLifecycle.Destinations(match.Status);

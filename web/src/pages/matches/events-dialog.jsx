@@ -11,11 +11,13 @@ import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
+import Typography from '@mui/material/Typography';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiDelete } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { useConfirm } from 'src/components/confirm-dialog';
+import { esIndividual } from 'src/lib/sport-shape';
 import { toast } from 'sonner';
 
 const EMPTY_FORM = { rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 };
@@ -48,6 +50,7 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
   const confirm = useConfirm();
   const [form, setForm] = useState(EMPTY_FORM);
   const playerFieldRef = useRef(null);
+  const individual = esIndividual(sportInfo);
 
   const { data: events, mutate: mEv } = useApi(open && selMatch ? endpoints.matchEvents(selMatch.id) : null);
   const { data: roster1 } = useApi(open && selMatch ? endpoints.roster(selMatch.homeTeamId) : null);
@@ -94,26 +97,57 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap', mb: 2, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-          <Autocomplete
-            openOnFocus
-            options={rosterHome}
-            getOptionLabel={(o) => `#${o.jerseyNumber ?? '?'} ${o.lastName}, ${o.firstName}${o.position ? ' — ' + o.position : ''}`}
-            isOptionEqualToValue={(o, v) => o.id === v.id}
-            value={rosterHome.find((r) => r.id === form.rosterEntryId) || null}
-            onChange={(_, v) => setForm({ ...form, rosterEntryId: v?.id || '' })}
-            sx={{ width: 230 }}
-            renderInput={(params) => <TextField {...params} inputRef={playerFieldRef} label={selMatch?.homeTeamName || 'Local'} placeholder="Nombre, dorsal o posicion" autoFocus />}
-          />
-          <Autocomplete
-            openOnFocus
-            options={rosterAway}
-            getOptionLabel={(o) => `#${o.jerseyNumber ?? '?'} ${o.lastName}, ${o.firstName}${o.position ? ' — ' + o.position : ''}`}
-            isOptionEqualToValue={(o, v) => o.id === v.id}
-            value={rosterAway.find((r) => r.id === form.rosterEntryId) || null}
-            onChange={(_, v) => setForm({ ...form, rosterEntryId: v?.id || '' })}
-            sx={{ width: 230 }}
-            renderInput={(params) => <TextField {...params} label={selMatch?.awayTeamName || 'Visitante'} placeholder="Nombre, dorsal o posicion" />}
-          />
+          {individual ? (
+            // Un deporte individual (Kyorugi hoy) enfrenta a un deportista
+            // contra otro, no a un plantel contra otro: no hay dorsal ni
+            // posicion que buscar, y cada lado tiene un solo nombre para
+            // elegir. Un buscador para una sola opcion es friccion de mas
+            // en un combate que se decide en segundos — dos chips para
+            // tocar cumplen lo mismo sin el paso de abrir un desplegable.
+            [
+              { key: 'home', label: selMatch?.homeTeamName || 'Rojo', list: rosterHome },
+              { key: 'away', label: selMatch?.awayTeamName || 'Azul', list: rosterAway },
+            ].map(({ key, label, list }) => (
+              <Box key={key} sx={{ minWidth: 180 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{label}</Typography>
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  {list.length === 0 && <Chip label="Sin inscripción" size="small" variant="outlined" disabled />}
+                  {list.map((r) => (
+                    <Chip
+                      key={r.id}
+                      label={`${r.lastName}, ${r.firstName}`}
+                      color={form.rosterEntryId === r.id ? 'primary' : 'default'}
+                      variant={form.rosterEntryId === r.id ? 'filled' : 'outlined'}
+                      onClick={() => setForm({ ...form, rosterEntryId: r.id })}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            ))
+          ) : (
+            <>
+              <Autocomplete
+                openOnFocus
+                options={rosterHome}
+                getOptionLabel={(o) => `#${o.jerseyNumber ?? '?'} ${o.lastName}, ${o.firstName}${o.position ? ' — ' + o.position : ''}`}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+                value={rosterHome.find((r) => r.id === form.rosterEntryId) || null}
+                onChange={(_, v) => setForm({ ...form, rosterEntryId: v?.id || '' })}
+                sx={{ width: 230 }}
+                renderInput={(params) => <TextField {...params} inputRef={playerFieldRef} label={selMatch?.homeTeamName || 'Local'} placeholder="Nombre, dorsal o posicion" autoFocus />}
+              />
+              <Autocomplete
+                openOnFocus
+                options={rosterAway}
+                getOptionLabel={(o) => `#${o.jerseyNumber ?? '?'} ${o.lastName}, ${o.firstName}${o.position ? ' — ' + o.position : ''}`}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+                value={rosterAway.find((r) => r.id === form.rosterEntryId) || null}
+                onChange={(_, v) => setForm({ ...form, rosterEntryId: v?.id || '' })}
+                sx={{ width: 230 }}
+                renderInput={(params) => <TextField {...params} label={selMatch?.awayTeamName || 'Visitante'} placeholder="Nombre, dorsal o posicion" />}
+              />
+            </>
+          )}
           <TextField select label="Evento" value={form.metricId} onChange={(e) => setForm({ ...form, metricId: e.target.value })} sx={{ width: 160 }}>
             <MenuItem value="">Seleccionar</MenuItem>
             {(sportInfo?.metrics || []).map((m) => <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>)}
@@ -142,25 +176,33 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
         <DataGrid rows={events || []} columns={[
           { field: 'minute', headerName: 'Min', width: 60, renderCell: ({ value }) => value != null ? `${value}'` : '--' },
           { field: 'periodNumber', headerName: 'Per', width: 50 },
-          { field: 'firstName', headerName: 'Jugador', flex: 1, renderCell: ({ row }) => (
+          { field: 'firstName', headerName: individual ? 'Deportista' : 'Jugador', flex: 1, renderCell: ({ row }) => (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <span>{row.firstName || ''} {row.lastName || ''}</span>
-              {row.countsForOpponent && <Chip label="AG" size="small" color="error" variant="outlined" sx={{ height: 18, '& .MuiChip-label': { px: 0.6, fontSize: 10, fontWeight: 700 } }} />}
+              {/* Generico, no "AG" (autogol): countsForOpponent es el mismo
+                  mecanismo para un autogol en futbol que para un gam-jeom en
+                  taekwondo, donde "autogol" no significa nada. */}
+              {row.countsForOpponent && <Chip label="RIVAL" size="small" color="error" variant="outlined" sx={{ height: 18, '& .MuiChip-label': { px: 0.6, fontSize: 10, fontWeight: 700 } }} />}
             </Box>
           ) },
-          { field: 'jerseyNumber', headerName: 'Dorsal', width: 65 },
-          // Un autogol lo carga un jugador del equipo contrario al que se le
-          // atribuye: se muestra el equipo al que le sirvio (igual que el
-          // marcador en vivo ya lo cuenta), no el plantel del jugador — la
-          // etiqueta AG de al lado aclara quien lo metio realmente.
-          { field: 'teamName', headerName: 'Equipo', width: 120, renderCell: ({ row }) => {
+          // Dorsal y equipo no dicen nada en un deporte individual: no hay
+          // camiseta numerada, y el "equipo" es el mismo nombre que ya
+          // muestra la columna del deportista (IndividualTeamName en el
+          // backend) — repetirlo aca solo ocupa lugar de la grilla.
+          !individual && { field: 'jerseyNumber', headerName: 'Dorsal', width: 65 },
+          // countsForOpponent lo carga alguien de un equipo pero cuenta para
+          // el otro (autogol en futbol, gam-jeom en taekwondo): se muestra
+          // el equipo al que le sirvio (igual que el marcador en vivo ya lo
+          // cuenta), no el plantel de quien lo cargo — la etiqueta RIVAL de
+          // al lado aclara quien lo hizo realmente.
+          !individual && { field: 'teamName', headerName: 'Equipo', width: 120, renderCell: ({ row }) => {
             if (!row.countsForOpponent || !selMatch) return row.teamName;
             return row.teamId === selMatch.homeTeamId ? selMatch.awayTeamName : selMatch.homeTeamName;
           } },
           { field: 'metricLabel', headerName: 'Evento', width: 120 },
           { field: 'quantity', headerName: 'Cant.', width: 60 },
           { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => <IconButton size="small" onClick={() => delEvent(row.id)}><Iconify icon="eva:trash-2-outline" width={16} sx={{ color: 'error.main' }} /></IconButton> },
-        ]} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
+        ].filter(Boolean)} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cerrar</Button>

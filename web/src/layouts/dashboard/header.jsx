@@ -14,7 +14,6 @@ import { alpha } from "@mui/material/styles";
 import { Iconify } from "src/components/iconify";
 import { signOut } from "src/auth/context/jwt";
 import { useAuthContext } from "src/auth/hooks";
-import { ColorModeToggle } from "src/components/color-mode-toggle";
 
 export function Header({ onToggleNav }) {
   const navigate = useNavigate();
@@ -40,7 +39,6 @@ export function Header({ onToggleNav }) {
         <IconButton onClick={onToggleNav} sx={{ mr: 1 }}><Iconify icon="eva:menu-2-fill" /></IconButton>
         {currentOrg && <Chip label={currentOrg.name} color="primary" variant="outlined" size="small" sx={{ mr: 2 }} />}
         <Box sx={{ flexGrow: 1 }} />
-        <ColorModeToggle sx={{ mr: 1 }} />
         <Tooltip title={user?.email || ""}>
           <Avatar sx={{ bgcolor: "primary.main", cursor: "pointer" }} onClick={(e) => setAnchorEl(e.currentTarget)}>{(user?.fullName || "U")[0]}</Avatar>
         </Tooltip>

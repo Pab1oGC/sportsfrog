@@ -97,9 +97,12 @@ public static class RecordPenalties
         match.ModifiedBy = organization.UserId;
         match.ModifiedAt = clock.GetUtcNow();
 
+        await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
 
-        var winnerTeamId = request.HomeScore > request.AwayScore ? match.HomeTeamId : match.AwayTeamId;
+        // A match reaches Finished only through RecordResult, which already
+        // refuses one without both teams named.
+        var winnerTeamId = request.HomeScore > request.AwayScore ? match.HomeTeamId!.Value : match.AwayTeamId!.Value;
 
         return Results.Ok(new Response(winnerTeamId));
     }

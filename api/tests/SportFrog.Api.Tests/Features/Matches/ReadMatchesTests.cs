@@ -13,7 +13,7 @@ public sealed class ReadMatchesTests
     private static ReadMatches.Summary Match(DateTimeOffset? at, MatchState status = MatchState.Scheduled) =>
         new(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Sub-15",
-            Guid.NewGuid(), "Equipo A", Guid.NewGuid(), "Equipo B",
+            Guid.NewGuid(), "Equipo A", null, Guid.NewGuid(), "Equipo B", null,
             null, null, null,
             at, 1, null, status, null, null, null, null, null, null, null, null, null);
 

@@ -1,0 +1,17 @@
+# Terminacion TLS para el perfil "production". Caddy pide y renueva el
+# certificado solo (Let's Encrypt via HTTP-01/TLS-ALPN) la primera vez que
+# alguien llega por DOMAIN, siempre que el DNS ya apunte a este servidor y
+# los puertos 80/443 esten abiertos hacia afuera -- Caddy necesita el 80
+# igual que el 443 para el challenge inicial, aunque despues redirija todo
+# a https.
+#
+# reverse_proxy habla con el contenedor "web" por la red interna de Compose
+# (nunca por WEB_PORT, que sigue existiendo aparte solo para pegarle
+# directo por IP sin dominio, a mano, mientras se prueba).
+{
+	email {$CADDY_EMAIL:admin@example.com}
+}
+
+{$DOMAIN} {
+	reverse_proxy web:80
+}

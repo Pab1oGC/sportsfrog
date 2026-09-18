@@ -29,10 +29,47 @@ public static class ReadPublicCalendar
         Guid Id,
         Guid CategoryId,
         string CategoryName,
-        string HomeTeamName,
+
+        /// <summary>
+        /// Null for a knockout slot drawn in full whose side is still
+        /// "whoever wins another match" — see <see cref="HomePlaceholder"/>
+        /// for what to show instead.
+        /// </summary>
+        string? HomeTeamName,
+
+        /// <summary>
+        /// "Ganador de {phase}", set exactly when <see cref="HomeTeamName"/>
+        /// is not — the fixture whose winner still has to fill this side.
+        /// </summary>
+        string? HomePlaceholder,
         string? HomeClubLogoUrl,
-        string AwayTeamName,
+
+        /// <summary>The club a home entry plays under. Never withheld — the same fact the crest already carries.</summary>
+        string? HomeClubName,
+        string? AwayTeamName,
+
+        /// <summary>See <see cref="HomePlaceholder"/>; the same story, the other side.</summary>
+        string? AwayPlaceholder,
         string? AwayClubLogoUrl,
+
+        /// <summary>The club an away entry plays under. Never withheld — the same fact the crest already carries.</summary>
+        string? AwayClubName,
+
+        /// <summary>
+        /// A home competitor's own photo, signed — present only for an
+        /// individual-sport entry of exactly one athlete, on a competition
+        /// that opted into "show athlete photos" (<c>PublicSettings.
+        /// ShowAthletePhotos</c>). Null for everything else: a team sport, a
+        /// poomsae pair or trio
+        /// (whose "photo" is not one well-defined thing), or an organization
+        /// that never turned the switch on. See <c>HandleAsync</c> for the
+        /// full reasoning — this is the one field on this record that is not
+        /// simply "whatever the match says."
+        /// </summary>
+        string? HomePhotoUrl,
+
+        /// <summary>The away side's own photo, same conditions as <see cref="HomePhotoUrl"/>.</summary>
+        string? AwayPhotoUrl,
         string? VenueName,
         string? VenueMapsUrl,
         string? SpaceName,
@@ -119,10 +156,18 @@ public static class ReadPublicCalendar
                         CategoryName = match.Category!.Name,
                         match.HomeTeamId,
                         HomeTeamName = match.HomeTeam!.Name,
+                        HomePlaceholder = match.HomeTeamId == null && match.HomeSourceMatch != null
+                            ? "Ganador de " + match.HomeSourceMatch.Phase
+                            : null,
                         HomeLogoKey = match.HomeTeam.Club!.LogoUrl,
+                        HomeClubName = match.HomeTeam.Club.Name,
                         match.AwayTeamId,
                         AwayTeamName = match.AwayTeam!.Name,
+                        AwayPlaceholder = match.AwayTeamId == null && match.AwaySourceMatch != null
+                            ? "Ganador de " + match.AwaySourceMatch.Phase
+                            : null,
                         AwayLogoKey = match.AwayTeam.Club!.LogoUrl,
+                        AwayClubName = match.AwayTeam.Club.Name,
                         VenueName = match.VenueSpace!.Venue!.Name,
                         VenueMapsUrl = match.VenueSpace.Venue.MapsUrl,
                         SpaceName = match.VenueSpace.Name,
@@ -137,11 +182,22 @@ public static class ReadPublicCalendar
                     })
                     .ToListAsync(cancellationToken);
 
+                // In progress implies both teams are already named.
                 var liveTotals = await LiveTotalsAsync(database, matches
                     .Where(match => match.Status == MatchState.InProgress)
-                    .Select(match => (match.Id, match.HomeTeamId, match.AwayTeamId))
+                    .Select(match => (match.Id, match.HomeTeamId!.Value, match.AwayTeamId!.Value))
                     .ToList(),
                     cancellationToken);
+
+                var teamIds = matches
+                    .SelectMany(match => new[] { match.HomeTeamId, match.AwayTeamId })
+                    .Where(id => id is not null)
+                    .Select(id => id!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var photoKeys = await AthletePhotoKeysAsync(
+                    database, resolved.CompetitionId, teamIds, cancellationToken);
 
                 var fixtures = new List<Fixture>(matches.Count);
 
@@ -163,9 +219,15 @@ public static class ReadPublicCalendar
                         match.CategoryId,
                         match.CategoryName,
                         match.HomeTeamName,
+                        match.HomePlaceholder,
                         await LinkAsync(store, resolved.OrganizationId, match.HomeLogoKey, cancellationToken),
+                        match.HomeClubName,
                         match.AwayTeamName,
+                        match.AwayPlaceholder,
                         await LinkAsync(store, resolved.OrganizationId, match.AwayLogoKey, cancellationToken),
+                        match.AwayClubName,
+                        await LinkAsync(store, resolved.OrganizationId, match.HomeTeamId is { } homeId ? photoKeys.GetValueOrDefault(homeId) : null, cancellationToken),
+                        await LinkAsync(store, resolved.OrganizationId, match.AwayTeamId is { } awayId ? photoKeys.GetValueOrDefault(awayId) : null, cancellationToken),
                         match.VenueName,
                         match.VenueMapsUrl,
                         match.SpaceName,
@@ -257,6 +319,61 @@ public static class ReadPublicCalendar
                         recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
                     match.HomeTeamId,
                     match.AwayTeamId));
+    }
+
+    /// <summary>
+    /// The storage key of the one athlete's photo behind each team that
+    /// qualifies for one, keyed by team — never touched for a team sport or
+    /// an organization that left the switch off, and never resolved for a
+    /// team fielding more than one athlete (a poomsae pair or trio), since
+    /// "the competitor's photo" is not one well-defined thing there.
+    /// </summary>
+    internal static async Task<Dictionary<Guid, string?>> AthletePhotoKeysAsync(
+        SportFrogDbContext database,
+        Guid competitionId,
+        List<Guid> teamIds,
+        CancellationToken cancellationToken)
+    {
+        if (teamIds.Count == 0)
+        {
+            return [];
+        }
+
+        // `Settings` comes back whole, never a property reached inside it --
+        // it is mapped with a value converter over the entire jsonb column
+        // (see CompetitionConfiguration), so EF can only translate a
+        // projection that asks for the whole object. Reaching for
+        // `Settings.Public.ShowAthletePhotos` directly inside this Select
+        // silently produced false regardless of the real value; the fix is
+        // the same shape ReadPublicCompetition already uses everywhere else
+        // it reads a Settings.Public field: fetch Settings whole, then
+        // navigate it in plain C# below.
+        var competition = await database.Competitions
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == competitionId)
+            .Select(candidate => new { IsIndividual = candidate.Sport!.IsIndividual, candidate.Settings })
+            .SingleAsync(cancellationToken);
+
+        // Absent settings mean the defaults PublicSettings declares -- for
+        // this switch, off, same reasoning ReadPublicCompetition already
+        // applies to every other field of Settings.Public.
+        var showAthletePhotos = competition.Settings.Public?.ShowAthletePhotos ?? false;
+
+        if (!competition.IsIndividual || !showAthletePhotos)
+        {
+            return [];
+        }
+
+        var entries = await database.RosterEntries
+            .AsNoTracking()
+            .Where(entry => teamIds.Contains(entry.TeamId) && entry.WithdrawnAt == null)
+            .Select(entry => new { entry.TeamId, entry.Athlete!.PhotoKey })
+            .ToListAsync(cancellationToken);
+
+        return entries
+            .GroupBy(entry => entry.TeamId)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single().PhotoKey);
     }
 
     /// <summary>A club's crest, signed — or null, for a club that never uploaded one.</summary>

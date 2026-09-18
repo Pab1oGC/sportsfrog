@@ -1,4 +1,5 @@
 using SportFrog.Domain.Competitions;
+using SportFrog.Domain.Scheduling;
 
 namespace SportFrog.Api.Features.Draw;
 
@@ -35,4 +36,23 @@ internal interface ICalendarDraw
 
     /// <summary>The fixtures, named phase, and byes this format produces from these teams.</summary>
     (IReadOnlyList<DrawnMatch> Matches, string? Phase, int Byes) Draw(IReadOnlyList<DrawnTeam> teams, int legs);
+}
+
+/// <summary>
+/// A format whose calendar can be drawn whole — every round's fixtures at
+/// once, not only the first.
+/// </summary>
+/// <remarks>
+/// Only a pure knockout implements this. League and Groups already draw
+/// everything they will ever draw in one call to <see cref="ICalendarDraw.Draw"/> —
+/// a league is not played a round at a time to begin with. A knockout
+/// promoted from a group stage still advances one round at a time through
+/// <c>AdvanceBracket</c>, because its entrants are not known until the group
+/// stage decides who qualifies; this is only for the case where every
+/// entrant is already known the moment the draw runs.
+/// </remarks>
+internal interface IPlansEntireBracket
+{
+    /// <summary>Every round of the bracket this field produces, from the first match to the final.</summary>
+    IReadOnlyList<PlannedMatch> DrawFull(IReadOnlyList<DrawnTeam> teams);
 }

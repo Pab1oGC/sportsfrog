@@ -33,9 +33,29 @@ public sealed class Match
     /// home team; where it does not, it is still the side written on the left
     /// of the scoreline, and the score columns follow it.
     /// </summary>
-    public Guid HomeTeamId { get; set; }
+    /// <remarks>
+    /// Null exactly while <see cref="HomeSourceMatchId"/> is set: a knockout
+    /// drawn in full books every round's date and venue before a ball is
+    /// kicked, and a later round's side is not a team yet, it is "whoever
+    /// wins that other match". <c>ck_home_slot_defined</c> is what refuses a
+    /// row naming neither.
+    /// </remarks>
+    public Guid? HomeTeamId { get; set; }
 
-    public Guid AwayTeamId { get; set; }
+    /// <summary>See <see cref="HomeTeamId"/>; the same story, the other side.</summary>
+    public Guid? AwayTeamId { get; set; }
+
+    /// <summary>
+    /// The match whose winner fills <see cref="HomeTeamId"/>. Set once, at
+    /// the draw, and never cleared — once that match is played, the winner
+    /// is copied into <see cref="HomeTeamId"/> alongside it rather than in
+    /// its place, since this is also how a bracket draws the lines
+    /// connecting one round to the next.
+    /// </summary>
+    public Guid? HomeSourceMatchId { get; set; }
+
+    /// <summary>See <see cref="HomeSourceMatchId"/>; the same story, the other side.</summary>
+    public Guid? AwaySourceMatchId { get; set; }
 
     /// <summary>
     /// Where it is played. Null while the calendar has a time but not yet a
@@ -127,5 +147,19 @@ public sealed class Match
     public Category? Category { get; set; }
     public Team? HomeTeam { get; set; }
     public Team? AwayTeam { get; set; }
+    public Match? HomeSourceMatch { get; set; }
+    public Match? AwaySourceMatch { get; set; }
     public VenueSpace? VenueSpace { get; set; }
+
+    /// <summary>
+    /// Whether this fixture already names two real teams, rather than
+    /// waiting on one or both of <see cref="HomeSourceMatchId"/>/
+    /// <see cref="AwaySourceMatchId"/> to be played.
+    /// </summary>
+    /// <remarks>
+    /// What every operation that needs to know who is actually playing —
+    /// starting the match, recording its result, awarding it — checks before
+    /// touching a fixture the bracket has not resolved yet.
+    /// </remarks>
+    public bool HasBothTeams => HomeTeamId is not null && AwayTeamId is not null;
 }

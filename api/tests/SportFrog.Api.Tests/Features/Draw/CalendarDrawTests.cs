@@ -142,6 +142,37 @@ public sealed class CalendarDrawTests
         byes.Should().Be(3);
     }
 
+    [Fact]
+    public void Knockout_DrawFull_EightTeams_DrawsEveryRoundDownToTheFinal()
+    {
+        var draw = new KnockoutCalendarDraw();
+
+        var plan = draw.DrawFull(Teams(8));
+
+        // Cuartos (4) + semifinal (2) + final (1) — round one alone stops
+        // after four; this is what a knockout promoted from nothing else
+        // gets that the other formats never need.
+        plan.Should().HaveCount(7);
+        plan.Last().Phase.Should().Be("final");
+    }
+
+    [Fact]
+    public void Knockout_DrawFull_RoundOne_AgreesWithDraw()
+    {
+        // Draw() is implemented in terms of DrawFull() precisely so the two
+        // can never disagree about what round one looks like — this is that
+        // guarantee, checked from the outside.
+        var draw = new KnockoutCalendarDraw();
+        var teams = Teams(5);
+
+        var (matches, phase, byes) = draw.Draw(teams, legs: 1);
+        var firstRound = draw.DrawFull(teams).Where(match => match.Round == 1).ToList();
+
+        firstRound.Should().HaveCount(matches.Count);
+        firstRound[0].Phase.Should().Be(phase);
+        (teams.Length - firstRound.Count * 2).Should().Be(byes);
+    }
+
     // ---- Registry ------------------------------------------------------
 
     [Fact]

@@ -6,6 +6,7 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Tooltip from '@mui/material/Tooltip';
+import Divider from '@mui/material/Divider';
 import { Iconify } from 'src/components/iconify';
 
 /**
@@ -37,10 +38,18 @@ import { Iconify } from 'src/components/iconify';
  * afuera segun el estado de la fila, sin tener que armar el arreglo a mano
  * en cada caso de uso, y `disabled` (con un `disabledLabel` opcional que
  * reemplaza el tooltip mientras lo esta).
+ *
+ * Una entrada `{ divider: true }` dibuja una linea en vez de un item -- para
+ * cuando `actions` junta acciones de mas de una responsabilidad (ver
+ * matches-page.jsx: logistica del fixture vs partido en vivo) y conviene que
+ * el corte se note, sin que cada pantalla tenga que reinventar el separador.
+ * No cuenta para decidir si el "..." se muestra: eso lo sigue diciendo solo
+ * tener alguna accion de verdad.
  */
 export function RowActionsMenu({ primary, actions = [] }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const visible = actions.filter((a) => a && !a.hidden);
+  const hasRealActions = visible.some((a) => !a.divider);
   const primaries = (Array.isArray(primary) ? primary : [primary]).filter((a) => a && !a.hidden);
 
   const run = (onClick) => {
@@ -66,13 +75,15 @@ export function RowActionsMenu({ primary, actions = [] }) {
           </span>
         </Tooltip>
       ))}
-      {visible.length > 0 && (
+      {hasRealActions && (
         <>
           <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)}>
             <Iconify icon="eva:more-vertical-fill" width={20} />
           </IconButton>
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-            {visible.map((a, i) => (
+            {visible.map((a, i) => a.divider ? (
+              <Divider key={i} />
+            ) : (
               <MenuItem key={i} disabled={a.disabled} onClick={() => run(a.onClick)}>
                 <ListItemIcon>
                   <Iconify icon={a.icon} width={20} sx={{ color: a.color }} />

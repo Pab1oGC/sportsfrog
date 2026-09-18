@@ -99,15 +99,24 @@ public static class RecordResult
 
     /// <summary>
     /// Finishes a match without asking anyone to type a score: the events
-    /// already logged against it — every goal, tagged with the period it was
-    /// scored in — are exactly what a period-by-period result says, added up
-    /// instead of remembered.
+    /// already logged against it — every goal, or every taekwondo point and
+    /// gam-jeom, tagged with the period it happened in — are exactly what a
+    /// period-by-period result says, added up instead of remembered.
     /// </summary>
     /// <remarks>
-    /// Refused for a sport decided in sets. Under
-    /// <see cref="ScoreMode.Sets"/> nothing recorded during the match affects
-    /// the score — a volleyball point is a statistic, not a goal — so there is
-    /// nothing here to tally from and the manual form is the only way in.
+    /// Refused only when this sport's ruleset has no metric that actually
+    /// moves the score — a volleyball point is a statistic, not something to
+    /// sum, so there is nothing here to tally and the manual form is the
+    /// only way in. That used to be every sport decided in sets, but it no
+    /// longer is: a taekwondo kyorugi point or gam-jeom does affect the score
+    /// (see <c>AddTaekwondoKyorugiScoringEvents</c>), so this now asks the
+    /// catalog directly instead of assuming the answer from the score mode.
+    ///
+    /// A sets-mode sport that does qualify still is not a cumulative one:
+    /// <see cref="LiveScore.ComputePlayedPeriods"/> reports only the asaltos
+    /// something was actually recorded for, not every one the ruleset
+    /// configures — a bout won in two never fights a third, and
+    /// <see cref="ComputePeriods"/> would misread that silence as a 0-0 tie.
     /// </remarks>
     private static async Task<IResult> HandleFromEventsAsync(
         Guid id,
@@ -126,12 +135,21 @@ public static class RecordResult
             return refusal;
         }
 
-        if (rules!.Sport.ScoreMode == ScoreMode.Sets)
+        var enabledMetrics = rules!.Configuration.Metrics;
+
+        var puedeDerivarseDeEventos = await database.SportMetrics
+            .AsNoTracking()
+            .AnyAsync(
+                metric => metric.SportCode == rules.Sport.Code
+                    && metric.AffectsScore
+                    && (enabledMetrics == null || enabledMetrics.Contains(metric.Code)),
+                cancellationToken);
+
+        if (!puedeDerivarseDeEventos)
         {
             return Results.Problem(
-                detail: $"{rules.Sport.Name} se decide por {rules.Configuration.Periods.Label.ToLowerInvariant()}s " +
-                        "ganados, no por goles cargados como eventos — no hay nada que sumar. Cargá el " +
-                        "resultado a mano.",
+                detail: $"{rules.Sport.Name} no tiene, bajo este reglamento, ningún evento que sume al " +
+                        "marcador — no hay nada que sumar. Cargá el resultado a mano.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 
@@ -146,17 +164,24 @@ public static class RecordResult
                 recorded.PeriodNumber))
             .ToListAsync(cancellationToken);
 
-        var periods = LiveScore.ComputePeriods(
-            events, rules.Configuration.Periods.Count, match!.HomeTeamId, match.AwayTeamId);
+        // LoadAsync already refused a match without both teams, so both are
+        // safe to unwrap here.
+        var periods = rules.Sport.ScoreMode == ScoreMode.Sets
+            ? LiveScore.ComputePlayedPeriods(
+                events, rules.Configuration.Periods.Count, match!.HomeTeamId!.Value, match.AwayTeamId!.Value)
+            : LiveScore.ComputePeriods(
+                events, rules.Configuration.Periods.Count, match!.HomeTeamId!.Value, match.AwayTeamId!.Value);
 
         var violations = policy.Inspect(rules, periods);
 
         if (violations.Count > 0)
         {
-            // Only reachable if the ruleset's period count changed between
-            // two people opening the same "finish" button, or something else
-            // this file does not otherwise guard against — ComputePeriods
-            // always emits exactly the periods Inspect asks for.
+            // Reachable for real here, unlike the cumulative-only case this
+            // comment used to describe: a kyorugi bout still short of its
+            // deciding asalto, or one recorded past it, fails exactly this
+            // check rather than an outcome check upstream, because
+            // ComputePlayedPeriods can only report what was recorded, not
+            // whether it was recorded correctly.
             return Refuse(violations);
         }
 
@@ -193,6 +218,18 @@ public static class RecordResult
                       "en el calendario primero si se va a jugar."
                     : "Este partido se otorgó por walkover. No se jugó nada, así que no hay " +
                       "marcador que registrar.",
+                statusCode: StatusCodes.Status409Conflict));
+        }
+
+        if (!match.HasBothTeams)
+        {
+            // A knockout drawn in full names this fixture's round and phase
+            // before it names its teams — one or both sides are still
+            // "whoever wins another match", and there is nobody yet to credit
+            // a score to.
+            return (null, null, Results.Problem(
+                detail: "Este partido todavía no tiene los dos equipos definidos: espera a que " +
+                        "termine el partido anterior de la llave.",
                 statusCode: StatusCodes.Status409Conflict));
         }
 
@@ -260,6 +297,7 @@ public static class RecordResult
             match.ModifiedAt = now;
         }
 
+        await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(new Response(home, away));

@@ -54,6 +54,63 @@ public static class Bracket
     }
 
     /// <summary>
+    /// Every round of a knockout, drawn at once instead of one at a time.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FirstRound"/> still decides who plays and who byes in round
+    /// one — this only continues past it, pairing round two onward from slots
+    /// that are not teams yet but positions in this very list: "whoever wins
+    /// the match at index 3". Nothing here knows a database; a caller that
+    /// wants every round's calendar and venue booked before a ball is kicked
+    /// assigns its own row ids against these positions.
+    ///
+    /// Byes are folded into round two exactly once, the same rule
+    /// <c>AdvanceBracket</c> applies a round at a time: they go first, ahead
+    /// of the winners, keeping the order the opening draw gave them. Every
+    /// round after that is already a power of two wide, which is why it never
+    /// needs another bye.
+    /// </remarks>
+    public static IReadOnlyList<PlannedMatch> FullDraw(IReadOnlyList<Guid> teams)
+    {
+        if (teams.Count < 2)
+        {
+            return [];
+        }
+
+        var (firstRoundMatches, byes) = FirstRound(teams);
+
+        var plan = new List<PlannedMatch>(firstRoundMatches.Select(match => new PlannedMatch(
+            1,
+            Phase(firstRoundMatches.Count, 1),
+            BracketSlot.Known(match.HomeTeamId),
+            BracketSlot.Known(match.AwayTeamId))));
+
+        var advancing = new List<BracketSlot>(byes.Select(BracketSlot.Known));
+        advancing.AddRange(Enumerable.Range(0, firstRoundMatches.Count).Select(BracketSlot.FromWinnerOf));
+
+        var round = 2;
+
+        while (advancing.Count > 1)
+        {
+            var roundStart = plan.Count;
+            var matchesThisRound = advancing.Count / 2;
+            var phase = Phase(matchesThisRound, round);
+            var next = new List<BracketSlot>(matchesThisRound);
+
+            for (var i = 0; i < advancing.Count; i += 2)
+            {
+                plan.Add(new PlannedMatch(round, phase, advancing[i], advancing[i + 1]));
+                next.Add(BracketSlot.FromWinnerOf(roundStart + next.Count));
+            }
+
+            advancing = next;
+            round++;
+        }
+
+        return plan;
+    }
+
+    /// <summary>
     /// What to call a round of this many matches.
     /// </summary>
     /// <remarks>

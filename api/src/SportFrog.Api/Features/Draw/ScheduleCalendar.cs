@@ -149,7 +149,12 @@ public static class ScheduleCalendar
             .Where(match => match.CategoryId == proxima.CategoryId
                 && match.RoundNumber == proxima.RoundNumber
                 && match.ScheduledAt == null
-                && match.Status == MatchState.Scheduled)
+                && match.Status == MatchState.Scheduled
+                // Same reason as FindNextJornadaAsync's own filter: one round
+                // of a knockout can mix a match both byes already settled
+                // with one still waiting on another match's winner, and only
+                // the settled one is this auto-placer's business.
+                && match.HomeTeamId != null && match.AwayTeamId != null)
             .ToListAsync(cancellationToken);
 
         // Every space this competition can use, and everything already
@@ -215,17 +220,20 @@ public static class ScheduleCalendar
             ?? DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
 
         var placements = CalendarPlacement.Place(
-            [.. pending.Select(match => new PendingFixture(match.Id, match.HomeTeamId, match.AwayTeamId))],
+            // The filter above already refused any of these a null side.
+            [.. pending.Select(match => new PendingFixture(match.Id, match.HomeTeamId!.Value, match.AwayTeamId!.Value))],
             thisJornada.GameMinutes,
             thisJornada.BufferMinutes,
             spaceIds,
             taken,
             [
-                .. engaged.SelectMany(match => new[]
-                {
-                    (Team: match.HomeTeamId, match.Day),
-                    (Team: match.AwayTeamId, match.Day),
-                }),
+                .. engaged
+                    .Where(match => match.HomeTeamId != null && match.AwayTeamId != null)
+                    .SelectMany(match => new[]
+                    {
+                        (Team: match.HomeTeamId!.Value, match.Day),
+                        (Team: match.AwayTeamId!.Value, match.Day),
+                    }),
             ],
             from,
 
@@ -315,6 +323,13 @@ public static class ScheduleCalendar
                     && match.ScheduledAt == null
                     && match.Status == MatchState.Scheduled
                     && match.RoundNumber != null
+                    // A knockout drawn in full can have a round whose teams
+                    // are still "whoever wins another match" — nothing this
+                    // auto-placer could space out by team, since there is no
+                    // team yet to check a day against. Left for
+                    // ScheduleMatch/RescheduleMatch, one fixture at a time,
+                    // once it is worth booking a pitch for.
+                    && match.HomeTeamId != null && match.AwayTeamId != null
                 orderby candidate.DisplayOrder, candidate.Name
                 select new { candidate.Id, candidate.Name }
             )
@@ -329,7 +344,8 @@ public static class ScheduleCalendar
             .Where(match => match.CategoryId == category.Id
                 && match.ScheduledAt == null
                 && match.Status == MatchState.Scheduled
-                && match.RoundNumber != null)
+                && match.RoundNumber != null
+                && match.HomeTeamId != null && match.AwayTeamId != null)
             .MinAsync(match => match.RoundNumber!.Value, cancellationToken);
 
         return new NextJornada(category.Id, category.Name, roundNumber);

@@ -41,6 +41,8 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(x => x.CategoryId).HasColumnName("category_id");
         builder.Property(x => x.HomeTeamId).HasColumnName("home_team_id");
         builder.Property(x => x.AwayTeamId).HasColumnName("away_team_id");
+        builder.Property(x => x.HomeSourceMatchId).HasColumnName("home_source_match_id");
+        builder.Property(x => x.AwaySourceMatchId).HasColumnName("away_source_match_id");
         builder.Property(x => x.VenueSpaceId).HasColumnName("venue_space_id");
         builder.Property(x => x.RoundNumber).HasColumnName("round_number");
         builder.Property(x => x.Phase).HasColumnName("phase");
@@ -111,6 +113,21 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.HasOne(x => x.AwayTeam)
             .WithMany()
             .HasForeignKey(x => x.AwayTeamId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Both point back at this same table too, so they need the same
+        // explicit telling-apart as HomeTeam/AwayTeam above. Restrict rather
+        // than cascade: a match is never physically deleted (DeleteMatch only
+        // sets deleted_at), so this is never actually exercised, but it says
+        // the true rule rather than one nothing enforces.
+        builder.HasOne(x => x.HomeSourceMatch)
+            .WithMany()
+            .HasForeignKey(x => x.HomeSourceMatchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.AwaySourceMatch)
+            .WithMany()
+            .HasForeignKey(x => x.AwaySourceMatchId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

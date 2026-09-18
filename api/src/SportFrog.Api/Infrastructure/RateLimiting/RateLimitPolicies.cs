@@ -14,7 +14,7 @@ namespace SportFrog.Api.Infrastructure.RateLimiting;
 /// </summary>
 public static class RateLimitPolicies
 {
-    /// <summary>Credential endpoints: signing in, renewing, registering.</summary>
+    /// <summary>Credential endpoints: signing in, renewing, registering, changing a password.</summary>
     public const string Authentication = "authentication";
 
     /// <summary>The anonymous read path.</summary>

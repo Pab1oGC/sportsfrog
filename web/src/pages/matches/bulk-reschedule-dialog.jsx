@@ -39,9 +39,14 @@ export function BulkRescheduleDialog({ open, onClose, matches, mutate, loading, 
   }, [open]);
 
   const disponibles = (matches || []).filter((m) => !rows.some((r) => r.matchId === m.id));
+  // Una llave de eliminacion directa sorteada completa puede reservar fecha
+  // y cancha para una ronda futura sin saber todavia quien la juega --
+  // homeTeamName/awayTeamName llegan null en ese caso.
+  const nombreEquipo = (m, lado) => m[lado + 'TeamName'] || m[lado + 'Placeholder'] || 'Por definir';
+
   const opcionesPartido = disponibles.map((m) => ({
     value: m.id,
-    label: `${m.homeTeamName} vs ${m.awayTeamName} — ${m.scheduledAt ? aFechaInput(m.scheduledAt).replace('T', ' ') : 'sin fecha'}`,
+    label: `${nombreEquipo(m, 'home')} vs ${nombreEquipo(m, 'away')} — ${m.scheduledAt ? aFechaInput(m.scheduledAt).replace('T', ' ') : 'sin fecha'}`,
   }));
 
   const agregarPartido = (e) => {
@@ -51,8 +56,8 @@ export function BulkRescheduleDialog({ open, onClose, matches, mutate, loading, 
     if (!m) return;
     setRows((rs) => [...rs, {
       matchId,
-      homeTeamName: m.homeTeamName,
-      awayTeamName: m.awayTeamName,
+      homeTeamName: nombreEquipo(m, 'home'),
+      awayTeamName: nombreEquipo(m, 'away'),
       venueSpaceId: m.venueSpaceId || '',
       scheduledAt: aFechaInput(m.scheduledAt),
       roundNumber: m.roundNumber ?? '',

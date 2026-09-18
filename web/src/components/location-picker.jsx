@@ -53,6 +53,12 @@ function ManejadorDeClicks({ onPick }) {
  * servidor que lo siga (ver ManageVenues.ResolveMapsLinkAsync) en vez de
  * intentarlo el mismo. Cuando ni eso alcanza, se avisa en vez de mostrar el
  * centro por omision como si fuera el lugar real.
+ *
+ * Una vez resuelto, el enlace corto se reemplaza por uno normal (mismo
+ * `onChange` que dispara `elegir()`) -- no alcanza con mover el pin de la
+ * vista previa: lo que se guarda tiene que ser el enlace ya resuelto, o
+ * quien mira la sede desde el portal público vuelve a toparse con el
+ * mismo enlace que el navegador no puede seguir.
  */
 export function LocationPicker({ value, onChange }) {
   const parsedFromValue = parseLatLng(value);
@@ -101,6 +107,11 @@ export function LocationPicker({ value, onChange }) {
           setPosition(resuelto);
           setPosicionConocida(true);
           mapRef.current?.setView([resuelto.lat, resuelto.lng], 15);
+          // Sin esto, lo que se guarda sigue siendo el enlace corto sin
+          // resolver aunque el pin ya haya caido en el lugar correcto --
+          // el campo de texto (y por lo tanto la sede) se corrige solo,
+          // no solo la vista previa del mapa.
+          onChange(linkFromLatLng(resuelto.lat, resuelto.lng));
         }
       } catch {
         // Se deja posicionConocida en false -- el aviso de abajo lo explica.

@@ -16,11 +16,6 @@ import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -31,13 +26,18 @@ import { useApi, apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
 import { slugDeOrganizacion } from 'src/lib/slug';
-import { useColorMode } from 'src/theme';
 import {
-  PORTAL_FONTS, PORTAL_CORNERS, PORTAL_HERO_STYLES, PORTAL_COLOR_SCHEMES, PORTAL_SECTIONS,
-  buildPortalTheme, portalFontHref, portalFontStack, contrastRatio, readableTextOn, isHex,
+  PORTAL_FONTS, PORTAL_CORNERS, PORTAL_HERO_STYLES, PORTAL_SECTIONS,
+  PORTAL_DENSITIES, PORTAL_DECORATIONS, PORTAL_CONTENT_FIGURES, PORTAL_HERO_LAYOUTS, PORTAL_HERO_VARIANTS,
+  PORTAL_STANDINGS_VARIANTS, PORTAL_MATCH_CARD_VARIANTS, PORTAL_BRACKET_VARIANTS,
+  buildPortalTheme, portalFontHref, portalFontStack, contrastRatio, readableTextOn, isHex, darken,
 } from 'src/lib/portal-theme';
 import { readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
 import { PortalHero } from 'src/pages/public/portal-hero';
+import { ContentFigureBackground } from 'src/pages/public/content-figure';
+import { StandingsView } from 'src/pages/public/standings/standings-view';
+import { Partido } from 'src/pages/public/match-card/partido';
+import { Llave } from 'src/pages/public/bracket/llave';
 
 /* ===========================================================================
    Estudio de portal: la personalización visual del portal público de una
@@ -56,6 +56,13 @@ import { PortalHero } from 'src/pages/public/portal-hero';
 
 const ANCHO_MOVIL = 390;
 
+// 64px de la barra fija del panel (Header, layout.jsx) + 16 de aire -- sin
+// esto "pegado arriba" quedaba tapado debajo de esa barra en vez de debajo
+// de ella. Compartido por las dos columnas: en desktop cada una vive en su
+// propia caja con este mismo tope y su propio scroll interno, en vez de que
+// la más corta se quede esperando a que la otra termine de bajar.
+const SCROLL_STICKY_TOP = 80;
+
 export default function PortalStudioPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -67,7 +74,6 @@ export default function PortalStudioPage() {
   const [device, setDevice] = useState('desktop');
 
   const appTheme = useTheme();
-  const { mode } = useColorMode();
   const [, startFontTransition] = useTransition();
 
   useEffect(() => {
@@ -76,8 +82,8 @@ export default function PortalStudioPage() {
 
   const previewPortal = useMemo(() => formToPreviewPortal(form), [form]);
   const previewTheme = useMemo(
-    () => buildPortalTheme({ base: appTheme, portal: previewPortal, visitorMode: mode }),
-    [appTheme, previewPortal, mode],
+    () => buildPortalTheme({ base: appTheme, portal: previewPortal }),
+    [appTheme, previewPortal],
   );
   const fontHref = form ? portalFontHref(form.theme.headingFont) : null;
 
@@ -195,9 +201,24 @@ export default function PortalStudioPage() {
         </Alert>
       )}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 420px) 1fr' }, gap: 3, alignItems: 'start' }}>
+      {/* En desktop cada columna vive en su propia caja "pegada" a
+          SCROLL_STICKY_TOP con su propio scroll interno (maxHeight +
+          overflowY) -- bajar por las herramientas no mueve ni un pixel la
+          vista previa, y viceversa. En mobile (`xs`) nada de esto aplica:
+          una sola columna, cada bloque en su alto natural, la página entera
+          se desplaza como cualquier otra pantalla del panel. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 420px) 1fr' }, gap: 3 }}>
         {/* ---- Formulario ---- */}
-        <Stack spacing={2.5}>
+        <Stack
+          spacing={2.5}
+          sx={{
+            position: { md: 'sticky' },
+            top: { md: SCROLL_STICKY_TOP },
+            maxHeight: { md: `calc(100vh - ${SCROLL_STICKY_TOP}px - 24px)` },
+            overflowY: { md: 'auto' },
+            pr: { md: 1 },
+          }}
+        >
           <Section title="Colores" icon="mdi:palette-outline">
             <ColorField label="Principal" value={form.theme.primary} placeholder={appTheme.palette.primary.main}
               onChange={(v) => patchTheme({ primary: v })} />
@@ -246,10 +267,30 @@ export default function PortalStudioPage() {
           <Section title="Forma" icon="mdi:shape-outline">
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Bordes</Typography>
-              <ToggleButtonGroup exclusive size="small" value={form.theme.corners}
+              <ToggleButtonGroup exclusive size="small" value={form.theme.corners} sx={{ flexWrap: 'wrap' }}
                 onChange={(e, v) => v && patchTheme({ corners: v })}>
                 {PORTAL_CORNERS.map((c) => <ToggleButton key={c.value} value={c.value}>{c.label}</ToggleButton>)}
               </ToggleButtonGroup>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Densidad</Typography>
+              <ToggleButtonGroup exclusive size="small" value={form.theme.density} sx={{ flexWrap: 'wrap' }}
+                onChange={(e, v) => v && patchTheme({ density: v })}>
+                {PORTAL_DENSITIES.map((d) => <ToggleButton key={d.value} value={d.value}>{d.label}</ToggleButton>)}
+              </ToggleButtonGroup>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Variante de portada</Typography>
+              <ToggleButtonGroup exclusive size="small" value={form.theme.heroVariant} sx={{ flexWrap: 'wrap' }}
+                onChange={(e, v) => v && patchTheme({ heroVariant: v })}>
+                {PORTAL_HERO_VARIANTS.map((h) => <ToggleButton key={h.value} value={h.value}>{h.label}</ToggleButton>)}
+              </ToggleButtonGroup>
+              {form.theme.heroVariant === 'live' && (
+                <Alert severity="info" sx={{ py: 0, mt: 1 }}>
+                  Esta vista previa nunca simula un partido en vivo, así que acá siempre se ve como la portada estándar.
+                  Solo se ve la portada "En vivo" de verdad en el portal público, mientras haya un partido en curso.
+                </Alert>
+              )}
             </Box>
             <TextField select fullWidth label="Portada" value={form.theme.heroStyle}
               onChange={(e) => patchTheme({ heroStyle: e.target.value })}>
@@ -258,10 +299,66 @@ export default function PortalStudioPage() {
             {form.theme.heroStyle === 'image' && !previewPortal.bannerUrl && (
               <Alert severity="warning" sx={{ py: 0 }}>Elegiste portada con imagen pero no subiste una. Se usa el color plano.</Alert>
             )}
-            <TextField select fullWidth label="Modo claro / oscuro" value={form.theme.colorScheme}
-              onChange={(e) => patchTheme({ colorScheme: e.target.value })}>
-              {PORTAL_COLOR_SCHEMES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+            {form.theme.heroStyle === 'gradient' && (
+              <ColorField
+                label="Segundo color del degradado" value={form.theme.heroGradientTo}
+                placeholder={darken(form.theme.primary || appTheme.palette.primary.main, 0.32)}
+                onChange={(v) => patchTheme({ heroGradientTo: v })}
+                help="Vacío: el principal oscurecido, como hasta ahora."
+              />
+            )}
+            {form.theme.heroVariant === 'standard' && (
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Disposición de la portada</Typography>
+                <ToggleButtonGroup exclusive size="small" value={form.theme.heroLayout} sx={{ flexWrap: 'wrap' }}
+                  onChange={(e, v) => v && patchTheme({ heroLayout: v })}>
+                  {PORTAL_HERO_LAYOUTS.map((h) => <ToggleButton key={h.value} value={h.value}>{h.label}</ToggleButton>)}
+                </ToggleButtonGroup>
+              </Box>
+            )}
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Decoración de la portada</Typography>
+              <ToggleButtonGroup exclusive size="small" value={form.theme.decoration} sx={{ flexWrap: 'wrap' }}
+                onChange={(e, v) => v && patchTheme({ decoration: v })}>
+                {PORTAL_DECORATIONS.map((d) => <ToggleButton key={d.value} value={d.value}>{d.label}</ToggleButton>)}
+              </ToggleButtonGroup>
+            </Box>
+            {/* Nunca la portada -- esta es la figura detrás del contenido
+                (tabla, calendario, fotos...), independiente de la decoración
+                de arriba. "Ninguna" ya resuelve el "quiero figura o no". */}
+            <TextField select fullWidth label="Figura de fondo" value={form.theme.contentFigure}
+              onChange={(e) => patchTheme({ contentFigure: e.target.value })}>
+              {PORTAL_CONTENT_FIGURES.map((cf) => <MenuItem key={cf.value} value={cf.value}>{cf.label}</MenuItem>)}
             </TextField>
+            {form.theme.contentFigure !== 'none' && (
+              <ColorField
+                label="Color de la figura" value={form.theme.contentFigureColor}
+                placeholder={form.theme.primary || appTheme.palette.primary.main}
+                onChange={(v) => patchTheme({ contentFigureColor: v })}
+                help="Vacío: sigue al color principal."
+              />
+            )}
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Variante de tabla de posiciones</Typography>
+              <ToggleButtonGroup exclusive size="small" value={form.theme.standingsVariant} sx={{ flexWrap: 'wrap' }}
+                onChange={(e, v) => v && patchTheme({ standingsVariant: v })}>
+                {PORTAL_STANDINGS_VARIANTS.map((s) => <ToggleButton key={s.value} value={s.value}>{s.label}</ToggleButton>)}
+              </ToggleButtonGroup>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Variante de tarjeta de partido</Typography>
+              <ToggleButtonGroup exclusive size="small" value={form.theme.matchCardVariant} sx={{ flexWrap: 'wrap' }}
+                onChange={(e, v) => v && patchTheme({ matchCardVariant: v })}>
+                {PORTAL_MATCH_CARD_VARIANTS.map((m) => <ToggleButton key={m.value} value={m.value}>{m.label}</ToggleButton>)}
+              </ToggleButtonGroup>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Variante de llave de eliminatoria</Typography>
+              <ToggleButtonGroup exclusive size="small" value={form.theme.bracketVariant} sx={{ flexWrap: 'wrap' }}
+                onChange={(e, v) => v && patchTheme({ bracketVariant: v })}>
+                {PORTAL_BRACKET_VARIANTS.map((b) => <ToggleButton key={b.value} value={b.value}>{b.label}</ToggleButton>)}
+              </ToggleButtonGroup>
+            </Box>
           </Section>
 
           <Section title="Secciones visibles" icon="mdi:eye-outline">
@@ -269,6 +366,10 @@ export default function PortalStudioPage() {
             <FormControlLabel control={<Switch checked={form.showLeaders} onChange={(e) => patch({ showLeaders: e.target.checked })} />} label="Líderes" />
             <FormControlLabel control={<Switch checked={form.showClassification} onChange={(e) => patch({ showClassification: e.target.checked })} />} label="Clasificación (deportes juzgados)" />
             <FormControlLabel control={<Switch checked={form.showRosters} onChange={(e) => patch({ showRosters: e.target.checked })} />} label="Nóminas" />
+            <FormControlLabel
+              control={<Switch checked={form.showAthletePhotos} onChange={(e) => patch({ showAthletePhotos: e.target.checked })} />}
+              label="Fotos de los deportistas (llave, deportes individuales)"
+            />
             <FormControlLabel control={<Switch checked={form.showGallery} onChange={(e) => patch({ showGallery: e.target.checked })} />} label="Fotos del evento" />
           </Section>
 
@@ -302,10 +403,18 @@ export default function PortalStudioPage() {
           <Section title="Portada e identidad" icon="mdi:image-outline">
             <ImagePicker label="Imagen de portada"
               url={previewImg(form.bannerKey, form.currentBannerUrl)}
-              onPick={async (file) => patch({ bannerKey: await leerComoDataUrl(file) })}
+              onPick={async (file) => {
+                // Subir la imagen ya la vuelve la portada -- antes había que
+                // además ir a "Portada" más abajo y elegir "Imagen" a mano;
+                // si no, quedaba guardada con el estilo que ya tenía (Color
+                // plano, el de por defecto) y la imagen recién subida nunca
+                // se veía. Se puede seguir cambiando después.
+                const bannerKey = await leerComoDataUrl(file);
+                setForm((f) => ({ ...f, bannerKey, theme: { ...f.theme, heroStyle: 'image' } }));
+              }}
               onClear={() => patch({ bannerKey: null, currentBannerUrl: null })}
               ratio="96 / 54"
-              help="La imagen ancha detrás del nombre. Se usa si la portada es «Imagen»." />
+              help="La imagen ancha detrás del nombre. Subirla la vuelve la portada." />
             {form.theme.heroStyle === 'image' && previewImg(form.bannerKey, form.currentBannerUrl) && (
               <FocalPointPicker
                 url={previewImg(form.bannerKey, form.currentBannerUrl)}
@@ -320,6 +429,19 @@ export default function PortalStudioPage() {
               onClear={() => patch({ logoKey: null, currentLogoUrl: null })}
               ratio="1 / 1"
               help="La marca de la competencia, al lado del nombre." />
+            {/* Solo el logo -- ningún otro color o imagen del portal tiene
+                esta opción. Prendido por defecto (el mismo look de siempre);
+                se apaga para una marca que ya se ve bien sola, sin un
+                fondo detrás que la enmarque otra vez. */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.theme.showLogoBackground}
+                  onChange={(e) => patchTheme({ showLogoBackground: e.target.checked })}
+                />
+              }
+              label="Fondo detrás del logo"
+            />
           </Section>
 
           <Section title="Presentación" icon="mdi:text-box-outline">
@@ -398,7 +520,14 @@ export default function PortalStudioPage() {
         </Stack>
 
         {/* ---- Vista previa ---- */}
-        <Box sx={{ position: { md: 'sticky' }, top: { md: 16 } }}>
+        <Box
+          sx={{
+            position: { md: 'sticky' },
+            top: { md: SCROLL_STICKY_TOP },
+            maxHeight: { md: `calc(100vh - ${SCROLL_STICKY_TOP}px - 24px)` },
+            overflowY: { md: 'auto' },
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Typography variant="overline" color="text.secondary" sx={{ flexGrow: 1 }}>Vista previa</Typography>
             <ToggleButtonGroup exclusive size="small" value={device} onChange={(e, v) => v && setDevice(v)}>
@@ -476,9 +605,19 @@ function formToPreviewPortal(form) {
       headingFont: t.headingFont,
       corners: t.corners,
       heroStyle: t.heroStyle,
+      heroGradientTo: t.heroGradientTo || null,
       focusX: t.focusX,
       focusY: t.focusY,
-      colorScheme: t.colorScheme,
+      density: t.density,
+      decoration: t.decoration,
+      contentFigure: t.contentFigure,
+      contentFigureColor: t.contentFigureColor || null,
+      showLogoBackground: t.showLogoBackground,
+      heroLayout: t.heroLayout,
+      heroVariant: t.heroVariant,
+      standingsVariant: t.standingsVariant,
+      matchCardVariant: t.matchCardVariant,
+      bracketVariant: t.bracketVariant,
     },
     sectionOrder: form.sectionOrder,
     bannerUrl: previewImg(form.bannerKey, form.currentBannerUrl),
@@ -558,7 +697,7 @@ function ColorField({ label, value, placeholder, onChange, help }) {
         <Box
           component="input"
           type="color"
-          value={valid ? draft : (isHex(placeholder) ? placeholder : '#1B8A2E')}
+          value={valid ? draft : (isHex(placeholder) ? placeholder : '#F50057')}
           onChange={(e) => commit(e.target.value)}
           sx={{ width: 40, height: 40, p: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'transparent', cursor: 'pointer', flexShrink: 0 }}
         />
@@ -654,38 +793,149 @@ function FocalPointPicker({ url, x, y, onChange }) {
 }
 
 /**
+ * Filas de mentira con la forma completa de ReadStandings.Row -- para que
+ * las tres variantes de tabla (standard/cards/editorial) tengan algo real
+ * que dibujar en la vista previa, no solo la variante `standard` como
+ * antes. `qualifiersPerGroup: 2` deja ver también el resaltado de
+ * clasificación en las tres.
+ */
+var FILAS_DE_MENTIRA = [
+  { position: 1, teamId: 'p1', teamName: 'Deportivo Norte', clubLogoUrl: null, played: 6, won: 5, drawn: 1, lost: 0, scoreFor: 16, scoreAgainst: 4, scoreDifference: 12, points: 16 },
+  { position: 2, teamId: 'p2', teamName: 'Atlético Sur', clubLogoUrl: null, played: 6, won: 4, drawn: 1, lost: 1, scoreFor: 13, scoreAgainst: 6, scoreDifference: 7, points: 13 },
+  { position: 3, teamId: 'p3', teamName: 'Unión Central', clubLogoUrl: null, played: 6, won: 3, drawn: 1, lost: 2, scoreFor: 10, scoreAgainst: 8, scoreDifference: 2, points: 10 },
+  { position: 4, teamId: 'p4', teamName: 'Estrella Roja', clubLogoUrl: null, played: 6, won: 1, drawn: 0, lost: 5, scoreFor: 3, scoreAgainst: 14, scoreDifference: -11, points: 3 },
+];
+
+var DATOS_DE_MENTIRA = {
+  categories: [{
+    categoryId: 'preview',
+    categoryName: 'Sub-15',
+    allowsDraw: true,
+    tiebreakers: [],
+    qualifiersPerGroup: 2,
+    groups: [{ label: null, rows: FILAS_DE_MENTIRA }],
+  }],
+};
+
+/**
+ * Un partido de mentira para previsualizar la variante de tarjeta elegida.
+ * `mostrarEventos: false` en el llamado de abajo evita que se intente
+ * pedir la cronología (que necesitaría un partido y una competencia
+ * reales) -- ni con "finished" aparece el botón.
+ */
+var PARTIDO_DE_MENTIRA = {
+  id: 'preview',
+  categoryName: 'Sub-15',
+  homeTeamName: 'Deportivo Norte',
+  homeClubLogoUrl: null,
+  awayTeamName: 'Atlético Sur',
+  awayClubLogoUrl: null,
+  homeTotal: 2,
+  awayTotal: 1,
+  status: 'finished',
+  scheduledAt: new Date().toISOString(),
+  venueName: 'Complejo Municipal',
+  spaceName: 'Cancha 1',
+  venueMapsUrl: null,
+};
+
+/**
+ * Una llave de mentira chica (semifinal + final) para previsualizar la
+ * variante de cruce elegida -- una semifinal en vivo, para que también se
+ * vea ese estado, y la final jugada, para que el banner de campeón
+ * también aparezca en la preview.
+ */
+var LLAVE_DE_MENTIRA = [
+  {
+    clave: 'sf', titulo: 'Semifinal', enCurso: true,
+    matches: [
+      {
+        id: 'sf1', homeTeamName: 'Deportivo Norte', homeClubLogoUrl: null,
+        awayTeamName: 'Atlético Sur', awayClubLogoUrl: null,
+        homeTotal: 2, awayTotal: 1, status: 'finished',
+        penaltyHomeScore: null, penaltyAwayScore: null,
+        scheduledAt: null, venueName: null, spaceName: null,
+      },
+      {
+        id: 'sf2', homeTeamName: 'Unión Central', homeClubLogoUrl: null,
+        awayTeamName: 'Estrella Roja', awayClubLogoUrl: null,
+        homeTotal: null, awayTotal: null, status: 'in_progress',
+        liveHomeTotal: 1, liveAwayTotal: 0,
+        penaltyHomeScore: null, penaltyAwayScore: null,
+        scheduledAt: null, venueName: 'Complejo Municipal', spaceName: 'Cancha 2',
+      },
+    ],
+  },
+  {
+    clave: 'final', titulo: 'Final', enCurso: false,
+    matches: [
+      {
+        id: 'final', homeTeamName: 'Deportivo Norte', homeClubLogoUrl: null,
+        awayTeamName: 'Unión Central', awayClubLogoUrl: null,
+        homeTotal: 3, awayTotal: 1, status: 'finished',
+        penaltyHomeScore: null, penaltyAwayScore: null,
+        scheduledAt: null, venueName: 'Complejo Municipal', spaceName: 'Cancha 1',
+      },
+    ],
+  },
+];
+
+/**
  * El cuerpo de la vista previa: no es el portal entero, es una tira de las
- * superficies que el tema toca (chips, pestañas, una tabla, botones, la
- * franja de auspiciantes) para que cada color y cada radio se vea sin tener
- * que cargar datos reales de la competencia. Las pestañas sí son las
- * reales -- en el orden y con el nombre que "Orden y nombres" dejó.
+ * superficies que el tema toca (chips, pestañas, la tabla de posiciones,
+ * botones, la franja de auspiciantes) para que cada color y cada radio se
+ * vea sin tener que cargar datos reales de la competencia. Las pestañas sí
+ * son las reales -- en el orden y con el nombre que "Orden y nombres" dejó.
+ *
+ * La tabla de posiciones es el StandingsView real (no una maqueta aparte),
+ * para que elegir una variante en "Variante de tabla de posiciones" se vea
+ * reflejado acá mismo -- la misma garantía que ya tiene el hero. `sportInfo`
+ * vacío es intencional: ni `row` ni `fakeComp(row)` traen todavía
+ * isPlayedInSets/scoringUnit/periodLabel, y columnasMarcador/
+ * etiquetasDesempate ya están pensadas para ese caso (caen en "puntos"/"a
+ * favor"/"en contra" genéricos) -- no hace falta una llamada nueva a la API
+ * solo para la vista previa.
  */
 function PreviewBody({ portal, sections }) {
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2, position: 'relative', overflow: 'hidden' }}>
+      <ContentFigureBackground figure={portal.theme && portal.theme.contentFigure} color={portal.theme && portal.theme.contentFigureColor} />
+      {/* Un solo envoltorio "position: relative" para todo lo que sigue --
+          no uno por hijo -- para que pinte por delante de la figura de
+          fondo (position: absolute), que si no, al venir primero en el DOM,
+          quedaría por encima de cualquier hijo sin su propio posicionamiento. */}
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
         <Chip label="Sub-15" color="primary" />
         <Chip label="Sub-17" variant="outlined" color="primary" />
         <Chip label="Libre" variant="outlined" color="primary" />
       </Box>
-      <Tabs value={0} sx={{ mb: 1.5, minHeight: 36 }}>
+      <Tabs value={0} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 1.5, minHeight: 36 }}>
         {sections.map((s) => <Tab key={s.key} label={s.label} sx={{ minHeight: 36 }} />)}
       </Tabs>
-      <Table size="small" sx={{ mb: 2 }}>
-        <TableHead>
-          <TableRow>
-            <TableCell>#</TableCell><TableCell>Equipo</TableCell><TableCell align="right">PJ</TableCell><TableCell align="right">Pts</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {[['1', 'Deportivo Norte', 6, 16], ['2', 'Atlético Sur', 6, 13], ['3', 'Unión Central', 6, 10]].map((r) => (
-            <TableRow key={r[0]}>
-              <TableCell>{r[0]}</TableCell><TableCell>{r[1]}</TableCell><TableCell align="right">{r[2]}</TableCell>
-              <TableCell align="right"><b>{r[3]}</b></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <Box sx={{ mb: 2 }}>
+        <StandingsView
+          data={DATOS_DE_MENTIRA}
+          loading={false}
+          selectedCatId={null}
+          sportInfo={{}}
+          variant={portal.theme && portal.theme.standingsVariant}
+        />
+      </Box>
+      <Box sx={{ mb: 2 }}>
+        <Partido
+          m={PARTIDO_DE_MENTIRA}
+          mostrarCategoria={false}
+          destacado={null}
+          orgSlug="preview"
+          compSlug="preview"
+          mostrarEventos={false}
+          variant={portal.theme && portal.theme.matchCardVariant}
+        />
+      </Box>
+      <Box sx={{ mb: 2 }}>
+        <Llave grupos={LLAVE_DE_MENTIRA} variant={portal.theme && portal.theme.bracketVariant} />
+      </Box>
       <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
         <Button variant="contained">Acción</Button>
         <Button variant="outlined">Secundaria</Button>
@@ -709,6 +959,7 @@ function PreviewBody({ portal, sections }) {
           </Box>
         </>
       )}
+      </Box>
     </Box>
   );
 }

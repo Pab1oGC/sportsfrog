@@ -12,11 +12,12 @@ import Toolbar from '@mui/material/Toolbar';
 import Container from '@mui/material/Container';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
+import { alpha } from '@mui/material/styles';
 import { useNavigate, Link as RouterLink } from 'react-router';
 import useSWR from 'swr';
 import publicAxios from 'src/lib/public-axios';
 import { Iconify } from 'src/components/iconify';
-import { ColorModeToggle } from 'src/components/color-mode-toggle';
+import { FREDOKA_HREF, FREDOKA_STACK } from 'src/pages/landing/playful-hero';
 
 const SL = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };
 const SC = { draft: 'default', scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error' };
@@ -34,10 +35,15 @@ export default function PublicPortalPage() {
   const total = data?.total || 0;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#F5FBFE' }}>
+      {/* React 19 iza este <link> al <head> y lo deduplica -- si el hero ya
+          lo pidio (o quien entra directo a /public sin pasar por el), esto
+          asegura que el titulo en Fredoka de esta pagina no se quede en la
+          alternativa Inter del stack. */}
+      <link rel="stylesheet" href={FREDOKA_HREF} precedence="hero-font" />
       <PublicNavbar />
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Typography variant="h4" fontWeight={700} sx={{ mb: 1 }}>Competiciones publicas</Typography>
+        <Typography variant="h4" fontWeight={700} sx={{ mb: 1, fontFamily: FREDOKA_STACK }}>Competiciones publicas</Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>{total} competicion(es) publicada{total !== 1 ? 's' : ''}</Typography>
 
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
@@ -59,7 +65,11 @@ export default function PublicPortalPage() {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
           {competitions.map((c) => (
             <Card key={`${c.organizationSlug}/${c.competitionSlug}`}
-              sx={{ cursor: 'pointer', transition: 'transform 0.15s', '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 } }}
+              sx={{
+                cursor: 'pointer', border: '2px solid #4CB8E6', boxShadow: 'none',
+                transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
+                '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 0 rgba(29,112,159,0.9)', borderColor: '#1D709F' },
+              }}
               onClick={() => navigate(`/public/${c.organizationSlug}/${c.competitionSlug}`)}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -74,7 +84,12 @@ export default function PublicPortalPage() {
                   <Chip label={`${c.teams} equip.`} size="small" variant="outlined" />
                 </Box>
                 {c.startsOn && c.endsOn && <Typography variant="caption" color="text.secondary">{new Date(c.startsOn).toLocaleDateString()} - {new Date(c.endsOn).toLocaleDateString()}</Typography>}
-                <Button size="small" sx={{ mt: 1, display: 'block' }} endIcon={<Iconify icon="eva:arrow-forward-outline" />}>Ver detalles</Button>
+                <Button
+                  size="small" endIcon={<Iconify icon="eva:arrow-forward-outline" />}
+                  sx={{ mt: 1.5, border: '2px solid #1D709F', color: '#1D709F', borderRadius: 999, px: 2, fontWeight: 700, '&:hover': { bgcolor: 'rgba(29,112,159,0.08)' } }}
+                >
+                  Ver detalles
+                </Button>
               </CardContent>
             </Card>
           ))}
@@ -87,19 +102,37 @@ export default function PublicPortalPage() {
 function PublicNavbar() {
   const navigate = useNavigate();
   return (
-    <AppBar position="static" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider' }}>
-      <Toolbar>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }} onClick={() => navigate('/')}>
-          <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography sx={{ color: 'white', fontWeight: 800, fontSize: 16 }}>SF</Typography>
+    <AppBar
+      position="static"
+      elevation={0}
+      sx={{
+        bgcolor: (theme) => alpha('#E7F5FD', theme.palette.mode === 'dark' ? 0.92 : 0.78),
+        backdropFilter: 'blur(16px) saturate(1.4)',
+        color: '#1D709F',
+        borderBottom: '2.5px solid #1D709F',
+        boxShadow: 'none',
+      }}
+    >
+      <Container maxWidth="lg">
+        <Toolbar disableGutters>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.1, cursor: 'pointer', transition: 'opacity 0.15s ease', '&:hover': { opacity: 0.8 } }} onClick={() => navigate('/')}>
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, background: 'linear-gradient(135deg, #00A4D1 0%, #1D709F 100%)', border: '2px solid #4CB8E6', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 0 rgba(29,112,159,0.9)' }}>
+              <Typography sx={{ color: 'white', fontWeight: 800, fontSize: 16 }}>SF</Typography>
+            </Box>
+            <Typography variant="h6" fontWeight={700} letterSpacing={-0.2} sx={{ fontFamily: FREDOKA_STACK, color: '#1D709F' }}>SportFrog</Typography>
           </Box>
-          <Typography variant="h6" fontWeight={700}>SportFrog</Typography>
-        </Box>
-        <Box sx={{ flexGrow: 1 }} />
-        <ColorModeToggle sx={{ mr: 0.5 }} />
-          <Button component={RouterLink} to="/" sx={{ mr: 1 }}>Inicio</Button>
-        <Button variant="outlined" component={RouterLink} to="/auth/jwt/sign-in">Iniciar sesion</Button>
-      </Toolbar>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button component={RouterLink} to="/" sx={{ mr: 1, color: '#1D709F', fontWeight: 700, borderRadius: 999, px: 2, '&:hover': { bgcolor: 'rgba(29,112,159,0.08)' } }}>
+            Inicio
+          </Button>
+          <Button
+            component={RouterLink} to="/auth/jwt/sign-in"
+            sx={{ bgcolor: '#1D709F', color: 'white', px: 3, py: 0.9, borderRadius: 999, fontWeight: 700, boxShadow: '0 4px 0 rgba(29,112,159,0.9)', '&:hover': { bgcolor: '#00A4D1' } }}
+          >
+            Iniciar sesion
+          </Button>
+        </Toolbar>
+      </Container>
     </AppBar>
   );
 }

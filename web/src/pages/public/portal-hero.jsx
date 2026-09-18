@@ -1,14 +1,11 @@
-import { useState, useEffect } from 'react';
-import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
-import IconButton from '@mui/material/IconButton';
-import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
-import { alpha } from '@mui/material/styles';
-import { Iconify } from 'src/components/iconify';
 import { heroBackground, isHex } from 'src/lib/portal-theme';
+import { HeroDecoration } from './hero/hero-parts';
+import { StandardHero } from './hero/standard-hero';
+import { ScoreboardHero } from './hero/scoreboard-hero';
+import { EditorialHero } from './hero/editorial-hero';
+import { LiveHero } from './hero/live-hero';
 
 /* ---------------------------------------------------------------------------
    La portada del portal de una competencia.
@@ -21,16 +18,27 @@ import { heroBackground, isHex } from 'src/lib/portal-theme';
    en `primary.main` y el texto en `primary.contrastText`, que en el tema
    base son el verde y el blanco de siempre: la portada queda idéntica a
    antes de que esto existiera.
+
+   Este módulo es solo el despachador: deriva una vez los hechos que
+   cualquier variante podría necesitar (fondo, contraste, campeón, en vivo,
+   redes...) y se los pasa a la variante elegida (theme.heroVariant). Cada
+   variante vive en su propio archivo bajo ./hero/ y solo decide cómo
+   ordenar esos hechos, nunca de dónde salen -- agregar una variante nueva
+   más adelante es un componente más en HERO_VARIANTS, sin tocar las demás.
    --------------------------------------------------------------------------- */
 
-var ESTADO = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };
-var FORMATO = { league: 'Todos vs todos', knockout: 'Eliminacion', groups: 'Grupos' };
+var HERO_VARIANTS = {
+  standard: StandardHero,
+  scoreboard: ScoreboardHero,
+  editorial: EditorialHero,
+  live: LiveHero,
+};
 
 /**
  * @param {object} props
  * @param {object} props.comp - { name, organizationName, season, sportName, status, format, startsOn, endsOn }
  * @param {object} props.portal - comp.portal de la API (o el equivalente que arma el estudio)
- * @param {object} [props.moment] - comp.moment de la API: { nextMatchAt, liveMatchCount, champion }.
+ * @param {object} [props.moment] - comp.moment de la API: { nextMatchAt, liveMatchCount, champion, liveMatch }.
  *   Nunca lo pasa el estudio -- no es algo que se configure, es un hecho de la
  *   competencia real, y la vista previa no simula una.
  * @param {function} [props.onBack] - si está, dibuja "Volver"; el estudio no lo pasa
@@ -51,6 +59,7 @@ export function PortalHero(props) {
   var bg = heroBackground({
     heroStyle: heroStyle,
     primary: (theme && theme.primary) || portal.accentColor,
+    gradientTo: theme && theme.heroGradientTo,
     bannerUrl: portal.bannerUrl,
     focusX: theme && theme.focusX,
     focusY: theme && theme.focusY,
@@ -75,91 +84,36 @@ export function PortalHero(props) {
   var campeon = moment && moment.champion;
   var enVivo = moment && moment.liveMatchCount > 0;
   var proximoPartido = moment && moment.nextMatchAt;
+  var liveMatch = moment && moment.liveMatch;
 
-  var inner = (
-    <>
-      {props.onBack && (
-        <Button
-          size="small"
-          sx={{ color: colorTexto, mb: 1, opacity: 0.85 }}
-          onClick={props.onBack}
-          startIcon={<Iconify icon="eva:arrow-back-outline" />}
-        >
-          Volver
-        </Button>
-      )}
-      {campeon && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          {campeon.logoUrl && (
-            <Avatar
-              src={campeon.logoUrl}
-              variant="rounded"
-              sx={{ width: 26, height: 26, bgcolor: (t) => alpha(alFrente(t), 0.15), '& img': { objectFit: 'contain' } }}
-            />
-          )}
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: 0.3 }}>
-            🏆 {campeon.teamName} es el campeón
-          </Typography>
-        </Box>
-      )}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        {portal.logoUrl && (
-          <Avatar
-            src={portal.logoUrl}
-            variant="rounded"
-            sx={{
-              width: { xs: 40, sm: props.dense ? 44 : 56 },
-              height: { xs: 40, sm: props.dense ? 44 : 56 },
-              bgcolor: (t) => alpha(alFrente(t), 0.15),
-              '& img': { objectFit: 'contain' },
-            }}
-          />
-        )}
-        <Typography
-          variant="h3"
-          fontWeight={700}
-          sx={{ fontSize: props.dense ? { xs: '1.35rem', sm: '1.75rem' } : { xs: '1.5rem', sm: '2rem', md: '2.5rem' } }}
-        >
-          {comp.name || 'Nombre de la competencia'}
-        </Typography>
-      </Box>
-      <Typography variant="subtitle1" sx={{ opacity: 0.9, mt: 0.5 }}>
-        {[comp.organizationName, comp.season, comp.sportName].filter(Boolean).join(' · ')}
-      </Typography>
-      {portal.description && (
-        <Typography variant="body2" sx={{ opacity: 0.95, mt: 1, maxWidth: 640 }}>{portal.description}</Typography>
-      )}
-      <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-        {enVivo && (
-          <Chip
-            label={'EN VIVO' + (moment.liveMatchCount > 1 ? ' · ' + moment.liveMatchCount + ' partidos' : '')}
-            size="small"
-            color="error"
-            sx={{ fontWeight: 700, letterSpacing: 0.5 }}
-          />
-        )}
-        {!enVivo && proximoPartido && <CuentaAtras targetIso={proximoPartido} fg={alFrente} />}
-        {comp.status && <HeroChip label={ESTADO[comp.status] || comp.status} fg={alFrente} />}
-        {comp.format && <HeroChip label={FORMATO[comp.format] || comp.format} fg={alFrente} />}
-        {dateLabel && <HeroChip label={dateLabel} fg={alFrente} />}
-        {social.map(function(s) {
-          return (
-            <IconButton
-              key={s.key}
-              size="small"
-              component="a"
-              href={s.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{ color: colorTexto, bgcolor: (t) => alpha(alFrente(t), 0.15) }}
-            >
-              <Iconify icon={s.icon} width={16} />
-            </IconButton>
-          );
-        })}
-      </Box>
-    </>
-  );
+  var eyebrow = [comp.organizationName, comp.season, comp.sportName].filter(Boolean).join(' · ');
+
+  // Independiente de `dense`: `dense` es "poco aire, panel angosto" (el
+  // estudio); `centered` es una composición distinta, y las dos preguntas no
+  // dependen una de la otra -- una competencia que eligió "centered" la ve
+  // centrada tanto en el estudio como en el portal real. Solo la variante
+  // `standard` la usa -- las otras tres fijan su propia composición.
+  var centered = theme && theme.heroLayout === 'centered';
+
+  var data = {
+    comp: comp,
+    portal: portal,
+    theme: theme,
+    moment: moment,
+    alFrente: alFrente,
+    colorTexto: colorTexto,
+    dateLabel: dateLabel,
+    social: social,
+    campeon: campeon,
+    enVivo: enVivo,
+    proximoPartido: proximoPartido,
+    liveMatch: liveMatch,
+    eyebrow: eyebrow,
+    centered: centered,
+  };
+
+  var Variant = HERO_VARIANTS[theme && theme.heroVariant] || StandardHero;
+  var inner = <Variant data={data} dense={props.dense} onBack={props.onBack} />;
 
   return (
     <Box
@@ -168,6 +122,7 @@ export function PortalHero(props) {
         color: colorTexto,
         py: props.dense ? 2.5 : { xs: 3, sm: 4 },
         px: 3,
+        overflow: 'hidden',
         // Sin color propio: el verde del tema. isHex evita pasar undefined a
         // backgroundColor y perder el fallback.
         bgcolor: isHex(bg.backgroundColor) ? bg.backgroundColor : 'primary.main',
@@ -176,51 +131,10 @@ export function PortalHero(props) {
         backgroundPosition: bg.backgroundPosition || 'center',
       }}
     >
-      {props.dense ? <Box>{inner}</Box> : <Container maxWidth="lg">{inner}</Container>}
+      <HeroDecoration level={theme && theme.decoration} />
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
+        {props.dense ? <Box>{inner}</Box> : <Container maxWidth="lg">{inner}</Container>}
+      </Box>
     </Box>
   );
-}
-
-function HeroChip(props) {
-  var fg = props.fg;
-  return (
-    <Chip
-      label={props.label}
-      size="small"
-      icon={props.icon ? <Iconify icon={props.icon} width={14} /> : undefined}
-      sx={{ bgcolor: (t) => alpha(fg(t), 0.2), color: (t) => fg(t), '& .MuiChip-icon': { color: 'inherit' } }}
-    />
-  );
-}
-
-/**
- * Cuánto falta para el próximo partido, en minutos redondeados hacia el
- * cuarto de hora que sea legible ("3 días", "2h 30m") — no segundo a
- * segundo, que en un cover no aporta y solo redibuja de más. Se actualiza
- * cada minuto por si alguien deja la pestaña abierta.
- */
-function CuentaAtras(props) {
-  var [ahora, setAhora] = useState(function() { return Date.now(); });
-
-  useEffect(function() {
-    var id = setInterval(function() { setAhora(Date.now()); }, 60000);
-    return function() { clearInterval(id); };
-  }, []);
-
-  var restanteMin = Math.floor((new Date(props.targetIso).getTime() - ahora) / 60000);
-  // Ya deberia haber arrancado (el visitante llego con la pestaña abierta
-  // desde antes, o el reloj del servidor y el del navegador no coinciden
-  // por unos segundos): no se muestra una cuenta en negativo.
-  if (restanteMin <= 0) return null;
-
-  var dias = Math.floor(restanteMin / 1440);
-  var horas = Math.floor((restanteMin % 1440) / 60);
-  var minutos = restanteMin % 60;
-
-  var texto;
-  if (dias > 0) texto = 'Empieza en ' + dias + (dias === 1 ? ' día' : ' días');
-  else if (horas > 0) texto = 'Empieza en ' + horas + 'h' + (minutos > 0 ? ' ' + minutos + 'm' : '');
-  else texto = 'Empieza en ' + minutos + ' min';
-
-  return <HeroChip label={texto} fg={props.fg} icon="mdi:timer-outline" />;
 }

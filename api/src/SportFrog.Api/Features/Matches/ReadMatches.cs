@@ -17,10 +17,25 @@ public static class ReadMatches
         Guid CompetitionId,
         Guid CategoryId,
         string CategoryName,
-        Guid HomeTeamId,
-        string HomeTeamName,
-        Guid AwayTeamId,
-        string AwayTeamName,
+
+        /// <summary>
+        /// Null for a knockout slot drawn in full whose side is still
+        /// "whoever wins another match" — see <see cref="HomePlaceholder"/>
+        /// for what to show instead.
+        /// </summary>
+        Guid? HomeTeamId,
+        string? HomeTeamName,
+
+        /// <summary>
+        /// "Ganador de {phase}", set exactly when <see cref="HomeTeamId"/> is
+        /// not — the fixture whose winner still has to fill this side.
+        /// </summary>
+        string? HomePlaceholder,
+        Guid? AwayTeamId,
+        string? AwayTeamName,
+
+        /// <summary>See <see cref="HomePlaceholder"/>; the same story, the other side.</summary>
+        string? AwayPlaceholder,
         Guid? VenueSpaceId,
         string? VenueName,
         string? SpaceName,
@@ -346,11 +361,13 @@ public static class ReadMatches
                 return match;
             }
 
+            // In progress implies both teams are already named — starting a
+            // match without them is refused before it ever reaches here.
             var totals = LiveScore.Compute(
                 byMatch[match.Id].Select(recorded => new ScoringEvent(
                     recorded.TeamId, recorded.ScorePoints, recorded.CountsForOpponent, recorded.Quantity)),
-                match.HomeTeamId,
-                match.AwayTeamId);
+                match.HomeTeamId!.Value,
+                match.AwayTeamId!.Value);
 
             return match with { LiveHomeTotal = totals.Home, LiveAwayTotal = totals.Away };
         })];
@@ -429,8 +446,14 @@ public static class ReadMatches
             match.Category!.Name,
             match.HomeTeamId,
             match.HomeTeam!.Name,
+            match.HomeTeamId == null && match.HomeSourceMatch != null
+                ? "Ganador de " + match.HomeSourceMatch.Phase
+                : null,
             match.AwayTeamId,
             match.AwayTeam!.Name,
+            match.AwayTeamId == null && match.AwaySourceMatch != null
+                ? "Ganador de " + match.AwaySourceMatch.Phase
+                : null,
             match.VenueSpaceId,
             match.VenueSpace!.Venue!.Name,
             match.VenueSpace.Name,

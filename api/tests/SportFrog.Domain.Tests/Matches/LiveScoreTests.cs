@@ -145,4 +145,54 @@ public sealed class LiveScoreTests
         periods.Select(period => period.Period).Should().BeEquivalentTo((short[])[1, 2, 3, 4]);
         periods.Should().OnlyContain(period => period.Home == 0 && period.Away == 0);
     }
+
+    [Fact]
+    public void ComputePlayedPeriods_BoutDecidedEarly_StopsAtTheLastAsaltoWithAnEvent()
+    {
+        // Won in two: nobody records a point or a gam-jeom for a third
+        // asalto that was never fought.
+        var events = new[]
+        {
+            new ScoringEvent(Home, 3, false, 1, PeriodNumber: 1),
+            new ScoringEvent(Away, 5, false, 1, PeriodNumber: 2),
+            new ScoringEvent(Home, 4, false, 1, PeriodNumber: 2),
+        };
+
+        var periods = LiveScore.ComputePlayedPeriods(events, maxPeriodCount: 3, Home, Away);
+
+        periods.Should().BeEquivalentTo(
+        [
+            new PeriodScore { Period = 1, Home = 3, Away = 0 },
+            new PeriodScore { Period = 2, Home = 4, Away = 5 },
+        ]);
+    }
+
+    [Fact]
+    public void ComputePlayedPeriods_GamJeomCreditsTheOpponent()
+    {
+        // A gam-jeom against home is worth one point to away, the same
+        // CountsForOpponent mechanism an own goal already uses.
+        var gamJeom = new ScoringEvent(Home, ScorePoints: 1, CountsForOpponent: true, Quantity: 1, PeriodNumber: 1);
+
+        var periods = LiveScore.ComputePlayedPeriods([gamJeom], maxPeriodCount: 3, Home, Away);
+
+        periods.Should().BeEquivalentTo([new PeriodScore { Period = 1, Home = 0, Away = 1 }]);
+    }
+
+    [Fact]
+    public void ComputePlayedPeriods_NoEventsAtAll_ProducesNoPeriods()
+    {
+        LiveScore.ComputePlayedPeriods([], maxPeriodCount: 3, Home, Away).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ComputePlayedPeriods_EveryConfiguredAsaltoFought_ProducesAllOfThem()
+    {
+        var events = new[] { new ScoringEvent(Home, 1, false, 1, PeriodNumber: 3) };
+
+        var periods = LiveScore.ComputePlayedPeriods(events, maxPeriodCount: 3, Home, Away);
+
+        periods.Select(period => period.Period).Should().BeEquivalentTo((short[])[1, 2, 3]);
+        periods.Single(period => period.Period == 3).Home.Should().Be(1);
+    }
 }

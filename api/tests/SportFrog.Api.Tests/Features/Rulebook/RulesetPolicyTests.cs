@@ -131,7 +131,12 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
     [Fact]
     public async Task InspectAsync_KyorugiUnknownMetric_IsRejectedAgainstTheCatalogsOwnPointAndPenalty()
     {
-        var unknownMetric = ValidKyorugi() with { Metrics = ["point", "not_a_real_metric"] };
+        // Both real metrics stay listed here on purpose: since
+        // AddTaekwondoKyorugiScoringEvents, point and penalty both affect
+        // the score, and leaving either out is its own violation (see
+        // InspectAsync_KyorugiExcludingAScoringMetric_IsRejected below) —
+        // this test is about the unknown one, so the other two stay valid.
+        var unknownMetric = ValidKyorugi() with { Metrics = ["point", "penalty", "not_a_real_metric"] };
 
         var violations = await Policy().InspectAsync(
             "taekwondo_kyorugi", unknownMetric, CancellationToken.None);
@@ -141,17 +146,19 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task InspectAsync_KyorugiHasNoScoringMetricToRequire()
+    public async Task InspectAsync_KyorugiExcludingAScoringMetric_IsRejected()
     {
-        // Same as every sets-mode sport: the result comes from asaltos won,
-        // and the catalog prices neither point nor penalty as affecting the
-        // score, so leaving both out is a valid selection.
-        var noMetricsAtAll = ValidKyorugi() with { Metrics = [] };
+        // Unlike wally or volleyball, kyorugi's point and gam-jeom do
+        // decide the asalto being fought (AddTaekwondoKyorugiScoringEvents)
+        // — same rule InspectAsync_AScoringMetricLeftOutOfACumulativeSport_
+        // IsRejected already covers for football's goal, exercised here for
+        // the one sets-mode sport it actually applies to.
+        var missingScoringMetric = ValidKyorugi() with { Metrics = ["point"] };
 
         var violations = await Policy().InspectAsync(
-            "taekwondo_kyorugi", noMetricsAtAll, CancellationToken.None);
+            "taekwondo_kyorugi", missingScoringMetric, CancellationToken.None);
 
-        violations.Should().BeEmpty();
+        violations.Should().Contain(violation => violation.Property == "Config.Metrics");
     }
 
     // ---- Poomsae (real catalog sport, one judged performance) -----------

@@ -60,12 +60,13 @@ public sealed class MatchRescheduleNotificationJob(
 
         var subject = $"Reprogramación: {notice.HomeTeamName} vs {notice.AwayTeamName}";
         var body = Body(notice);
+        var htmlBody = HtmlBody(notice);
 
         foreach (var recipient in notice.Recipients)
         {
             try
             {
-                await email.SendAsync(recipient.Email, subject, body, cancellationToken);
+                await email.SendAsync(recipient.Email, subject, body, htmlBody, cancellationToken);
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
             {
@@ -166,5 +167,26 @@ public sealed class MatchRescheduleNotificationJob(
             $"Nueva fecha y hora: {when}\n" +
             $"Nueva sede: {where}\n\n" +
             "Este es un aviso automático de SportFrog.";
+    }
+
+    /// <summary>
+    /// La misma información que <see cref="Body"/>, pero con la línea gráfica
+    /// del sitio — ver <see cref="EmailTemplate"/> para por qué es tabla e
+    /// inline en vez del CSS de verdad que usa el frontend.
+    /// </summary>
+    internal static string HtmlBody(Notice notice)
+    {
+        var when = notice.ScheduledAt is { } at ? FormatInstant(at) : "Una fecha a confirmar";
+        var where = notice.VenueName is not null
+            ? $"{notice.VenueName} — {notice.SpaceName}"
+            : "Una sede a confirmar";
+
+        return EmailTemplate.Render(
+            "Reprogramación de partido",
+            $"Se reprogramó el partido {notice.HomeTeamName} vs {notice.AwayTeamName}.",
+            [
+                ("Nueva fecha y hora", when),
+                ("Nueva sede", where),
+            ]);
     }
 }

@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-16T00:00:00Z",
+  "title": "Design System: SportFrog",
+  "extensions": {
+    "colorMeta": {
+      "fucsia-brand": {
+        "role": "primary",
+        "displayName": "Fucsia eléctrico",
+        "canonical": "#F50057",
+        "tonalRamp": ["#4a0019", "#800029", "#b2003e", "#F50057", "#ff3380", "#ff6699", "#ff99bb", "#ffccdd"]
+      },
+      "fucsia-brand-dark": {
+        "role": "primary-dark-variant",
+        "displayName": "Fucsia arena",
+        "canonical": "#FF4081",
+        "tonalRamp": ["#4a0019", "#880030", "#cc0050", "#FF4081", "#ff6699", "#ff8cb3", "#ffb3cc", "#ffd9e6"]
+      },
+      "fucsia-deep": {
+        "role": "primary-hover",
+        "displayName": "Fucsia profundo",
+        "canonical": "#B2003E",
+        "tonalRamp": ["#330012", "#660025", "#990037", "#B2003E", "#cc0047", "#e50050", "#f2668b", "#f9b3c5"]
+      },
+      "lime-accent": {
+        "role": "secondary",
+        "displayName": "Lima eléctrico",
+        "canonical": "#7CFC00",
+        "tonalRamp": ["#2e5e00", "#4a9700", "#5ec800", "#7CFC00", "#97fd30", "#b3fd68", "#cffe9a", "#e8ffcc"]
+      },
+      "surface-dark": {
+        "role": "neutral-bg-dark",
+        "displayName": "Noche profunda",
+        "canonical": "#111315",
+        "tonalRamp": ["#060708", "#0b0d0e", "#111315", "#1a1d20", "#252a2d", "#343b3f", "#4d5559", "#6b767b"]
+      },
+      "paper-dark": {
+        "role": "neutral-paper-dark",
+        "displayName": "Papel oscuro",
+        "canonical": "#1A1D20",
+        "tonalRamp": ["#08090a", "#0e1012", "#141719", "#1A1D20", "#252a2d", "#343b3f", "#4d5559", "#6b767b"]
+      },
+      "surface-light": {
+        "role": "neutral-bg-light",
+        "displayName": "Gris campo",
+        "canonical": "#f4f6f8",
+        "tonalRamp": ["#9cadb6", "#b8c5cc", "#d1dce2", "#e5edf1", "#edf2f5", "#f4f6f8", "#f9fafb", "#ffffff"]
+      },
+      "paper-light": {
+        "role": "neutral-paper-light",
+        "displayName": "Blanco papel",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#b0b0b0", "#c4c4c4", "#d8d8d8", "#ebebeb", "#f4f4f4", "#f9f9f9", "#fcfcfc", "#ffffff"]
+      },
+      "medal-gold": {
+        "role": "tertiary",
+        "displayName": "Oro medalla",
+        "canonical": "#C9A227",
+        "tonalRamp": ["#3e3209", "#6b5610", "#9d7e1a", "#C9A227", "#d8b750", "#e3c97b", "#eddba8", "#f6ecd3"]
+      },
+      "medal-silver": {
+        "role": "tertiary",
+        "displayName": "Plata medalla",
+        "canonical": "#8E8E93",
+        "tonalRamp": ["#2a2a2c", "#444448", "#5e5e63", "#78787e", "#8E8E93", "#a8a8ac", "#c4c4c6", "#e1e1e2"]
+      },
+      "medal-bronze": {
+        "role": "tertiary",
+        "displayName": "Bronce medalla",
+        "canonical": "#B87333",
+        "tonalRamp": ["#3a2210", "#62371c", "#8c5027", "#B87333", "#cb8f57", "#d9aa7e", "#e8c8aa", "#f5e4d5"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero del landing únicamente. Un solo uso por página."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Títulos de sección del landing. No aparece en el portal de competencias."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Nombre de la competencia en el hero del portal. Puede usar la fuente deportiva elegida por el organizador."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texto de apoyo, descripciones, mensajes vacíos. La mayoría del texto de la interfaz."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Etiquetas de sección (AHORA MISMO) y eyebrow del hero del portal. Siempre en mayúsculas."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ambient-card",
+        "value": "0 2px 12px rgba(0,0,0,0.08)",
+        "purpose": "Reposo de tarjetas en modo claro. Flotamiento discreto."
+      },
+      {
+        "name": "hover-card-fucsia",
+        "value": "0 12px 32px rgba(245,0,87,0.18)",
+        "purpose": "Hover de tarjetas de competencia. El tinte fucsia comunica interactividad."
+      },
+      {
+        "name": "hover-feature-fucsia",
+        "value": "0 12px 36px rgba(245,0,87,0.14)",
+        "purpose": "Hover de feature cards del landing. Fucsia más suave."
+      },
+      {
+        "name": "ambient-cta",
+        "value": "0 20px 60px rgba(245,0,87,0.32)",
+        "purpose": "CTA card del landing. El glow más fuerte del sistema."
+      },
+      {
+        "name": "nav-glass",
+        "value": "0 1px 12px rgba(80,0,30,0.06)",
+        "purpose": "AppBar del landing en modo claro. Mínima."
+      },
+      {
+        "name": "button-inverted",
+        "value": "0 4px 20px rgba(0,0,0,0.18)",
+        "purpose": "Botón blanco sobre fondos fucsia oscuro."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Easing estándar para transiciones de estado."
+      },
+      {
+        "name": "duration-fast",
+        "value": "0.15s",
+        "purpose": "Botones, texto, iconos."
+      },
+      {
+        "name": "duration-card",
+        "value": "0.2s",
+        "purpose": "Tarjetas (transform, box-shadow, border-color)."
+      },
+      {
+        "name": "duration-feature",
+        "value": "0.25s",
+        "purpose": "Feature cards del landing."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "600px", "purpose": "Mobile landscape / tablet pequeño." },
+      { "name": "md", "value": "900px", "purpose": "Tablet. Grilla pasa de 2 a 3 columnas." },
+      { "name": "lg", "value": "1200px", "purpose": "Desktop. Límite del container lg." },
+      { "name": "xl", "value": "1536px", "purpose": "Desktop grande." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal. Fucsia eléctrico, texto oscuro en base, blanco en hover profundo. Lift 1px en hover.",
+      "html": "<button class=\"ds-btn-primary\">Iniciar sesion</button>",
+      "css": ".ds-btn-primary { background: #F50057; color: #111315; padding: 10px 22px; border-radius: 12px; font-family: Inter, sans-serif; font-size: 0.875rem; font-weight: 600; text-transform: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease; } .ds-btn-primary:hover { transform: translateY(-1px); background: #B2003E; color: #ffffff; } .ds-btn-primary:active { transform: translateY(0); } .ds-btn-primary:focus-visible { outline: 2px solid #F50057; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "Acción secundaria. Borde fucsia semitransparente, texto fucsia.",
+      "html": "<button class=\"ds-btn-outlined\">Ver competencias</button>",
+      "css": ".ds-btn-outlined { background: transparent; color: #F50057; padding: 10px 22px; border-radius: 12px; font-family: Inter, sans-serif; font-size: 0.875rem; font-weight: 600; text-transform: none; border: 1px solid rgba(245,0,87,0.5); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background-color 0.15s ease, border-color 0.15s ease; } .ds-btn-outlined:hover { background: rgba(245,0,87,0.06); border-color: rgba(245,0,87,0.8); } .ds-btn-outlined:focus-visible { outline: 2px solid #F50057; outline-offset: 2px; }"
+    },
+    {
+      "name": "Competition Card",
+      "kind": "card",
+      "refersTo": "card-base",
+      "description": "Tarjeta de competencia. Hover con glow fucsia y borde primario.",
+      "html": "<div class=\"ds-competition-card\"><div class=\"ds-cc-chips\"><span class=\"ds-chip-status warning\">En curso</span><span class=\"ds-chip-sport\">Fútbol</span></div><h3 class=\"ds-cc-title\">Liga Municipal de Cochabamba 2026</h3><p class=\"ds-cc-org\">Asociación Metropolitana</p><div class=\"ds-cc-meta\"><span>12 equipos</span><span>2 categorías</span><span>2026</span></div></div>",
+      "css": ".ds-competition-card { background: #ffffff; border-radius: 12px; border: 1px solid rgba(0,0,0,0.12); padding: 20px; cursor: pointer; display: flex; flex-direction: column; box-shadow: 0 2px 12px rgba(0,0,0,0.08); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; } .ds-competition-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(245,0,87,0.18); border-color: #F50057; } .ds-cc-chips { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; } .ds-chip-status { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 60px; font-family: Inter, sans-serif; font-size: 0.75rem; font-weight: 600; } .ds-chip-status.warning { background: #fff3e0; color: #e65100; } .ds-chip-status.success { background: #fce4ec; color: #880e4f; } .ds-chip-sport { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 60px; border: 1px solid rgba(0,0,0,0.2); font-family: Inter, sans-serif; font-size: 0.75rem; font-weight: 500; color: rgba(0,0,0,0.6); } .ds-cc-title { font-family: Inter, sans-serif; font-size: 1rem; font-weight: 700; line-height: 1.3; margin: 0 0 4px; min-height: 2.6em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } .ds-cc-org { font-family: Inter, sans-serif; font-size: 0.875rem; color: rgba(0,0,0,0.6); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-cc-meta { display: flex; gap: 16px; margin-top: auto; padding-top: 16px; font-family: Inter, sans-serif; font-size: 0.75rem; color: rgba(0,0,0,0.6); }"
+    },
+    {
+      "name": "Hero Chip",
+      "kind": "chip",
+      "refersTo": "chip-hero",
+      "description": "Chip de glass para el hero del portal. Funciona sobre cualquier color de fondo.",
+      "html": "<span class=\"ds-chip-hero\">En curso</span> <span class=\"ds-chip-hero\">Todos vs todos</span>",
+      "css": ".ds-chip-hero { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 60px; background: rgba(255,255,255,0.2); color: inherit; font-family: Inter, sans-serif; font-size: 0.8125rem; font-weight: 500; line-height: 1.5; white-space: nowrap; backdrop-filter: blur(4px); }"
+    },
+    {
+      "name": "Live Badge",
+      "kind": "chip",
+      "refersTo": "chip-hero",
+      "description": "Badge de transmisión en vivo. Rojo invariante, no sigue el tema del organizador ni el fucsia de la marca.",
+      "html": "<span class=\"ds-live-badge\"><span class=\"ds-live-dot\"></span>EN VIVO · 3 partidos</span>",
+      "css": ".ds-live-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 60px; background: #d32f2f; color: #ffffff; font-family: Inter, sans-serif; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.5px; white-space: nowrap; } .ds-live-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; animation: ds-live-pulse 1.5s ease infinite; } @keyframes ds-live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }"
+    },
+    {
+      "name": "Section Label",
+      "kind": "custom",
+      "refersTo": "label",
+      "description": "Etiqueta de sección. Fucsia, uppercase, tracking amplio.",
+      "html": "<span class=\"ds-section-label\">AHORA MISMO</span>",
+      "css": ".ds-section-label { display: block; font-family: Inter, sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #F50057; }"
+    },
+    {
+      "name": "Portal Navigation Tabs",
+      "kind": "nav",
+      "refersTo": "button-outlined",
+      "description": "Tabs de sección del portal público. Underline indicator en fucsia.",
+      "html": "<div class=\"ds-tab-nav\"><button class=\"ds-tab active\">Tabla de posiciones</button><button class=\"ds-tab\">Calendario</button><button class=\"ds-tab\">Líderes</button></div>",
+      "css": ".ds-tab-nav { display: flex; border-bottom: 1px solid rgba(0,0,0,0.12); overflow-x: auto; scrollbar-width: none; } .ds-tab-nav::-webkit-scrollbar { display: none; } .ds-tab { padding: 12px 16px; font-family: Inter, sans-serif; font-size: 0.875rem; font-weight: 600; color: rgba(0,0,0,0.6); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s ease; text-transform: none; white-space: nowrap; flex-shrink: 0; } .ds-tab:hover { color: #F50057; } .ds-tab.active { color: #F50057; border-bottom-color: #F50057; } .ds-tab:focus-visible { outline: 2px solid #F50057; outline-offset: -2px; }"
+    },
+    {
+      "name": "CTA Card",
+      "kind": "card",
+      "refersTo": "card-base",
+      "description": "Bloque de llamada a la acción del landing. Gradiente fucsia eléctrico a profundo.",
+      "html": "<div class=\"ds-cta-card\"><h2 class=\"ds-cta-title\">Todo listo para tu proxima temporada</h2><p class=\"ds-cta-body\">Inicia sesion y arma tu competencia en una tarde.</p><div class=\"ds-cta-actions\"><button class=\"ds-btn-inverted\">Iniciar sesion</button></div></div>",
+      "css": ".ds-cta-card { background: linear-gradient(135deg, #F50057 0%, #B2003E 60%, #80002A 100%); border-radius: 48px; color: #111315; padding: 48px; box-shadow: 0 20px 60px rgba(245,0,87,0.32); position: relative; overflow: hidden; text-align: center; } .ds-cta-title { font-family: Inter, sans-serif; font-size: clamp(1.4rem, 3vw, 1.9rem); font-weight: 800; margin: 0 0 12px; color: #ffffff; } .ds-cta-body { font-family: Inter, sans-serif; font-size: 1rem; color: rgba(255,255,255,0.9); margin: 0 0 28px; max-width: 520px; margin-left: auto; margin-right: auto; } .ds-cta-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; } .ds-btn-inverted { background: #ffffff; color: #F50057; padding: 12px 36px; border-radius: 12px; font-family: Inter, sans-serif; font-size: 0.875rem; font-weight: 700; border: none; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.18); transition: background-color 0.15s ease; } .ds-btn-inverted:hover { background: #f0f0f0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El Escenario Vacío",
+    "overview": "SportFrog es una plataforma, no un producto con una sola cara. La capa base — el fucsia eléctrico, Inter en todo, radio 12 — es el telón de fondo que cualquier organización puede pisar con su propio color, su propia tipografía de titulares, sus propias variantes de hero y tabla. El sistema recede. La competencia manda.\n\n#F50057 no es un fucsia institucional: es una declaración. En el mundo base sin personalización, le dice al visitante que SportFrog toma partido por la energía del deporte. Cuando un organizador elige su propio color, el fucsia cede sin resistir — pero la estructura, el piso de calidad, y el contraste garantizado permanecen invariantes.\n\nLos datos son siempre el protagonista. Los componentes no decoran, sostienen.",
+    "keyCharacteristics": [
+      "Sistema de dos capas: base SportFrog (fucsia) + personalización por competencia vía portal studio",
+      "Fucsia eléctrico #F50057 como color de marca — enérgico, inconfundible, deportivo",
+      "Acento lima #7CFC00 para urgencia sobre fondos oscuros; contraste intencional con el fucsia",
+      "Texto oscuro (#111315) sobre fucsia base — el sistema lo calcula automáticamente",
+      "Inter completo en la base; tipografías deportivas solo por elección explícita",
+      "Piso de calidad garantizado: contraste, legibilidad y spacing son invariantes"
+    ],
+    "rules": [
+      {
+        "name": "La Regla del Lima Escaso",
+        "body": "#7CFC00 aparece en ≤ 2 puntos por pantalla y solo sobre fondos oscuros o fucsia profundo. Sobre blanco, el contraste es insuficiente.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla de la Paleta del Organizador",
+        "body": "Cuando una competencia personaliza su color primario, ese color hereda todos los roles del fucsia en su portal. El fucsia de SportFrog se retira sin competir.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla del Texto Oscuro",
+        "body": "El texto sobre #F50057 es siempre #111315. No usar texto blanco sobre fucsia base. Sobre #B2003E (profundo), el blanco pasa y puede usarse.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla Inter Primero",
+        "body": "Una competencia sin fuente de titular elegida se ve con Inter en el hero también. Tipografías deportivas son upgrade explícito.",
+        "section": "typography"
+      },
+      {
+        "name": "La Regla del Peso 800",
+        "body": "Títulos de competencia y números de standings usan fontWeight 800 o 900. En una tabla: equipo en 700, puntos en 800.",
+        "section": "typography"
+      },
+      {
+        "name": "La Regla del Interruptor Tonal",
+        "body": "En claro: elevación por sombra. En oscuro: elevación por borde 1px solid rgba(255,255,255,0.08) y diferencia tonal. Nunca sombras sobre fondo oscuro.",
+        "section": "elevation"
+      },
+      {
+        "name": "La Regla del Fucsia en la Sombra",
+        "body": "Las sombras de hover de elementos interactivos tiñen el fucsia de la marca (rgba(245,0,87, ...)). Sombra neutra = reposo; sombra fucsia = respuesta.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do usar fontWeight 800 o 900 para nombres de competencia y números de standings.",
+      "Do usar texto #111315 sobre #F50057 base.",
+      "Do usar rgba(245,0,87, ...) en sombras de hover de elementos interactivos.",
+      "Do usar readableTextOn() de portal-theme.js para cualquier color personalizado.",
+      "Do usar Inter para todo en la base; tipografías deportivas solo por elección explícita.",
+      "Do escalar border-radius proporcionalmente al perfil del portal (sharp / soft / round).",
+      "Do reservar #7CFC00 para fondos oscuros o fucsia profundo únicamente."
+    ],
+    "donts": [
+      "Don't usar texto blanco sobre #F50057 base. Contraste insuficiente para texto normal.",
+      "Don't usar sombras en modo oscuro. Borde y diferencia tonal son la separación.",
+      "Don't usar textTransform: uppercase en botones. Desactivado globalmente.",
+      "Don't usar #7CFC00 sobre fondos claros.",
+      "Don't inventar un cuarto perfil de esquina fuera del portal studio.",
+      "Don't hardcodear el color del texto sobre el hero del portal.",
+      "Don't cambiar el rojo del Live Badge."
+    ]
+  }
+}

@@ -152,9 +152,9 @@ internal static class FixturePdf
                     Td(table, match.CategoryName);
                 }
 
-                Td(table, match.HomeTeamName);
+                Td(table, match.HomeTeamName ?? match.HomePlaceholder ?? "Por definir");
                 Td(table, Score(match));
-                Td(table, match.AwayTeamName);
+                Td(table, match.AwayTeamName ?? match.AwayPlaceholder ?? "Por definir");
                 Td(table, match.VenueName is { } venue ? $"{venue} — {match.SpaceName}" : "Sin definir");
                 Td(table, StatusLabels.GetValueOrDefault(match.Status, match.Status.ToString()));
             }

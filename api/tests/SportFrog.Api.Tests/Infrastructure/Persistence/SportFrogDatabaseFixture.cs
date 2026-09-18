@@ -79,6 +79,13 @@ public sealed class SportFrogDatabaseFixture : IAsyncLifetime
             .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
+        // SeedPlatformOwner (one of the migrations this run applies) reads
+        // these two from the process environment exactly like a real
+        // deployment would — there is no test-only branch in that migration,
+        // on purpose, so this proves the same code path production runs.
+        Environment.SetEnvironmentVariable("PLATFORM_ADMIN_EMAIL", "owner@frogtech-solutions.test");
+        Environment.SetEnvironmentVariable("PLATFORM_ADMIN_PASSWORD", "Test-Owner-Password-1!");
+
         await using (var migrationContext = new SportFrogDbContext(migrationOptions))
         {
             // The real migration path: InitialSchema + SeedCatalog, exactly

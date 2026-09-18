@@ -10,8 +10,11 @@ import { createTheme } from '@mui/material/styles';
    El backend guarda el tema en settings.public.theme y lo entrega ya
    resuelto en portal.theme (ver PortalTheme.Resolve en el dominio). Acá se
    traduce ese objeto a un tema de MUI. Las listas de abajo son las mismas
-   que valida PortalTheme.Fonts / CornerStyles / HeroStyles / ColorSchemes:
-   si se agrega una opción, va en los dos lados.
+   que valida PortalTheme.Fonts / CornerStyles / HeroStyles: si se agrega
+   una opción, va en los dos lados.
+
+   Un solo modo, claro, en todo el portal -- sin interruptor y sin seguir la
+   preferencia del sistema del visitante.
    =========================================================================== */
 
 /**
@@ -45,15 +48,86 @@ export const PORTAL_HERO_STYLES = [
   { value: 'image', label: 'Imagen de portada' },
 ];
 
-/** Si la página sigue la preferencia del visitante o queda fija. */
-export const PORTAL_COLOR_SCHEMES = [
-  { value: 'auto', label: 'Sigue al visitante' },
-  { value: 'light', label: 'Siempre claro' },
-  { value: 'dark', label: 'Siempre oscuro' },
+/**
+ * Cuánto aire tiene la página entera -- un solo multiplicador de espaciado
+ * (ver `spacingUnit` en `buildPortalTheme`), no un ajuste sección por
+ * sección. `normal` es 8, el mismo valor por defecto de MUI y el que ya usa
+ * el tema base (`theme/index.jsx`), así que "normal" es pixel-idéntico a
+ * como se veía el portal antes de que esto existiera.
+ */
+export const PORTAL_DENSITIES = [
+  { value: 'compact', label: 'Compacta', unit: 6 },
+  { value: 'normal', label: 'Normal', unit: 8 },
+  { value: 'spacious', label: 'Espaciosa', unit: 11 },
 ];
 
-/** El verde de la marca, al que se cae si un tema se abrió sin elegir color. */
-const BRAND_GREEN = '#1B8A2E';
+/**
+ * La textura detrás del texto de la portada. Un solo motivo (líneas
+ * diagonales), dos intensidades -- no una librería de patrones para elegir.
+ */
+export const PORTAL_DECORATIONS = [
+  { value: 'none', label: 'Ninguna' },
+  { value: 'subtle', label: 'Sutil' },
+  { value: 'bold', label: 'Marcada' },
+];
+
+/**
+ * Una figura de fondo detrás del contenido (tabla, calendario, fotos...) --
+ * nunca la portada, que ya tiene la suya (PORTAL_DECORATIONS). Cada valor
+ * nombra un archivo bajo /portal/ (ver content-figure.jsx), no un estilo
+ * aplicado a todos -- si se agrega uno nuevo, va en los dos lados: acá y en
+ * `PortalTheme.ContentFigures` del backend.
+ */
+export const PORTAL_CONTENT_FIGURES = [
+  { value: 'none', label: 'Ninguna' },
+  { value: 'wave', label: 'Olas' },
+  { value: 'curve-line', label: 'Líneas curvas' },
+  { value: 'shiny-overlay', label: 'Brillo diagonal' },
+  { value: 'colored-patterns', label: 'Patrones' },
+  { value: 'contour-line', label: 'Líneas de contorno' },
+];
+
+/** Cómo se ordena el texto de la portada. */
+export const PORTAL_HERO_LAYOUTS = [
+  { value: 'standard', label: 'Estándar (dos columnas)' },
+  { value: 'centered', label: 'Centrada' },
+];
+
+/**
+ * Qué composición de portada se dibuja -- no un restyling de la misma, un
+ * componente distinto (ver web/src/pages/public/hero/). `heroLayout` solo
+ * aplica a `standard`; las otras tres fijan su propia disposición.
+ */
+export const PORTAL_HERO_VARIANTS = [
+  { value: 'standard', label: 'Estándar' },
+  { value: 'scoreboard', label: 'Marcador' },
+  { value: 'editorial', label: 'Editorial' },
+  { value: 'live', label: 'En vivo' },
+];
+
+/** Qué disposición usa la tabla de posiciones -- ver web/src/pages/public/standings/. */
+export const PORTAL_STANDINGS_VARIANTS = [
+  { value: 'standard', label: 'Tabla' },
+  { value: 'cards', label: 'Tarjetas' },
+  { value: 'editorial', label: 'Ranking' },
+];
+
+/** Qué disposición usa la tarjeta de partido en el calendario -- ver web/src/pages/public/match-card/. */
+export const PORTAL_MATCH_CARD_VARIANTS = [
+  { value: 'standard', label: 'Estándar' },
+  { value: 'compact', label: 'Compacta' },
+  { value: 'matchup', label: 'Destacada' },
+];
+
+/** Qué disposición usa el cruce de la llave de eliminatoria -- ver web/src/pages/public/bracket/. */
+export const PORTAL_BRACKET_VARIANTS = [
+  { value: 'standard', label: 'Estándar' },
+  { value: 'compact', label: 'Compacta' },
+  { value: 'detailed', label: 'Detallada' },
+];
+
+/** El fucsia de la marca, al que se cae si un tema se abrió sin elegir color. */
+const BRAND_FUCSIA = '#F50057';
 
 /** El estado inicial del formulario del estudio: nada elegido, defaults en las listas. */
 export const DEFAULT_PORTAL_THEME = {
@@ -64,9 +138,19 @@ export const DEFAULT_PORTAL_THEME = {
   headingFont: 'inter',
   corners: 'soft',
   heroStyle: 'solid',
+  heroGradientTo: '',
   focusX: 50,
   focusY: 50,
-  colorScheme: 'auto',
+  density: 'normal',
+  decoration: 'none',
+  contentFigure: 'none',
+  contentFigureColor: '',
+  showLogoBackground: true,
+  heroLayout: 'standard',
+  heroVariant: 'standard',
+  standingsVariant: 'standard',
+  matchCardVariant: 'standard',
+  bracketVariant: 'standard',
 };
 
 /* --- Color: parseo y contraste (WCAG 2.1) --------------------------------- */
@@ -172,6 +256,7 @@ export const PORTAL_SECTIONS = [
   { key: 'classification', label: 'Clasificación' },
   { key: 'calendar', label: 'Calendario' },
   { key: 'gallery', label: 'Fotos' },
+  { key: 'bracket', label: 'Llave' },
 ];
 
 /**
@@ -204,18 +289,6 @@ export function resolvePortalSections(stored) {
   return resolved;
 }
 
-/* --- Modo claro / oscuro ---------------------------------------------------- */
-
-/**
- * El modo efectivo del portal: si la competencia lo fijó, ese; si no, el del
- * visitante (`visitorMode`, que viene de useColorMode).
- */
-export function resolvePortalMode(portal, visitorMode) {
-  const scheme = portal?.theme?.colorScheme || 'auto';
-  if (scheme === 'light' || scheme === 'dark') return scheme;
-  return visitorMode === 'dark' ? 'dark' : 'light';
-}
-
 /* --- Portada --------------------------------------------------------------- */
 
 /**
@@ -223,10 +296,13 @@ export function resolvePortalMode(portal, visitorMode) {
  * `bannerUrl` es el enlace ya firmado (portal.bannerUrl) o una data URL en el
  * estudio. `focusX`/`focusY` (0..100, default 50 = centrado) solo importan
  * con imagen: dicen qué parte de la foto no se pierde cuando el ancho de la
- * pantalla la recorta. Devuelve props sx: { backgroundColor, backgroundImage,
- * backgroundPosition }.
+ * pantalla la recorta. `gradientTo` solo importa con degradado: el segundo
+ * color elegido a mano, o -si no se eligió uno- el mismo principal oscurecido
+ * que este degradado dibujaba antes de que ese campo existiera (una
+ * competencia vieja con "gradient" guardado no cambia de look). Devuelve
+ * props sx: { backgroundColor, backgroundImage, backgroundPosition }.
  */
-export function heroBackground({ heroStyle, primary, bannerUrl, focusX, focusY }) {
+export function heroBackground({ heroStyle, primary, gradientTo, bannerUrl, focusX, focusY }) {
   const color = isHex(primary) ? primary : undefined;
   const wantsImage = heroStyle === 'image' && bannerUrl;
   const darkOverlay = 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.6))';
@@ -236,7 +312,8 @@ export function heroBackground({ heroStyle, primary, bannerUrl, focusX, focusY }
     return { backgroundColor: color, backgroundImage: `${darkOverlay}, url(${bannerUrl})`, backgroundPosition: position };
   }
   if (heroStyle === 'gradient' && color) {
-    return { backgroundColor: color, backgroundImage: `linear-gradient(135deg, ${color}, ${darken(color, 0.32)})`, backgroundPosition: undefined };
+    const to = isHex(gradientTo) ? gradientTo : darken(color, 0.32);
+    return { backgroundColor: color, backgroundImage: `linear-gradient(135deg, ${color}, ${to})`, backgroundPosition: undefined };
   }
   // solid, o image sin banner: cae en color plano.
   return { backgroundColor: color, backgroundImage: undefined, backgroundPosition: undefined };
@@ -249,23 +326,48 @@ function clampAxis(value) {
 
 /* --- El tema de MUI ------------------------------------------------------- */
 
-const DARK_SURFACE = '#111315';
-const DARK_PAPER = '#1A1D20';
-const LIGHT_SURFACE = '#f4f6f8';
-const LIGHT_PAPER = '#ffffff';
+/**
+ * Reconstruye `theme.spacing` para la densidad elegida. No se puede pasar
+ * `{ spacing: N }` a `createTheme(base, {...})`: `base` ya es un tema
+ * resuelto, así que `base.spacing` llega como función, no como número, y el
+ * merge final de createTheme no la reconstruye -- reemplazaría la función
+ * por el número crudo y cualquier `sx={{ p: 2 }}` del portal rompería
+ * (`theme.spacing is not a function`). Hay que asignar la función ya hecha.
+ *
+ * Mismo algoritmo que `createSpacing`/`createUnaryUnit` de `@mui/system`
+ * para una unidad numérica (verificado contra su código fuente): cada
+ * argumento se multiplica por la unidad y se formatea en `px`; sin
+ * argumentos equivale a factor 1; varios argumentos se unen con un espacio,
+ * igual que soporta `theme.spacing(1, 2)`. No se importa el paquete en sí
+ * -- no es una dependencia declarada de este proyecto (solo llega transitivo
+ * a través de @mui/material) y agregarla llevó a un symlink de pnpm roto en
+ * este entorno; el llamado real que hace este portal es siempre un único
+ * número positivo, así que reimplementar esa porción puntual es más simple
+ * y no depende de un paquete que no se puede resolver.
+ */
+function createPortalSpacing(unit) {
+  function spacing(...factors) {
+    const args = factors.length === 0 ? [1] : factors;
+    return args.map((factor) => (typeof factor === 'string' ? factor : `${unit * factor}px`)).join(' ');
+  }
+  spacing.mui = true;
+  return spacing;
+}
+
+const DEFAULT_SURFACE = '#f4f6f8';
+const DEFAULT_PAPER = '#ffffff';
 
 /**
- * Construye el tema del portal a partir del `portal` que entrega la API y el
- * modo del visitante. Si la competencia no personalizó nada (ni tema ni el
- * viejo accentColor) devuelve `base` intacto: el portal se ve exactamente
- * como antes de que esto existiera.
+ * Construye el tema del portal a partir del `portal` que entrega la API. Si
+ * la competencia no personalizó nada (ni tema ni el viejo accentColor)
+ * devuelve `base` intacto: el portal se ve exactamente como antes de que esto
+ * existiera.
  *
  * @param {object} args
  * @param {import('@mui/material/styles').Theme} args.base - el tema de la app
  * @param {object|null|undefined} args.portal - comp.portal de la API
- * @param {'light'|'dark'} args.visitorMode - useColorMode().mode
  */
-export function buildPortalTheme({ base, portal, visitorMode }) {
+export function buildPortalTheme({ base, portal }) {
   const theme = portal?.theme || null;
   const legacyAccent = portal?.accentColor || null;
   const primarySource = theme?.primary || legacyAccent;
@@ -275,16 +377,8 @@ export function buildPortalTheme({ base, portal, visitorMode }) {
   // la usó.
   if (!theme && !primarySource) return base;
 
-  const mode = resolvePortalMode(portal, visitorMode);
-  const dark = mode === 'dark';
-
-  const primary = isHex(primarySource) ? primarySource.trim() : base.palette.primary.main;
-  // En oscuro se aclara la marca para que pase el contraste sobre un fondo
-  // casi negro — el mismo ajuste que hace theme/index.jsx con su verde.
-  const primaryMain = dark ? lighten(primary, 0.26) : primary;
-
-  const secondarySource = isHex(theme?.secondary) ? theme.secondary.trim() : primary;
-  const secondaryMain = dark ? lighten(secondarySource, 0.26) : secondarySource;
+  const primaryMain = isHex(primarySource) ? primarySource.trim() : base.palette.primary.main;
+  const secondaryMain = isHex(theme?.secondary) ? theme.secondary.trim() : primaryMain;
 
   const contrastText = isHex(theme?.primaryContrast)
     ? theme.primaryContrast.trim()
@@ -294,10 +388,8 @@ export function buildPortalTheme({ base, portal, visitorMode }) {
   const headingFontValue = theme?.headingFont || 'inter';
   const headingStack = portalFontStack(headingFontValue);
 
-  const surface = isHex(theme?.surface)
-    ? theme.surface.trim()
-    : dark ? DARK_SURFACE : LIGHT_SURFACE;
-  const paper = dark ? DARK_PAPER : LIGHT_PAPER;
+  const surface = isHex(theme?.surface) ? theme.surface.trim() : DEFAULT_SURFACE;
+  const paper = DEFAULT_PAPER;
 
   // Los titulares. Solo se tocan si se eligió una fuente distinta a la del
   // cuerpo — así una competencia sin tipografía propia conserva la jerarquía
@@ -310,68 +402,36 @@ export function buildPortalTheme({ base, portal, visitorMode }) {
           return acc;
         }, {});
 
-  // Cuando la competencia fija un modo distinto al del visitante, mezclar
-  // { mode } sobre `base` no alcanza: createPalette no pisa el texto y los
-  // divisores que ya venían del otro modo. Se pasan completos.
-  const surfaces = dark
-    ? {
-        text: { primary: '#F4F6F8', secondary: 'rgba(244,246,248,0.7)', disabled: 'rgba(244,246,248,0.4)' },
-        divider: 'rgba(255,255,255,0.12)',
-        background: { default: surface, paper },
-        action: {
-          active: 'rgba(255,255,255,0.7)',
-          hover: 'rgba(255,255,255,0.08)',
-          selected: 'rgba(255,255,255,0.16)',
-          disabled: 'rgba(255,255,255,0.3)',
-          disabledBackground: 'rgba(255,255,255,0.12)',
-        },
-      }
-    : {
-        text: { primary: 'rgba(0,0,0,0.87)', secondary: 'rgba(0,0,0,0.6)', disabled: 'rgba(0,0,0,0.38)' },
-        divider: 'rgba(0,0,0,0.12)',
-        background: { default: surface, paper },
-      };
-
-  // El tema base (web/src/theme/index.jsx) hornea en MuiCard y MuiDataGrid
-  // colores que dependen del modo, decididos cuando se creó — el modo del
-  // panel. Si el portal fija el modo contrario, esos overrides quedan al
-  // revés (una grilla clara con texto claro encima). Se vuelven a declarar
-  // acá para el modo ya resuelto.
   const componentOverrides = {
     MuiCard: {
       styleOverrides: {
-        root: {
-          boxShadow: dark ? 'none' : '0 2px 12px rgba(0,0,0,0.08)',
-          border: dark ? '1px solid rgba(255,255,255,0.08)' : undefined,
-        },
+        root: { boxShadow: '0 2px 12px rgba(0,0,0,0.08)' },
       },
     },
     MuiDataGrid: {
       styleOverrides: {
         root: {
-          border: dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
+          border: '1px solid rgba(0,0,0,0.08)',
           backgroundColor: paper,
-          boxShadow: dark ? 'none' : '0 2px 12px rgba(0,0,0,0.06)',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
         },
-        columnHeaders: {
-          backgroundColor: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-        },
+        columnHeaders: { backgroundColor: 'rgba(0,0,0,0.02)' },
       },
     },
   };
 
-  // light/dark de primary/secondary van explícitos: el merge sobre `base`
-  // conserva los tonos que MUI ya calculó para el verde, y el hover de un
-  // botón (primary.dark) saldría verde sobre un primary azul. Mismo
-  // tonalOffset 0.2 que usa MUI por defecto. Se mezcla sobre `base` para
-  // heredar su tipografía, sus breakpoints y sus overrides de componentes;
-  // `components` es un tercer argumento para que createTheme lo funda slot a
-  // slot con los del panel.
-  return createTheme(
+  // primary/secondary van explícitos: el merge sobre `base` conserva los
+  // tonos que MUI ya calculó para el verde, y el hover de un botón
+  // (primary.dark) saldría verde sobre un primary azul. Mismo tonalOffset
+  // 0.2 que usa MUI por defecto. Se mezcla sobre `base` para heredar su
+  // tipografía, sus breakpoints y sus overrides de componentes; `components`
+  // es un tercer argumento para que createTheme lo funda slot a slot con los
+  // del panel.
+  const result = createTheme(
     base,
     {
       palette: {
-        mode,
+        mode: 'light',
         primary: {
           main: primaryMain,
           light: lighten(primaryMain, 0.2),
@@ -384,11 +444,20 @@ export function buildPortalTheme({ base, portal, visitorMode }) {
           dark: darken(secondaryMain, 0.2),
           contrastText: readableTextOn(secondaryMain),
         },
-        ...surfaces,
+        text: { primary: 'rgba(0,0,0,0.87)', secondary: 'rgba(0,0,0,0.6)', disabled: 'rgba(0,0,0,0.38)' },
+        divider: 'rgba(0,0,0,0.12)',
+        background: { default: surface, paper },
       },
       shape: { borderRadius: cornerRadius },
       typography: { ...headingVariants },
     },
     { components: componentOverrides },
   );
+
+  // Ver createPortalSpacing más arriba para el porqué de reasignar esto
+  // después de crear el tema en vez de pasarlo como opción.
+  const density = PORTAL_DENSITIES.find((d) => d.value === (theme?.density || 'normal')) || PORTAL_DENSITIES[1];
+  result.spacing = createPortalSpacing(density.unit);
+
+  return result;
 }

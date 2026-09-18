@@ -60,7 +60,8 @@ public sealed class PerformanceRescheduleNotificationJob(
 
         try
         {
-            await email.SendAsync(notice.ClubEmail, $"Reprogramación: {notice.TeamName}", Body(notice), cancellationToken);
+            await email.SendAsync(
+                notice.ClubEmail, $"Reprogramación: {notice.TeamName}", Body(notice), HtmlBody(notice), cancellationToken);
         }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
@@ -105,5 +106,33 @@ public sealed class PerformanceRescheduleNotificationJob(
             $"Nuevo día: {when}{turn}\n" +
             $"Nueva sede: {where}\n\n" +
             "Este es un aviso automático de SportFrog.";
+    }
+
+    /// <summary>
+    /// La misma información que <see cref="Body"/>, pero con la línea gráfica
+    /// del sitio — ver <see cref="EmailTemplate"/>.
+    /// </summary>
+    internal static string HtmlBody(Notice notice)
+    {
+        var when = notice.ScheduledOn is { } day ? FormatDay(day) : "Un día a confirmar";
+        var where = notice.VenueName is not null
+            ? $"{notice.VenueName} — {notice.SpaceName}"
+            : "Una sede a confirmar";
+
+        var filas = new List<(string, string)>
+        {
+            ("Nuevo día", when),
+            ("Nueva sede", where),
+        };
+
+        if (notice.OrderNumber is { } order)
+        {
+            filas.Add(("Turno", order.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        return EmailTemplate.Render(
+            "Reprogramación de actuación",
+            $"Se reprogramó la actuación de {notice.TeamName}.",
+            filas);
     }
 }

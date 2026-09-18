@@ -26,7 +26,7 @@ public sealed class FixturePdfTests
         string? space = "Cancha 1") =>
         new(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), category,
-            Guid.NewGuid(), home, Guid.NewGuid(), away,
+            Guid.NewGuid(), home, null, Guid.NewGuid(), away, null,
             venue is null ? null : Guid.NewGuid(), venue, space,
             at, 1, null, status, null, null, homeTotal, awayTotal, null, null, null, null, null);
 

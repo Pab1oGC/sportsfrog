@@ -273,4 +273,15 @@ public sealed class JwtAccessTokenIssuerTests
 
         JwtAccessTokenIssuer.FindRole(principal, Guid.NewGuid()).Should().BeNull();
     }
+
+    [Fact]
+    public void CurrentUserId_ReturnsTheSubjectTheTokenWasIssuedFor()
+    {
+        var userId = Guid.NewGuid();
+        var token = _issuer.IssueForOrganizations(userId, [Membership(MembershipRole.Viewer)]);
+
+        var principal = _issuer.Validate(token);
+
+        JwtAccessTokenIssuer.CurrentUserId(principal).Should().Be(userId);
+    }
 }

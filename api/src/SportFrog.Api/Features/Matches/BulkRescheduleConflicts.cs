@@ -14,9 +14,14 @@ namespace SportFrog.Api.Features.Matches;
 /// </param>
 internal sealed record ScheduledSlot(
     Guid MatchId,
-    Guid HomeTeamId,
+
+    /// <summary>
+    /// Null for a knockout slot drawn in full whose side is still "whoever
+    /// wins another match" — nobody to collide over yet.
+    /// </summary>
+    Guid? HomeTeamId,
     string HomeTeamName,
-    Guid AwayTeamId,
+    Guid? AwayTeamId,
     string AwayTeamName,
     Guid? VenueSpaceId,
     DateTimeOffset? ScheduledAt,
@@ -55,6 +60,8 @@ internal static class BulkRescheduleConflicts
     {
         var violations = new Dictionary<int, List<string>>();
 
+        static bool Shares(Guid? a, Guid? b) => a is not null && a == b;
+
         void Add(int index, string message)
         {
             if (!violations.TryGetValue(index, out var messages))
@@ -91,8 +98,12 @@ internal static class BulkRescheduleConflicts
                     Add(index, $"Esa cancha quedaría con {other.HomeTeamName} vs {other.AwayTeamName} a la misma hora.");
                 }
 
-                if (other.HomeTeamId == mine.HomeTeamId || other.AwayTeamId == mine.HomeTeamId
-                    || other.HomeTeamId == mine.AwayTeamId || other.AwayTeamId == mine.AwayTeamId)
+                // Guarded by "not null" on the side compared, not just
+                // "equal": two knockout slots that both have no team yet
+                // would otherwise compare null == null and report a team
+                // playing itself twice, when neither names one at all.
+                if (Shares(other.HomeTeamId, mine.HomeTeamId) || Shares(other.AwayTeamId, mine.HomeTeamId)
+                    || Shares(other.HomeTeamId, mine.AwayTeamId) || Shares(other.AwayTeamId, mine.AwayTeamId))
                 {
                     Add(index, $"Un equipo quedaría jugando dos partidos a la vez: contra {other.HomeTeamName} vs {other.AwayTeamName}.");
                 }

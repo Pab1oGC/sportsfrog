@@ -3,10 +3,19 @@ using SportFrog.Domain.Competitions;
 namespace SportFrog.Api.Features.Draw;
 
 /// <summary>
-/// A knockout can only draw its first round, because who plays the second is
-/// not known until the first is played.
+/// A pure knockout — no group stage ahead of it — whose entrants are all
+/// known the moment it is drawn.
 /// </summary>
-internal sealed class KnockoutCalendarDraw : ICalendarDraw
+/// <remarks>
+/// <see cref="Draw"/> still answers "just round one", the question every
+/// other format's own <see cref="ICalendarDraw.Draw"/> answers, kept for
+/// whatever still calls it that way. <see cref="DrawFull"/> is what
+/// <see cref="DrawCalendar"/> actually uses for this format: every round
+/// down to the final, computed by <see cref="Bracket.FullDraw"/> — the one
+/// place either method reads the byes and pairings from, so neither can ever
+/// disagree with the other about round one.
+/// </remarks>
+internal sealed class KnockoutCalendarDraw : ICalendarDraw, IPlansEntireBracket
 {
     public string Format => CompetitionFormat.Knockout;
 
@@ -25,8 +34,16 @@ internal sealed class KnockoutCalendarDraw : ICalendarDraw
     public (IReadOnlyList<DrawnMatch> Matches, string? Phase, int Byes) Draw(
         IReadOnlyList<DrawnTeam> teams, int legs)
     {
-        var (matches, byes) = Bracket.FirstRound([.. teams.Select(team => team.Id)]);
+        var firstRound = DrawFull(teams).Where(match => match.Round == 1).ToList();
+        var byeCount = teams.Count - firstRound.Count * 2;
 
-        return (matches, Bracket.Phase(matches.Count, 1), byes.Count);
+        var matches = firstRound
+            .Select(match => new DrawnMatch(1, match.Home.TeamId!.Value, match.Away.TeamId!.Value))
+            .ToList();
+
+        return (matches, firstRound.Count > 0 ? firstRound[0].Phase : Bracket.Phase(0, 1), byeCount);
     }
+
+    public IReadOnlyList<PlannedMatch> DrawFull(IReadOnlyList<DrawnTeam> teams) =>
+        Bracket.FullDraw([.. teams.Select(team => team.Id)]);
 }

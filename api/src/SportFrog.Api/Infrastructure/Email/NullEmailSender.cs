@@ -13,7 +13,7 @@ namespace SportFrog.Api.Infrastructure.Email;
 /// </remarks>
 internal sealed class NullEmailSender(ILogger<NullEmailSender> logger) : IEmailSender
 {
-    public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
+    public Task SendAsync(string to, string subject, string body, string? htmlBody, CancellationToken cancellationToken)
     {
         logger.LogInformation(
             "SMTP is not configured; not sending to {To}: {Subject}", to, subject);
