@@ -5,7 +5,8 @@ import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { Header } from "./header";
 import { NavVertical } from "./nav-vertical";
-import { navData } from "./nav-data";
+import { getNavData } from "./nav-data";
+import { useAuthContext } from "src/auth/hooks";
 
 // Discreta a propósito: 8px y 240ms es la diferencia entre "la página cambió
 // sola" y "algo se está animando". Se apaga entera con prefers-reduced-motion.
@@ -24,6 +25,11 @@ export function DashboardLayout({ children }) {
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user } = useAuthContext();
+
+  const isPlatformAdmin = Boolean(
+    user?.organizations?.some((org) => org.slug === "frogtech-solutions")
+  );
 
   // Abajo de "md" el drawer no puede ser permanente: no hay ancho que
   // restarle al contenido sin dejarlo inservible. Ahi el boton de hamburguesa
@@ -33,7 +39,7 @@ export function DashboardLayout({ children }) {
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
       <NavVertical
-        data={navData}
+        data={getNavData(isPlatformAdmin)}
         collapsed={isDesktop && collapsed}
         isDesktop={isDesktop}
         mobileOpen={mobileOpen}

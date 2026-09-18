@@ -29,6 +29,7 @@ var TemplateDesignerPage = lazy(function() { return import("src/pages/template-d
 var DocumentsPage = lazy(function() { return import("src/pages/documents-page"); });
 var MembersPage = lazy(function() { return import("src/pages/members-page"); });
 var OrganizationPage = lazy(function() { return import("src/pages/organization-page"); });
+var RegisterOrganizationPage = lazy(function() { return import("src/pages/register-organization-page"); });
 var PublicPortalPage = lazy(function() { return import("src/pages/public/public-portal"); });
 var PublicCompetitionPage = lazy(function() { return import("src/pages/public/public-competition"); });
 
@@ -80,6 +81,7 @@ export var routesSection = [
       { path: "documents", element: <LazyPage Component={DocumentsPage} /> },
       { path: "members", element: <LazyPage Component={MembersPage} /> },
       { path: "organization", element: <LazyPage Component={OrganizationPage} /> },
+      { path: "register-organization", element: <LazyPage Component={RegisterOrganizationPage} /> },
     ],
   },
 

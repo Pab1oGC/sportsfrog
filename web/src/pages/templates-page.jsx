@@ -18,15 +18,23 @@ import Tooltip from '@mui/material/Tooltip';
 import Alert from '@mui/material/Alert';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
-import { endpoints } from 'src/lib/axios';
+import { endpoints, default as axios } from 'src/lib/axios';
 import { useConfirm } from 'src/components/confirm-dialog';
 
 var KINDS = ['credential', 'certificate'];
 var KIND_LABELS = { credential: 'Credencial', certificate: 'Certificado' };
-var PAGE_SIZES = ['letter', 'a4', 'half-letter', 'id-card'];
+
+var PAGE_SIZES = [
+  { code: 'credential', label: 'Credencial horizontal (85.6 × 54 mm)', ratio: 85.6 / 54 },
+  { code: 'credential_portrait', label: 'Credencial vertical (54 × 85.6 mm)', ratio: 54 / 85.6 },
+  { code: 'a4', label: 'A4 vertical (210 × 297 mm)', ratio: 210 / 297 },
+  { code: 'a4_landscape', label: 'A4 horizontal (297 × 210 mm)', ratio: 297 / 210 },
+  { code: 'a5', label: 'A5 horizontal (210 × 148 mm)', ratio: 210 / 148 },
+  { code: 'letter', label: 'Carta vertical (216 × 279 mm)', ratio: 216 / 279 },
+];
 
 function emptyForm() {
-  return { name: '', kind: 'credential', pageSize: 'letter', isDefault: false };
+  return { name: '', kind: 'credential', pageSize: 'credential', isDefault: false, layout: null };
 }
 
 export default function TemplatesPage() {
@@ -38,10 +46,24 @@ export default function TemplatesPage() {
   var [form, setForm] = useState(emptyForm());
   var [error, setError] = useState('');
 
-  var handleOpen = function(row) {
+  var handleOpen = async function(row) {
     if (row) {
       setEditId(row.id);
-      setForm({ name: row.name || '', kind: row.kind || 'credential', pageSize: row.pageSize || 'letter', isDefault: row.isDefault || false });
+      setForm({
+        name: row.name || '',
+        kind: row.kind || 'credential',
+        pageSize: row.pageSize || 'credential',
+        isDefault: row.isDefault || false,
+        layout: null,
+      });
+      try {
+        var detail = await axios.get(endpoints.template(row.id)).then(function(r) { return r.data; });
+        if (detail && detail.layout) {
+          setForm(function(prev) { return Object.assign({}, prev, { layout: detail.layout }); });
+        }
+      } catch (e) {
+        // Ignorar si falla precarga
+      }
     } else {
       setEditId(null);
       setForm(emptyForm());
@@ -53,13 +75,26 @@ export default function TemplatesPage() {
   var handleSave = async function() {
     setError('');
     try {
+      var selectedSize = PAGE_SIZES.find(function(s) { return s.code === form.pageSize; });
+      var defaultRatio = selectedSize ? selectedSize.ratio : 1.585;
+
+      var layout = form.layout || {
+        front: {
+          backgroundKey: null,
+          aspectRatio: Number(defaultRatio.toFixed(4)),
+          fields: [],
+        },
+        back: null,
+      };
+
       var body = {
         name: form.name,
         kind: form.kind,
         pageSize: form.pageSize,
         isDefault: form.isDefault,
-        layout: { fields: [] }
+        layout: layout,
       };
+
       if (editId) {
         await apiPut(endpoints.template(editId), body);
       } else {
@@ -79,7 +114,7 @@ export default function TemplatesPage() {
   };
 
   var handleDelete = async function(id) {
-    var ok = await confirm('Eliminar plantilla?', { confirmLabel: 'Eliminar', danger: true });
+    var ok = await confirm('¿Eliminar plantilla?', { confirmLabel: 'Eliminar', danger: true });
     if (ok) {
       await apiDelete(endpoints.template(id));
       mutate();
@@ -96,26 +131,27 @@ export default function TemplatesPage() {
       </Box>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 3 }}>
         {(data || []).map(function(t) {
+          var sizeObj = PAGE_SIZES.find(function(s) { return s.code === t.pageSize; });
           return (
             <Card key={t.id} variant="outlined">
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                   <Typography variant="subtitle1" fontWeight={600}>{t.name}</Typography>
-                  {t.isDefault && <Chip label="Default" color="primary" size="small" />}
+                  {t.isDefault && <Chip label="Por defecto" color="primary" size="small" />}
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
                   <Chip label={KIND_LABELS[t.kind] || t.kind} size="small" variant="outlined" />
                   <Chip label={'v' + t.version} size="small" variant="outlined" />
-                  <Chip label={t.pageSize || 'letter'} size="small" variant="outlined" />
+                  <Chip label={(sizeObj && sizeObj.label) || t.pageSize} size="small" variant="outlined" />
                 </Box>
               </CardContent>
               <CardActions sx={{ justifyContent: 'flex-end', pt: 0 }}>
-                <Tooltip title="Disenar">
+                <Tooltip title="Diseñar">
                   <IconButton size="small" onClick={function() { navigate('/dashboard/templates/' + t.id + '/design'); }}>
                     <Iconify icon="eva:brush-outline" width={18} sx={{ color: 'primary.main' }} />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Editar">
+                <Tooltip title="Editar metadatos">
                   <IconButton size="small" onClick={function() { handleOpen(t); }}>
                     <Iconify icon="eva:edit-fill" width={18} />
                   </IconButton>
@@ -143,13 +179,13 @@ export default function TemplatesPage() {
           <TextField select label="Tipo" value={form.kind} onChange={function(e) { setForm(Object.assign({}, form, { kind: e.target.value })); }} fullWidth>
             {KINDS.map(function(k) { return <MenuItem key={k} value={k}>{KIND_LABELS[k]}</MenuItem>; })}
           </TextField>
-          <TextField select label="Tamano de papel" value={form.pageSize} onChange={function(e) { setForm(Object.assign({}, form, { pageSize: e.target.value })); }} fullWidth>
-            {PAGE_SIZES.map(function(s) { return <MenuItem key={s} value={s}>{s}</MenuItem>; })}
+          <TextField select label="Tamaño de papel" value={form.pageSize} onChange={function(e) { setForm(Object.assign({}, form, { pageSize: e.target.value })); }} fullWidth>
+            {PAGE_SIZES.map(function(s) { return <MenuItem key={s.code} value={s.code}>{s.label}</MenuItem>; })}
           </TextField>
         </DialogContent>
         <DialogActions>
           <Button onClick={function() { setOpen(false); }}>Cancelar</Button>
-          <Button variant="contained" onClick={handleSave}>Crear plantilla</Button>
+          <Button variant="contained" onClick={handleSave}>{editId ? 'Guardar' : 'Crear plantilla'}</Button>
         </DialogActions>
       </Dialog>
     </Box>
