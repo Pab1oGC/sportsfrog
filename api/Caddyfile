@@ -9,7 +9,8 @@
 # (nunca por WEB_PORT, que sigue existiendo aparte solo para pegarle
 # directo por IP sin dominio, a mano, mientras se prueba).
 {
-	email {$CADDY_EMAIL:admin@example.com}
+	# Definir CADDY_EMAIL en .env activa las notificaciones.
+	email {$CADDY_EMAIL}
 }
 
 {$DOMAIN} {
