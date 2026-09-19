@@ -1,4 +1,4 @@
-import { PORTAL_SECTIONS, resolvePortalSections } from 'src/lib/portal-theme';
+import { PORTAL_SECTIONS, resolvePortalSections, isHex } from 'src/lib/portal-theme';
 
 /* ===========================================================================
    La rebanada "portal" del formulario de una competencia: cómo se lee de la
@@ -124,7 +124,7 @@ export function buildPortalPayload(f) {
     showGallery: f.showGallery,
     bannerKey: f.bannerKey || null,
     logoKey: f.logoKey || null,
-    accentColor: f.accentColor || null,
+    accentColor: f.accentColor && isHex(f.accentColor) ? f.accentColor : null,
     theme: portalThemePayload(f),
     description: f.description || null,
     instagram: f.instagram || null,
@@ -171,34 +171,52 @@ function sectionOrderPayload(sections) {
 function portalThemePayload(f) {
   const t = f.theme;
   if (!t) return null;
-  // El estilo de portada por defecto depende de si hay banner: si el valor
-  // del formulario coincide con ese default, no se guarda (así el tema queda
-  // null cuando no se personalizó nada de verdad).
   const defaultHero = f.bannerKey ? 'image' : 'solid';
-  const body = {
-    primary: t.primary || null,
-    primaryContrast: t.primaryContrast || null,
-    secondary: t.secondary || null,
-    surface: t.surface || null,
+
+  const hasCustomization =
+    (t.primary && isHex(t.primary)) ||
+    (t.primaryContrast && isHex(t.primaryContrast)) ||
+    (t.secondary && isHex(t.secondary)) ||
+    (t.surface && isHex(t.surface)) ||
+    (t.headingFont && t.headingFont !== 'inter') ||
+    (t.corners && t.corners !== 'soft') ||
+    (t.heroStyle && t.heroStyle !== defaultHero) ||
+    (t.heroGradientTo && isHex(t.heroGradientTo)) ||
+    (t.focusX != null && t.focusX !== 50) ||
+    (t.focusY != null && t.focusY !== 50) ||
+    (t.density && t.density !== 'normal') ||
+    (t.decoration && t.decoration !== 'none') ||
+    (t.contentFigure && t.contentFigure !== 'none') ||
+    (t.contentFigureColor && isHex(t.contentFigureColor)) ||
+    t.showLogoBackground === false ||
+    (t.heroLayout && t.heroLayout !== 'standard') ||
+    (t.heroVariant && t.heroVariant !== 'standard') ||
+    (t.standingsVariant && t.standingsVariant !== 'standard') ||
+    (t.matchCardVariant && t.matchCardVariant !== 'standard') ||
+    (t.bracketVariant && t.bracketVariant !== 'standard');
+
+  if (!hasCustomization) return null;
+
+  return {
+    primary: t.primary && isHex(t.primary) ? t.primary : null,
+    primaryContrast: t.primaryContrast && isHex(t.primaryContrast) ? t.primaryContrast : null,
+    secondary: t.secondary && isHex(t.secondary) ? t.secondary : null,
+    surface: t.surface && isHex(t.surface) ? t.surface : null,
     headingFont: t.headingFont && t.headingFont !== 'inter' ? t.headingFont : null,
     corners: t.corners && t.corners !== 'soft' ? t.corners : null,
     heroStyle: t.heroStyle && t.heroStyle !== defaultHero ? t.heroStyle : null,
-    heroGradientTo: t.heroGradientTo || null,
-    focusX: t.focusX != null && t.focusX !== 50 ? t.focusX : null,
-    focusY: t.focusY != null && t.focusY !== 50 ? t.focusY : null,
+    heroGradientTo: t.heroGradientTo && isHex(t.heroGradientTo) ? t.heroGradientTo : null,
+    focusX: t.focusX != null && t.focusX !== 50 ? Number(t.focusX) : null,
+    focusY: t.focusY != null && t.focusY !== 50 ? Number(t.focusY) : null,
     density: t.density && t.density !== 'normal' ? t.density : null,
     decoration: t.decoration && t.decoration !== 'none' ? t.decoration : null,
     contentFigure: t.contentFigure && t.contentFigure !== 'none' ? t.contentFigure : null,
-    contentFigureColor: t.contentFigureColor || null,
-    // false explícito solo cuando se apagó -- true es el default, y un
-    // false acá no debe ser indistinguible de "nunca se tocó" (Object.values
-    // más abajo lo trataría como "nada personalizado" si fuera null).
-    showLogoBackground: t.showLogoBackground === false ? false : null,
+    contentFigureColor: t.contentFigureColor && isHex(t.contentFigureColor) ? t.contentFigureColor : null,
+    showLogoBackground: Boolean(t.showLogoBackground !== false),
     heroLayout: t.heroLayout && t.heroLayout !== 'standard' ? t.heroLayout : null,
     heroVariant: t.heroVariant && t.heroVariant !== 'standard' ? t.heroVariant : null,
     standingsVariant: t.standingsVariant && t.standingsVariant !== 'standard' ? t.standingsVariant : null,
     matchCardVariant: t.matchCardVariant && t.matchCardVariant !== 'standard' ? t.matchCardVariant : null,
     bracketVariant: t.bracketVariant && t.bracketVariant !== 'standard' ? t.bracketVariant : null,
   };
-  return Object.values(body).some((v) => v !== null) ? body : null;
 }

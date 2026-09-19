@@ -15,6 +15,7 @@ import Tab from '@mui/material/Tab';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import CircularProgress from '@mui/material/CircularProgress';
+import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
@@ -437,11 +438,15 @@ export default function TemplateDesignerPage() {
         name: nombre,
         pageSize: tamano,
         isDefault: porDefecto,
-        layout: { front: limpiarCara(caras.front), back: limpiarCara(caras.back) }
+        layout: {
+          front: limpiarCara(caras.front),
+          back: caras.back ? limpiarCara(caras.back) : null
+        }
       });
+      toast.success('Diseño guardado exitosamente.');
       navigate('/dashboard/templates');
     } catch (err) {
-      setError(err.message || 'No se pudo guardar el diseno.');
+      setError(err.message || 'No se pudo guardar el diseño.');
     } finally {
       setGuardando(false);
     }
