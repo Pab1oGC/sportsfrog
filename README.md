@@ -103,12 +103,60 @@ Hay un perfil de Compose que levanta la API en un contenedor, migraciones
 incluidas, para quien solo quiere verla andar sin SDK ni IDE. Está documentado
 en [`api/README.md`](api/README.md).
 
-### Desplegarlo, todo dockerizado
+### Desplegarlo a producción, con dominio propio
 
-Otro perfil de Compose levanta el sitio completo — Postgres, MinIO, la API y
-el frontend detrás de nginx — para un despliegue real en vez de una prueba
-local. También está en [`api/README.md`](api/README.md), con el paso que hay
-que hacer antes de exponerlo con un túnel o un dominio propio.
+Otro perfil de Compose levanta el sitio completo: Postgres, MinIO, la API, el
+frontend detrás de nginx, y **Caddy** de cara a internet.
+**Antes de arrancar:**
+
+- Un registro DNS (A o AAAA) de tu dominio apuntando a la IP pública del
+  servidor. Caddy pide el certificado la primera vez que alguien entra por
+  ese dominio, y falla si el DNS todavía no resuelve.
+- Los puertos **80 y 443** abiertos hacia afuera (80 hace falta también,
+  aunque después todo se redirija a https: es el que usa el challenge inicial
+  de Let's Encrypt).
+
+**Pasos:**
+
+```bash
+cd api
+cp .env.example .env
+```
+
+Editar `.env`:
+
+| Variable | Valor |
+|---|---|
+| Todas las que dicen `change-this-password` | Contraseñas reales — `POSTGRES_SUPERUSER_PASSWORD`, `SPORTFROG_OWNER_PASSWORD`, `SPORTFROG_APP_PASSWORD`, `SPORTFROG_PUBLIC_PASSWORD`, `MINIO_ROOT_PASSWORD`, y las mismas repetidas dentro de cada `ConnectionStrings__*` y `SPORTFROG_MIGRATIONS_CONNECTION` |
+| `ASPNETCORE_ENVIRONMENT` | `Production` |
+| `Authentication__Jwt__SigningKey` | Un secreto propio de al menos 32 bytes |
+| `DOMAIN` | Tu dominio, el mismo que apunta por DNS al servidor |
+| `CADDY_EMAIL` | Tu email, para que Let's Encrypt avise si un certificado no se puede renovar (opcional, pero recomendado) |
+| `STORAGE_ENDPOINT` | `https://` + tu dominio |
+| `VERIFICATION_BASE_URL` | `https://` + tu dominio + `/verificar` |
+| `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | La primera cuenta habilitada para registrar organizaciones — la migración inicial la crea a partir de estas dos, y no arranca sin ellas |
+
+`STORAGE_ENDPOINT` y `VERIFICATION_BASE_URL` importan porque cada link a una
+foto, un logo, una credencial, cada certificado, se firma contra
+ese valor: dejarlos vacíos o apuntando a `localhost` hace que todo eso se vea
+roto para cualquiera que no sea el propio servidor.
+
+```bash
+docker compose --profile production up -d --build
+```
+
+Esto encadena: Postgres y MinIO arrancan, `migrate` aplica el esquema y
+termina, recién entonces la API arranca, y Caddy queda escuchando 80/443 y
+pide el certificado en cuanto llega el primer pedido por tu dominio.
+
+```bash
+docker compose ps
+```
+
+Se esperan `sportfrog-postgres` y `sportfrog-minio` en `healthy`,
+`sportfrog-migrate` en `Exited (0)` (corrió una vez y terminó), y
+`sportfrog-api`, `sportfrog-web`, `sportfrog-caddy` corriendo. 
+
 
 ---
 
