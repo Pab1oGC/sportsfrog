@@ -17,6 +17,11 @@ axiosInstance.interceptors.request.use((config) => {
     if (orgs?.[0]?.id) config.headers['X-Organization-Id'] = orgs[0].id;
   } catch { /* ignore */ }
 
+  // Cuando se envía FormData, dejar que el navegador/axios calcule el Content-Type multipart con su boundary
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   return config;
 });
 
