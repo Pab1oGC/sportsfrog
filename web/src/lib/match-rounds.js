@@ -13,6 +13,14 @@ import { PENDIENTE } from 'src/lib/match-status';
  * terminada, enCurso }. `clave` empieza con "f:" para un grupo de fase
  * (eliminatoria) y con "j:"/"sin" para una jornada de grupos -- así se
  * filtran los de fase sin tener que volver a mirar cada partido.
+ *
+ * Un grupo de fase lleva también la ronda en su clave (`f:<ronda>:<fase>`),
+ * no solo el nombre de la fase: dos rondas de una misma llave nunca deberían
+ * compartir nombre, pero si alguna vez lo hacen -- un cruce con byes puede
+ * dejar la ronda uno con tan pocos partidos reales como una semifinal --
+ * esto evita mezclar sus partidos en una sola columna. Verían el mismo
+ * título dos veces antes que un cruce ya definido revuelto con uno todavía
+ * por confirmar.
  */
 export function agruparPorRonda(fixtures) {
   // La fase manda antes que la ronda: una categoria que paso de grupos a
@@ -37,7 +45,7 @@ export function agruparPorRonda(fixtures) {
   var grupos = [];
   var porClave = {};
   orden.forEach(function(m) {
-    var clave = m.phase ? 'f:' + m.phase : (m.roundNumber != null ? 'j:' + m.roundNumber : 'sin');
+    var clave = m.phase ? 'f:' + m.roundNumber + ':' + m.phase : (m.roundNumber != null ? 'j:' + m.roundNumber : 'sin');
     if (!porClave[clave]) {
       porClave[clave] = {
         clave: clave,

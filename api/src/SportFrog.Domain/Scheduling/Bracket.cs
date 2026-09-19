@@ -79,9 +79,15 @@ public static class Bracket
 
         var (firstRoundMatches, byes) = FirstRound(teams);
 
+        // Named by the bracket's full width, not by how many of round one's
+        // matches are real — byes shrink that count, and a round named after
+        // its actual match total can land on the same name a later round
+        // earns honestly, mixing two different rounds under one heading.
+        var firstRoundPhase = Phase(NextPowerOfTwo(teams.Count) / 2, 1);
+
         var plan = new List<PlannedMatch>(firstRoundMatches.Select(match => new PlannedMatch(
             1,
-            Phase(firstRoundMatches.Count, 1),
+            firstRoundPhase,
             BracketSlot.Known(match.HomeTeamId),
             BracketSlot.Known(match.AwayTeamId))));
 
