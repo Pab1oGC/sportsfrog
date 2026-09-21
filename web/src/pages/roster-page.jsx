@@ -254,7 +254,7 @@ function ExcelImportDialog({ open, onClose, step, file, result, loading, onFileC
   return (
     <Box component="div">
       {open && (
-        <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'rgba(0,0,0,0.5)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }} onClick={onClose}>
+        <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'overlay.scrim', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }} onClick={onClose}>
           <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, width: { xs: '100%', sm: 500 }, maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Importar nomina desde Excel</Typography>
             <Stepper activeStep={step} sx={{ mb: 3 }}>

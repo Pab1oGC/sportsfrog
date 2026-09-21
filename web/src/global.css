@@ -1,5 +1,5 @@
-﻿*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Solo estructura. Los colores (fondo de página, barra de scroll) salen del
+   tema -- ver src/theme/palette.js y src/theme/components.js (MuiCssBaseline). */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
-body { font-family: 'Inter', sans-serif; background: #f4f6f8; }
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #c4c4c4; border-radius: 3px; }
+body { font-family: 'Inter', sans-serif; }

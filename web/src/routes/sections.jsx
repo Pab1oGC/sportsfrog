@@ -3,6 +3,7 @@ import { Navigate, Outlet } from "react-router";
 import { AuthGuard } from "src/auth/guard";
 import { GuestGuard } from "src/auth/guard";
 import { DashboardLayout } from "src/layouts/dashboard";
+import { PortalThemeBoundary } from "src/theme/portal-base";
 import React from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -41,6 +42,15 @@ function LazyPage(props) {
   );
 }
 
+// Las páginas de una competencia (/public/:org/:comp) conservan el tema base
+// propio del portal (ver theme/portal-base.jsx): cada organizador lo
+// personaliza y lo que no elige no debe seguir la paleta de la marca. El
+// directorio /public NO entra acá: es una página de listado con el estilo de
+// la portada, no un portal personalizable, y usa la paleta de la marca.
+function PortalLazyPage(props) {
+  return <PortalThemeBoundary><LazyPage Component={props.Component} /></PortalThemeBoundary>;
+}
+
 function LayoutOutlet() {
   return <DashboardLayout><Outlet /></DashboardLayout>;
 }
@@ -49,8 +59,8 @@ export var routesSection = [
   // Landing & Public
   { path: "/", element: <LazyPage Component={LandingPage} /> },
   { path: "/public", element: <LazyPage Component={PublicPortalPage} /> },
-  { path: "/public/:orgSlug/:compSlug", element: <LazyPage Component={PublicCompetitionPage} /> },
-  { path: "/public/:orgSlug/:compSlug/verify/:serial", element: <LazyPage Component={PublicCompetitionPage} /> },
+  { path: "/public/:orgSlug/:compSlug", element: <PortalLazyPage Component={PublicCompetitionPage} /> },
+  { path: "/public/:orgSlug/:compSlug/verify/:serial", element: <PortalLazyPage Component={PublicCompetitionPage} /> },
 
   // Auth
   { path: "/auth/jwt/sign-in", element: <GuestGuard><SignInPage /></GuestGuard> },

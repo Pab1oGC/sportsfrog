@@ -19,7 +19,8 @@ import Tab from '@mui/material/Tab';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import CircularProgress from '@mui/material/CircularProgress';
-import { ThemeProvider, useTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
+import { portalBaseTheme } from 'src/theme/portal-base';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut } from 'src/hooks/use-api';
@@ -73,7 +74,10 @@ export default function PortalStudioPage() {
   const [saveError, setSaveError] = useState('');
   const [device, setDevice] = useState('desktop');
 
-  const appTheme = useTheme();
+  // El tema base del PORTAL, no el del panel: la vista previa y los
+  // placeholders "vacío = el del tema base" tienen que mostrar lo que va a ver
+  // el visitante, y el portal parte de portalBaseTheme (ver theme/portal-base.jsx).
+  const appTheme = portalBaseTheme;
   const [, startFontTransition] = useTransition();
 
   useEffect(() => {

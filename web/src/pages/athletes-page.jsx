@@ -224,7 +224,7 @@ export default function AthletesPage() {
     { field: 'documentId', headerName: 'Documento', width: 140 },
     { field: 'birthDate', headerName: 'Fecha nac.', width: 120 },
     { field: 'edad', headerName: 'Edad', width: 70, valueGetter: (_, row) => edad(row.birthDate), renderCell: ({ value }) => (
-      value != null ? <span style={{ color: value < 18 ? 'var(--mui-palette-warning-main, #b26a00)' : undefined, fontWeight: value < 18 ? 700 : 400 }}>{value}</span> : '--'
+      value != null ? <Box component="span" sx={{ color: value < 18 ? 'warning.dark' : undefined, fontWeight: value < 18 ? 700 : 400 }}>{value}</Box> : '--'
     ) },
     { field: 'gender', headerName: 'Genero', width: 100, renderCell: ({ value }) => value === 'M' ? 'Masculino' : value === 'F' ? 'Femenino' : '--' },
     { field: 'weightKg', headerName: 'Peso (kg)', width: 90, renderCell: ({ value }) => value ?? '--' },
@@ -367,7 +367,7 @@ export default function AthletesPage() {
       </CrudDialog>
 
       {photoOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box' }} onClick={() => setPhotoOpen(false)}>
+        <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'overlay.scrim', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, boxSizing: 'border-box' }} onClick={() => setPhotoOpen(false)}>
           <Box sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, width: { xs: '100%', sm: 400 }, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 12px' }}>Importar fotos (ZIP)</h3>
             <Alert severity="info" sx={{ mb: 2 }}>Cada imagen debe llamarse igual al documento del deportista.</Alert>
@@ -390,7 +390,7 @@ export default function AthletesPage() {
               </Button>
             </Box>
           </Box>
-        </div>
+        </Box>
       )}
     </div>
   );

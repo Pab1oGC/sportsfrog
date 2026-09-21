@@ -15,6 +15,7 @@ import Tab from '@mui/material/Tab';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import CircularProgress from '@mui/material/CircularProgress';
+import { alpha } from '@mui/material/styles';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut } from 'src/hooks/use-api';
@@ -495,9 +496,13 @@ export default function TemplateDesignerPage() {
               position: 'relative',
               width: '100%',
               aspectRatio: String(caraActual.aspectRatio || 1.5875),
-              bgcolor: '#fff',
-              backgroundImage: 'linear-gradient(45deg,#f0f0f0 25%,transparent 25%,transparent 75%,#f0f0f0 75%),'
-                + 'linear-gradient(45deg,#f0f0f0 25%,transparent 25%,transparent 75%,#f0f0f0 75%)',
+              bgcolor: 'common.white',
+              // Tablero de ajedrez: se ve a través de las zonas transparentes del arte.
+              backgroundImage: function(theme) {
+                var g = theme.palette.grey[200];
+                return 'linear-gradient(45deg,' + g + ' 25%,transparent 25%,transparent 75%,' + g + ' 75%),'
+                  + 'linear-gradient(45deg,' + g + ' 25%,transparent 25%,transparent 75%,' + g + ' 75%)';
+              },
               backgroundSize: '16px 16px',
               backgroundPosition: '0 0, 8px 8px',
               overflow: 'hidden',
@@ -668,9 +673,13 @@ function CampoEnLienzo(props) {
         height: (caja.h * 100) + '%',
         cursor: 'move',
         touchAction: 'none',
-        outline: sel ? '2px solid #1976d2' : '1px dashed rgba(25,118,210,0.55)',
+        outline: function(theme) {
+          return sel
+            ? '2px solid ' + theme.palette.primary.main
+            : '1px dashed ' + alpha(theme.palette.primary.main, 0.55);
+        },
         outlineOffset: 0,
-        bgcolor: sel ? 'rgba(25,118,210,0.10)' : 'rgba(25,118,210,0.04)',
+        bgcolor: function(theme) { return alpha(theme.palette.primary.main, sel ? 0.10 : 0.04); },
         boxSizing: 'border-box'
       }}
     >
@@ -689,7 +698,7 @@ function CampoEnLienzo(props) {
             overflow: 'hidden', pointerEvents: 'none',
             fontFamily: familia,
             fontWeight: campo.bold ? 700 : 400,
-            color: campo.color || '#000',
+            color: campo.color || 'common.black',
             fontSize: Math.max(6, (campo.size || 0.06) * (props.alto || 0)) + 'px',
             lineHeight: 1,
             whiteSpace: 'nowrap'
@@ -712,8 +721,9 @@ function CampoEnLienzo(props) {
               left: (asa.cx * 100) + '%',
               top: (asa.cy * 100) + '%',
               width: 10, height: 10, ml: '-5px', mt: '-5px',
-              bgcolor: '#fff',
-              border: '2px solid #1976d2',
+              bgcolor: 'common.white',
+              border: '2px solid',
+              borderColor: 'primary.main',
               borderRadius: '2px',
               cursor: asa.cursor,
               touchAction: 'none'

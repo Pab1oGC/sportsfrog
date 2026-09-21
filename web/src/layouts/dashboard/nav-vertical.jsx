@@ -32,7 +32,7 @@ export function NavVertical({ data, collapsed, isDesktop, mobileOpen, onCloseMob
     <Scrollbar sx={{ height: 1 }}>
       <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }} onClick={onToggle}>
         <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: "primary.main", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Typography sx={{ color: "white", fontWeight: 700, fontSize: 18 }}>SF</Typography>
+          <Typography sx={{ color: "primary.contrastText", fontWeight: 700, fontSize: 18 }}>SF</Typography>
         </Box>
         {!collapsed && <Typography variant="h6" fontWeight={700}>SportFrog</Typography>}
       </Box>

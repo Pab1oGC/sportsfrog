@@ -24,8 +24,8 @@ export function Marquesina({ resultados }) {
     <Box
       className="hero-marquesina"
       sx={{
-        position: 'relative', zIndex: 3, bgcolor: '#1D709F', color: '#ffffff',
-        py: 1.1, overflow: 'hidden', whiteSpace: 'nowrap', borderTop: '2px solid #00A4D1',
+        position: 'relative', zIndex: 3, bgcolor: 'primary.main', color: 'primary.contrastText',
+        py: 1.1, overflow: 'hidden', whiteSpace: 'nowrap', borderTop: 2, borderColor: 'brand.bright',
       }}
     >
       <Box

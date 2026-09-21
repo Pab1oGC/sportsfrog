@@ -1,13 +1,17 @@
 import Box from '@mui/material/Box';
 import { alpha } from '@mui/material/styles';
+import { medalColors } from 'src/theme/palette';
 
 /**
  * Los tres colores de medalla del portal (oro/plata/bronce) -- un solo
  * lugar, en vez de la copia local que hasta ahora repetían por separado
  * `public-competition.jsx` (Tablero y ClassificationView), CardsBoard y
- * EditorialBoard.
+ * EditorialBoard. Los valores viven en theme/palette.js; se re-exportan acá
+ * porque el portal público importa MEDAL_COLORS de este archivo, y este
+ * componente se importa directo y no a través del tema porque el portal
+ * arma un tema propio que no trae esas claves.
  */
-export var MEDAL_COLORS = { 1: '#C9A227', 2: '#8E8E93', 3: '#B87333' };
+export var MEDAL_COLORS = medalColors;
 
 /**
  * El círculo de posición con su medalla -- número, fondo de color si es

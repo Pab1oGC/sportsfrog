@@ -51,7 +51,7 @@ export default function SignInPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
             <Box sx={{ width: 56, height: 56, borderRadius: 2, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, cursor: 'pointer' }}
               onClick={() => navigate('/')}>
-              <Typography sx={{ color: 'white', fontWeight: 800, fontSize: 24 }}>SF</Typography>
+              <Typography sx={{ color: 'primary.contrastText', fontWeight: 800, fontSize: 24 }}>SF</Typography>
             </Box>
             <Typography variant="h5" fontWeight={700}>SportFrog</Typography>
             <Typography variant="body2" color="text.secondary">Inicia sesion en tu cuenta</Typography>

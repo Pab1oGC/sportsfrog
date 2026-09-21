@@ -5,6 +5,7 @@ import Button from '@mui/material/Button';
 import { Link as RouterLink } from 'react-router';
 import useSWR from 'swr';
 import gsap from 'gsap';
+import { alpha, useTheme } from '@mui/material/styles';
 import { Iconify } from 'src/components/iconify';
 import { LivePulse } from 'src/components/live-pulse';
 import { publicFetcher } from 'src/lib/public-axios';
@@ -238,8 +239,10 @@ export function PlayfulHero() {
       sx={{
         position: 'relative', minHeight: '100svh', overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        bgcolor: '#E7F5FD',
-        backgroundImage: 'radial-gradient(rgba(29,112,159,0.06) 1.4px, transparent 1.4px)',
+        bgcolor: 'brand.tint',
+        backgroundImage: function(theme) {
+          return 'radial-gradient(' + alpha(theme.palette.primary.main, 0.06) + ' 1.4px, transparent 1.4px)';
+        },
         backgroundSize: '18px 18px',
       }}
     >
@@ -266,7 +269,7 @@ export function PlayfulHero() {
               <Box
                 sx={{
                   position: 'absolute', top: -34, left: '50%', transform: 'translateX(-50%)',
-                  bgcolor: '#ffffff', border: '2px solid #1D709F', borderRadius: 2,
+                  bgcolor: 'background.paper', border: 2, borderColor: 'primary.main', borderRadius: 2,
                   px: 1, py: 0.3, whiteSpace: 'nowrap', fontWeight: 800, fontSize: '0.75rem',
                   zIndex: 5, pointerEvents: 'none',
                 }}
@@ -284,7 +287,7 @@ export function PlayfulHero() {
               sx={{
                 width: '100%', height: '100%',
                 transform: 'rotate(' + m.rotate + 'deg)',
-                filter: 'drop-shadow(0 14px 20px rgba(29,112,159,0.16))',
+                filter: function(theme) { return 'drop-shadow(0 14px 20px ' + alpha(theme.palette.primary.main, 0.16) + ')'; },
                 userSelect: 'none', cursor: 'pointer',
               }}
             />
@@ -315,12 +318,13 @@ export function PlayfulHero() {
           <Box
             className="hero-eyebrow"
             sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(0,164,209,0.16)',
+              display: 'inline-flex', alignItems: 'center', gap: 1,
+              bgcolor: function(theme) { return alpha(theme.palette.brand.bright, 0.16); },
               borderRadius: 10, px: 2, py: 0.7, mb: { xs: 2, md: 3 },
             }}
           >
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1D709F' }} />
-            <Typography variant="caption" fontWeight={700} sx={{ color: '#1D709F' }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main' }} />
+            <Typography variant="caption" fontWeight={700} sx={{ color: 'primary.main' }}>
               Plataforma deportiva hecha en Bolivia
             </Typography>
           </Box>
@@ -340,7 +344,7 @@ export function PlayfulHero() {
                 component="span"
                 className="hero-letra"
                 sx={{
-                  fontFamily: FREDOKA_STACK, fontWeight: 700, color: '#111315',
+                  fontFamily: FREDOKA_STACK, fontWeight: 700, color: 'text.primary',
                   fontSize: { xs: '3.1rem', sm: '4.6rem', md: '6.4rem', lg: '7.6rem' },
                   lineHeight: 0.9, display: 'inline-block',
                 }}
@@ -359,14 +363,14 @@ export function PlayfulHero() {
             alt="SportFrog"
             sx={{
               width: { xs: 260, sm: 350, md: 480 }, height: { xs: 260, sm: 350, md: 480 },
-              filter: 'drop-shadow(0 18px 22px rgba(29,112,159,0.22))',
+              filter: function(theme) { return 'drop-shadow(0 18px 22px ' + alpha(theme.palette.primary.main, 0.22) + ')'; },
               pointerEvents: 'none', userSelect: 'none',
             }}
           />
           <Box
             sx={{
               width: { xs: 90, md: 130 }, height: { xs: 14, md: 20 }, mx: 'auto', mt: -1,
-              borderRadius: '50%', bgcolor: 'rgba(0,164,209,0.20)', filter: 'blur(4px)',
+              borderRadius: '50%', bgcolor: function(theme) { return alpha(theme.palette.brand.bright, 0.20); }, filter: 'blur(4px)',
             }}
           />
         </Box>
@@ -378,9 +382,9 @@ export function PlayfulHero() {
             variant="contained" size="large" component={RouterLink} to="/auth/jwt/sign-in"
             startIcon={<Iconify icon="eva:log-in-outline" />}
             sx={{
-              bgcolor: '#1D709F', color: 'white', px: 4, py: 1.5, borderRadius: 999, fontWeight: 700,
-              boxShadow: '0 8px 24px rgba(29,112,159,0.28)',
-              '&:hover': { bgcolor: '#00A4D1' },
+              bgcolor: 'primary.main', color: 'primary.contrastText', px: 4, py: 1.5, borderRadius: 999, fontWeight: 700,
+              boxShadow: function(theme) { return '0 8px 24px ' + alpha(theme.palette.primary.main, 0.28); },
+              '&:hover': { bgcolor: 'brand.bright' },
             }}
           >
             Iniciar sesion
@@ -391,9 +395,9 @@ export function PlayfulHero() {
             variant="outlined" size="large" component={RouterLink} to="/public"
             startIcon={<Iconify icon="eva:eye-outline" />}
             sx={{
-              borderWidth: 2, borderColor: '#1D709F', color: '#1D709F', px: 4, py: 1.5,
+              borderWidth: 2, borderColor: 'primary.main', color: 'primary.main', px: 4, py: 1.5,
               borderRadius: 999, fontWeight: 700,
-              '&:hover': { borderWidth: 2, borderColor: '#1D709F', bgcolor: 'rgba(29,112,159,0.08)' },
+              '&:hover': { borderWidth: 2, borderColor: 'primary.main', bgcolor: 'action.hover' },
             }}
           >
             Ver competencias
@@ -405,7 +409,8 @@ export function PlayfulHero() {
         className="hero-scroll"
         sx={{
           position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: 0.5, pb: { xs: 1.5, md: 2 }, color: 'rgba(29,112,159,0.55)',
+          alignItems: 'center', gap: 0.5, pb: { xs: 1.5, md: 2 },
+          color: function(theme) { return alpha(theme.palette.primary.main, 0.55); },
         }}
       >
         <Iconify icon="eva:chevron-down-outline" width={20} className="hero-scroll-flecha" />
@@ -563,7 +568,7 @@ function Voladores() {
             sx={{
               position: 'absolute', top: v.top, left: v.left, width: v.width, height: v.width,
               transform: 'rotate(' + v.rotate + 'deg)',
-              filter: 'drop-shadow(0 6px 10px rgba(29,112,159,0.25))',
+              filter: function(theme) { return 'drop-shadow(0 6px 10px ' + alpha(theme.palette.primary.main, 0.25) + ')'; },
               zIndex: 1, pointerEvents: 'none', userSelect: 'none',
             }}
           />
@@ -575,6 +580,10 @@ function Voladores() {
 
 /** El sello circular que gira en una esquina -- el "logo vivo" del hero. */
 function Insignia() {
+  // Los atributos de un <svg> no leen el tema como `sx`, así que se toman
+  // los colores del tema y se pasan a mano.
+  var palette = useTheme().palette;
+
   return (
     <Box
       className="hero-insignia"
@@ -584,13 +593,13 @@ function Insignia() {
       }}
     >
       <svg viewBox="0 0 100 100" width="100%" height="100%">
-        <circle cx="50" cy="50" r="47" fill="#00A4D1" />
-        <circle cx="50" cy="50" r="41" fill="#1D709F" />
+        <circle cx="50" cy="50" r="47" fill={palette.brand.bright} />
+        <circle cx="50" cy="50" r="41" fill={palette.primary.main} />
         <path id="insignia-curva" d="M 50,50 m -30,0 a 30,30 0 1,1 60,0 a 30,30 0 1,1 -60,0" fill="none" />
-        <text fontSize="8.6" fontWeight="700" fill="#ffffff" letterSpacing="1.6">
+        <text fontSize="8.6" fontWeight="700" fill={palette.primary.contrastText} letterSpacing="1.6">
           <textPath href="#insignia-curva" startOffset="0%">SPORTFROG • SPORTFROG • </textPath>
         </text>
-        <circle cx="50" cy="50" r="13" fill="#7CFC00" />
+        <circle cx="50" cy="50" r="13" fill={palette.brand.accent} />
       </svg>
     </Box>
   );
