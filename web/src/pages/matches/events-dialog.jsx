@@ -160,14 +160,12 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
           </TextField>
           <TextField label="Minuto" type="number" value={form.minute} onChange={(e) => setForm({ ...form, minute: e.target.value })} sx={{ width: 90 }} />
           <TextField label="Cant." type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} sx={{ width: 80 }} />
-          {/* Habilitado solo con los cinco datos cargados — jugador, evento,
-              periodo y minuto incluidos, no solo jugador y evento — para que
-              no se pueda cargar un evento a medio llenar. */}
+          {/* Habilitado con jugador y evento cargados — minuto y periodo son opcionales según el deporte. */}
           <Button
             variant="contained"
             startIcon={<Iconify icon="eva:plus-fill" />}
             onClick={doEvent}
-            disabled={loading || !form.rosterEntryId || !form.metricId || !form.periodNumber || !form.minute}
+            disabled={loading || !form.rosterEntryId || !form.metricId}
             sx={{ height: 56 }}
           >
             Agregar
