@@ -223,7 +223,7 @@ export default function AthletesPage() {
     { field: 'lastName', headerName: 'Apellidos', flex: 1, minWidth: 150 },
     { field: 'documentId', headerName: 'Documento', width: 140 },
     { field: 'birthDate', headerName: 'Fecha nac.', width: 120 },
-    { field: 'edad', headerName: 'Edad', width: 70, valueGetter: (_, row) => edad(row.birthDate), renderCell: ({ value }) => (
+    { field: 'edad', headerName: 'Edad', width: 70, valueGetter: (_, row) => edad(row?.birthDate), renderCell: ({ value }) => (
       value != null ? <Box component="span" sx={{ color: value < 18 ? 'warning.dark' : undefined, fontWeight: value < 18 ? 700 : 400 }}>{value}</Box> : '--'
     ) },
     { field: 'gender', headerName: 'Genero', width: 100, renderCell: ({ value }) => value === 'M' ? 'Masculino' : value === 'F' ? 'Femenino' : '--' },
