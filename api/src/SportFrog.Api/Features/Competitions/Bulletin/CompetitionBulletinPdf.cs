@@ -23,7 +23,14 @@ internal static class CompetitionBulletinPdf
         {
             page.Size(PageSizes.A4);
             page.Margin(2, Unit.Centimetre);
-            page.DefaultTextStyle(style => style.FontSize(10));
+
+            // Lato explicitly, not left to resolve on its own: with no
+            // FontFamily() at all, QuestPDF and CompetitionBulletinWord's
+            // Word each pick their own host's default typeface, and those
+            // two defaults are never the same font — see Lato's own remark
+            // in DocumentRenderer.Style for why it, and not some other name,
+            // is the one guaranteed present everywhere this renders.
+            page.DefaultTextStyle(style => style.FontSize(10).FontFamily("Lato"));
 
             page.Header().Element(container => Header(container, data));
             page.Content().Element(container => Body(container, data));

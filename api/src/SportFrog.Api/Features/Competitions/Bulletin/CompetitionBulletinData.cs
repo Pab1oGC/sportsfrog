@@ -27,9 +27,9 @@ internal sealed record BulletinCategory(
 /// </param>
 /// <param name="AccentColor">
 /// The competition's resolved theme colour — see
-/// <see cref="CompetitionBranding"/>. Only the PDF renderer reads this; the
-/// Word one keeps the plain look a document meant to be edited after
-/// download has always had.
+/// <see cref="CompetitionBranding"/>. Both renderers read this, the same way
+/// and with the same fallback, so a bulletin's Word copy carries the same
+/// colour as its PDF instead of the plain blue every competition used to get.
 /// </param>
 internal sealed record BulletinData(
     string OrganizationName,
