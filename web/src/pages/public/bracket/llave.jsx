@@ -48,9 +48,9 @@ export function Llave(props) {
   var campeon = null;
 
   if (finalJugada) {
-    var penales = final.homeTotal === final.awayTotal && final.penaltyHomeScore != null;
-    var ganoLocal = penales ? final.penaltyHomeScore > final.penaltyAwayScore : final.homeTotal > final.awayTotal;
-    campeon = ganoLocal ? final.homeTeamName : final.awayTeamName;
+    var outcome = resolveMatchOutcome(final);
+    if (outcome.ganoLocal) campeon = final.homeTeamName;
+    else if (outcome.ganoVisita) campeon = final.awayTeamName;
   }
 
   return (
