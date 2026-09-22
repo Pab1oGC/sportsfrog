@@ -86,7 +86,7 @@ export default function CategoriesPage() {
 
   return (
     <div>
-      <PageHeader title="Categorias" actionLabel="Nueva categoria" onAction={openCreate} actionDisabled={!compId} />
+      <PageHeader title="Categorías" actionLabel="Nueva categoría" onAction={openCreate} actionDisabled={!compId} />
       <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 700, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
       </Box>

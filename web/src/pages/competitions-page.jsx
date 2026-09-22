@@ -26,6 +26,7 @@ import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } f
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { EstadoChip } from 'src/components/estado-chip';
 import { SelectionSpace } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { toast } from 'sonner';
@@ -39,6 +40,27 @@ const FORMATO_INFO = {
   league: 'Todos juegan contra todos.',
   knockout: 'El que pierde queda afuera.',
   groups: 'Primero zonas, despues llaves.',
+};
+
+// MUI resetea el borde del Accordion a 90° (border-radius: 0) salvo que sea
+// el primero/último de su tipo entre hermanos del mismo tag -- que acá no lo
+// es, porque comparte contenedor con los TextField del formulario. Sin este
+// radio, el "outlined" queda un cuadrado de esquinas rectas que desentona
+// con el resto de la app (Card, Button, DataGrid: todos redondeados).
+// overflow: 'hidden' recorta el tinte de ACCORDION_SUMMARY_SX a esas mismas
+// esquinas en vez de dejarlo asomar en punta por debajo.
+const ACCORDION_SX = { borderRadius: 1, overflow: 'hidden', '&:before': { display: 'none' } };
+
+// Un fondo propio en la cabecera del accordion: "outlined" a secas se
+// confunde con un panel fijo (el borde es igual al de cualquier TextField de
+// al lado), y la flecha sola no basta para que se note que es desplegable.
+// Con un tinte y un hover más marcado, la cabecera se lee como una barra
+// clickeable antes de que el usuario repare en el ícono.
+const ACCORDION_SUMMARY_SX = {
+  bgcolor: 'action.hover',
+  borderRadius: 1,
+  '&:hover': { bgcolor: 'action.selected' },
+  '&.Mui-expanded': { bgcolor: 'action.selected', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
 };
 
 // La personalizacion del portal (colores, tipografia, portada, redes,
@@ -209,12 +231,14 @@ export default function CompetitionsPage() {
         )}
       </Box>
     )},
-    { field: 'isPublic', headerName: 'Publica', width: 80, renderCell: ({ value, row }) => (
-      <Tooltip title="Alternar publicacion">
-        <IconButton size="small" onClick={() => togglePublish(row.id, value)}>
-          <Chip label={value ? 'Si' : 'No'} color={value ? 'success' : 'default'} size="small" variant="outlined" icon={<Iconify icon={value ? 'eva:globe-fill' : 'eva:eye-off-outline'} width={14} />} />
-        </IconButton>
-      </Tooltip>
+    { field: 'isPublic', headerName: 'Pública', width: 80, renderCell: ({ value, row }) => (
+      <EstadoChip
+        activo={value}
+        onClick={() => togglePublish(row.id, value)}
+        onLabel="Si" offLabel="No"
+        onIcon="eva:globe-fill" offIcon="eva:eye-off-outline"
+        onTooltip="Alternar publicación" offTooltip="Alternar publicación"
+      />
     )},
     { field: 'actions', headerName: 'Acciones', width: 150, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
       const next = NEXT_STATUS[row.status] || [];
@@ -246,13 +270,13 @@ export default function CompetitionsPage() {
     <Box>
       <PageHeader title="Competiciones" actionLabel="Nueva" onAction={() => openDialog(null)} />
       <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
-      <CrudDialog open={open} editId={editId} entityName="Competicion" entityGender="f" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
+      <CrudDialog open={open} editId={editId} entityName="Competición" entityGender="f" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
         <TextField label="Nombre" value={form.name} onChange={handleNameChange} fullWidth required />
         {/* La direccion queda fija desde que se crea: cambiarla romperia
             cualquier enlace ya compartido, y el backend la rechaza (ver
             UpdateCompetition). Editando, se muestra pero no se toca. */}
         <TextField
-          label="Direccion publica (slug)"
+          label="Direccion pública (slug)"
           value={form.slug}
           onChange={handleSlugChange}
           fullWidth
@@ -274,8 +298,8 @@ export default function CompetitionsPage() {
           {CAPS.map((c) => <MenuItem key={c} value={c}>{c === 'basic' ? 'Basico' : 'Detallado'}</MenuItem>)}
         </TextField>
 
-        <Accordion disableGutters variant="outlined" sx={{ '&:before': { display: 'none' } }}>
-          <AccordionSummary expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
+        <Accordion disableGutters variant="outlined" sx={ACCORDION_SX}>
+          <AccordionSummary sx={ACCORDION_SUMMARY_SX} expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
             <Typography variant="subtitle2">Disponibilidad para programar el calendario</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -290,7 +314,7 @@ export default function CompetitionsPage() {
               value={form.bufferMinutes}
               onChange={(e) => setForm({ ...form, bufferMinutes: e.target.value })}
               fullWidth
-              helperText="La duración del partido se calcula sola (o se declara, para un deporte sin reloj) desde el reglamento de cada categoría — esto es solo el margen entre el final de uno y el arranque del siguiente en la misma cancha (cambio de equipos, entrada en calor). Vacío usa un valor por defecto."
+              helperText="La duración del partido se calcula sola (o se declara, para un deporte sin reloj) desde el reglamento de cada categoría, esto es solo el margen entre el final de uno y el arranque del siguiente en la misma cancha (cambio de equipos, entrada en calor). Vacío usa un valor por defecto."
             />
 
             <Divider />
@@ -301,9 +325,7 @@ export default function CompetitionsPage() {
             </Box>
             {form.scheduleSpaceIds.length === 0 && (
               <Typography variant="caption" color="text.secondary">
-                Sin canchas cargadas, "Generar siguiente jornada" no va a poder colocar ningun partido.
-                Cuáles y a qué hora están disponibles se acuerda directamente con quien las administra — acá
-                solo elegís cuáles de las que ya registraste en Sedes puede usar esta competencia.
+                Sin canchas cargadas, "Generar siguiente jornada" no va a poder colocar ningún partido.
               </Typography>
             )}
             {form.scheduleSpaceIds.map((venueSpaceId, i) => (
@@ -319,8 +341,8 @@ export default function CompetitionsPage() {
           </AccordionDetails>
         </Accordion>
 
-        <Accordion disableGutters variant="outlined" sx={{ '&:before': { display: 'none' } }}>
-          <AccordionSummary expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
+        <Accordion disableGutters variant="outlined" sx={ACCORDION_SX}>
+          <AccordionSummary sx={ACCORDION_SUMMARY_SX} expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
             <Typography variant="subtitle2">Convocatoria</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -355,9 +377,9 @@ export default function CompetitionsPage() {
           </AccordionDetails>
         </Accordion>
 
-        <Accordion disableGutters variant="outlined" sx={{ '&:before': { display: 'none' } }}>
-          <AccordionSummary expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
-            <Typography variant="subtitle2">Portal publico</Typography>
+        <Accordion disableGutters variant="outlined" sx={ACCORDION_SX}>
+          <AccordionSummary sx={ACCORDION_SUMMARY_SX} expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
+            <Typography variant="subtitle2">Portal público</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>

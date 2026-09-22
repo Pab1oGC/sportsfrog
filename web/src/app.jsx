@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/es";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { esES as datePickersEsES } from "@mui/x-date-pickers/locales";
 import { AuthProvider } from "src/auth/context/jwt";
 import { Snackbar } from "src/components/snackbar";
 import { ConfirmProvider } from "src/components/confirm-dialog";
@@ -17,10 +18,20 @@ const router = createBrowserRouter(routesSection);
 // sin importar el idioma del navegador de quien lo abre.
 dayjs.locale("es");
 
+// adapterLocale de arriba solo traduce fechas (dias, meses); los textos
+// propios del picker -- "Cancel"/"OK" en la barra de acciones de
+// DateTimeField, "Today", los aria-label -- son un paquete de idioma aparte.
+// okButtonLabel se pisa a mano porque hasta el esES oficial de MUI lo deja
+// en "OK" (unico texto que no traduce).
+const datePickersLocaleText = {
+  ...datePickersEsES.components.MuiLocalizationProvider.defaultProps.localeText,
+  okButtonLabel: "Aceptar",
+};
+
 export default function App() {
   return (
     <AppThemeProvider>
-      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es" localeText={datePickersLocaleText}>
         <ConfirmProvider>
           <AuthProvider>
             <Snackbar />

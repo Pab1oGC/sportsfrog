@@ -26,7 +26,7 @@ import { CascadeFilters } from 'src/components/cascade-filters';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { toast } from 'sonner';
-import { DateField } from 'src/components/date-field';
+import { DateField, TimeField } from 'src/components/date-field';
 import { DrawDialog } from 'src/pages/matches/draw-dialog';
 import { PromoteDialog } from 'src/pages/matches/promote-dialog';
 import { ScheduleDialog } from 'src/pages/matches/schedule-dialog';
@@ -326,7 +326,16 @@ export default function MatchesPage() {
     // fecha y cancha para una ronda futura sin saber todavia quien la juega
     // -- homeTeamName llega null en ese caso, y homePlaceholder trae
     // "Ganador de <fase>" para no dejar la celda en blanco.
-    { field: 'homeTeamName', headerName: 'Local', flex: 1, minWidth: 120, renderCell: ({ row }) => row.homeTeamName || <Typography variant="body2" color="text.secondary" fontStyle="italic">{row.homePlaceholder || 'Por definir'}</Typography> },
+    { field: 'homeTeamName', headerName: 'Local', flex: 1, minWidth: 120, renderCell: ({ row }) => row.homeTeamName || (
+      // El div propio con su altura completa fuerza el centrado vertical de
+      // la celda: el line-height del tema para "body2" no coincide con el
+      // que usa la grilla para un string plano, y sin esto el placeholder
+      // queda unos pixeles arriba o abajo del centro en vez de a la misma
+      // altura que el resto de la fila.
+      <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+        <Typography variant="body2" color="text.secondary" fontStyle="italic">{row.homePlaceholder || 'Por definir'}</Typography>
+      </Box>
+    ) },
     // El marcador oficial (homeTotal/awayTotal) queda null hasta que se
     // carga el Resultado, aunque ya haya goles cargados como eventos — son
     // dos pasos separados a proposito. Mientras el partido esta en curso, se
@@ -334,7 +343,11 @@ export default function MatchesPage() {
     // esos eventos) para no dejar la grilla en blanco mientras se juega.
     { field: 'homeTotal', headerName: '', width: 30, renderCell: ({ row }) => row.homeTotal != null ? row.homeTotal : row.liveHomeTotal != null ? <span title="Marcador en vivo, a partir de los eventos cargados" style={{ color: 'var(--mui-palette-warning-main)', fontWeight: 600 }}>{row.liveHomeTotal}</span> : '' },
     { field: 'awayTotal', headerName: '', width: 30, renderCell: ({ row }) => row.awayTotal != null ? row.awayTotal : row.liveAwayTotal != null ? <span title="Marcador en vivo, a partir de los eventos cargados" style={{ color: 'var(--mui-palette-warning-main)', fontWeight: 600 }}>{row.liveAwayTotal}</span> : '' },
-    { field: 'awayTeamName', headerName: 'Visitante', flex: 1, minWidth: 120, renderCell: ({ row }) => row.awayTeamName || <Typography variant="body2" color="text.secondary" fontStyle="italic">{row.awayPlaceholder || 'Por definir'}</Typography> },
+    { field: 'awayTeamName', headerName: 'Visitante', flex: 1, minWidth: 120, renderCell: ({ row }) => row.awayTeamName || (
+      <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+        <Typography variant="body2" color="text.secondary" fontStyle="italic">{row.awayPlaceholder || 'Por definir'}</Typography>
+      </Box>
+    ) },
     { field: 'penalties', headerName: '', width: 90, sortable: false, renderCell: ({ row }) =>
       row.penaltyHomeScore != null
         ? <Typography variant="caption" color="text.secondary">({row.penaltyHomeScore}-{row.penaltyAwayScore} pen)</Typography>
@@ -498,15 +511,13 @@ export default function MatchesPage() {
             onChange={(e) => setJornadaForm((f) => ({ ...f, from: e.target.value }))}
             fullWidth
           />
-          <TextField
+          <TimeField
             label="Hora de inicio"
-            type="time"
             value={jornadaForm.startTime}
             onChange={(e) => setJornadaForm((f) => ({ ...f, startTime: e.target.value }))}
             fullWidth
             required
             helperText="Ancla el primer partido de esta jornada — si hace falta más de un día, los siguientes reutilizan esta misma hora. No hay tope de hasta qué hora se puede jugar."
-            slotProps={{ inputLabel: { shrink: true } }}
           />
         </DialogContent>
         <DialogActions>

@@ -5,12 +5,11 @@ import Paper from '@mui/material/Paper';
 import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import { DataGrid } from '@mui/x-data-grid';
+import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
-import { useApi } from 'src/hooks/use-api';
+import { useApi, apiPut } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
 import { useCrudDialog } from 'src/hooks/use-crud';
 import { endpoints } from 'src/lib/axios';
@@ -20,6 +19,8 @@ import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { CascadeFilters } from 'src/components/cascade-filters';
 import { DelegationImportDialog } from 'src/components/delegation-import-dialog';
+import { EstadoChip } from 'src/components/estado-chip';
+import { useConfirm } from 'src/components/confirm-dialog';
 import { SelectionClub, SelectionAthletes } from 'src/components/selectors';
 import { MembersPanel } from 'src/pages/teams/members-panel';
 
@@ -31,6 +32,7 @@ export default function TeamsPage() {
   // unica que administra inscripciones. La categoria no viaja en la URL: la
   // cascada ya la recuerda por competencia (useRememberedChild).
   const [searchParams] = useSearchParams();
+  const confirm = useConfirm();
   const cascade = useCascade(searchParams.get('competition'));
   const { data: sports } = useApi(endpoints.sports);
 
@@ -89,7 +91,7 @@ export default function TeamsPage() {
     emptyForm,
     entityName,
     entityGender,
-    savedMessage: soloDeportista ? 'Deportista inscripto.' : (individual ? 'Inscripción guardada.' : 'Equipo guardado.'),
+    savedMessage: soloDeportista ? 'Deportista inscrito.' : (individual ? 'Inscripción guardada.' : 'Equipo guardado.'),
     buildUrl: (base, id) => endpoints.team(id),
     // La edicion no cambia con el deporte: UpdateTeam es el mismo contrato
     // para los dos casos, y ni club ni deportistas se tocan aca (el club no
@@ -122,12 +124,41 @@ export default function TeamsPage() {
 
   const [importOpen, setImportOpen] = useState(false);
 
+  // Mismo patron que VenuesPage/AthletesPage: activar es inofensivo y
+  // reversible con el mismo click, pero desactivar saca la inscripcion del
+  // sorteo y de la programacion de partidos nuevos (ver UpdateTeam.IsActive
+  // y FixturePolicy en el backend) -- vale la pena avisar antes, no solo
+  // cambiar el estado en silencio. Lo que ya jugo no se ve afectado.
+  // Reenvia name/groupLabel/seed junto con isActive porque UpdateTeam.Request
+  // los exige todos juntos, igual que mapToSend en la edicion de arriba.
+  const toggleTeamActive = async (row, event) => {
+    event.stopPropagation();
+    if (row.isActive) {
+      const ok = await confirm(
+        `Desactivar "${row.name}"? Deja de sortearse y programarse en partidos nuevos. Lo que ya jugó no se ve afectado.`,
+        { confirmLabel: 'Desactivar', danger: true },
+      );
+      if (!ok) return;
+    }
+    try {
+      await apiPut(endpoints.team(row.id), {
+        name: row.name || null,
+        groupLabel: row.groupLabel || null,
+        seed: row.seed ?? null,
+        isActive: !row.isActive,
+      });
+      mutate();
+    } catch (err) { toast.error(err.message); }
+  };
+
   const columns = [
     { field: 'name', headerName: soloDeportista ? 'Deportista' : (individual ? 'Deportista(s)' : 'Nombre'), flex: 1, minWidth: 200 },
     { field: 'clubName', headerName: 'Club', width: 160 },
     { field: 'groupLabel', headerName: 'Grupo', width: 100, renderCell: ({ value }) => value ? <Chip label={value} size="small" /> : '--' },
     { field: 'seed', headerName: 'Bombo', width: 90, renderCell: ({ value }) => value != null ? value : '--' },
-    { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Chip label={value ? 'Si' : 'No'} color={value ? 'success' : 'default'} size="small" variant="outlined" /> },
+    { field: 'isActive', headerName: 'Estado', width: 110, sortable: false, renderCell: ({ value, row }) => (
+      <EstadoChip activo={value} femenino={entityGender === 'f'} onClick={(e) => toggleTeamActive(row, e)} />
+    )},
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
       <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
@@ -153,7 +184,7 @@ export default function TeamsPage() {
   return (
     <Box>
       <PageHeader
-        title={soloDeportista ? 'Deportistas inscriptos' : (individual ? 'Inscripciones' : 'Equipos')}
+        title={soloDeportista ? 'Deportistas inscritos' : (individual ? 'Inscripciones' : 'Equipos')}
         actionLabel={soloDeportista ? 'Inscribir deportista' : (individual ? 'Nueva inscripción' : 'Nuevo equipo')}
         onAction={openCreate}
         actionDisabled={!cascade.catId}
@@ -252,7 +283,11 @@ export default function TeamsPage() {
           helperText={`Opcional. Para un sorteo de grupos por bombos: ${soloDeportista ? 'deportistas' : (individual ? 'inscripciones' : 'equipos')} del mismo bombo nunca caen en el mismo grupo.`}
           slotProps={{ htmlInput: { min: 1, max: 26 } }}
         />
-        {editId && <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Activo" />}
+        {/* El estado activo/inactivo ya se alterna desde la columna "Estado"
+            de la grilla (EstadoChip) -- repetirlo acá era un segundo control
+            para lo mismo. form.isActive sigue viajando igual en el guardado
+            (mapToSend lo exige junto con name/groupLabel/seed), solo que ya
+            no hay forma de tocarlo desde este diálogo. */}
       </CrudDialog>
 
       <DelegationImportDialog

@@ -19,6 +19,7 @@ import { downloadBlob } from 'src/lib/download-blob';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { EstadoChip } from 'src/components/estado-chip';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionAthletes } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { esIndividual } from 'src/lib/sport-shape';
@@ -152,7 +153,14 @@ export default function RosterPage() {
     { field: 'firstName', headerName: 'Nombre', flex: 1, minWidth: 120 },
     { field: 'documentId', headerName: 'Documento', width: 120 },
     { field: 'position', headerName: 'Posicion', width: 100, renderCell: ({ value }) => value || '--' },
-    { field: 'withdrawnAt', headerName: 'Estado', width: 110, renderCell: ({ value }) => value ? <Chip label="Retirado" color="warning" size="small" /> : <Chip label="Activo" color="success" size="small" /> },
+    { field: 'withdrawnAt', headerName: 'Estado', width: 110, renderCell: ({ value, row }) => (
+      <EstadoChip
+        activo={!value}
+        offLabel="Retirado" offColor="warning"
+        onTooltip="Retirar" offTooltip="Reintegrar"
+        onClick={() => withdraw(row, !value)}
+      />
+    )},
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row: entry }) => {
       const w = !!entry.withdrawnAt;
       return (

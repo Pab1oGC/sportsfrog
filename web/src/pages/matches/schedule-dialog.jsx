@@ -8,6 +8,7 @@ import Button from '@mui/material/Button';
 import { apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { SelectionTeam, SelectionSpace } from 'src/components/selectors';
+import { DateTimeField } from 'src/components/date-field';
 
 const EMPTY_FORM = { homeTeamId: '', awayTeamId: '', venueSpaceId: '', scheduledAt: '', roundNumber: '', notes: '' };
 
@@ -42,7 +43,7 @@ export function ScheduleDialog({ open, onClose, cascade, mutate, loading, setLoa
         <SelectionTeam categoryId={cascade.catId} value={form.homeTeamId} onChange={(e) => setForm({ ...form, homeTeamId: e.target.value })} label="Local" required />
         <SelectionTeam categoryId={cascade.catId} value={form.awayTeamId} onChange={(e) => setForm({ ...form, awayTeamId: e.target.value })} label="Visitante" required />
         <SelectionSpace value={form.venueSpaceId} onChange={(e) => setForm({ ...form, venueSpaceId: e.target.value })} />
-        <TextField label="Fecha y hora" type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+        <DateTimeField label="Fecha y hora" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} fullWidth />
         <TextField label="Ronda" type="number" value={form.roundNumber} onChange={(e) => setForm({ ...form, roundNumber: e.target.value })} fullWidth />
       </DialogContent>
       <DialogActions>
