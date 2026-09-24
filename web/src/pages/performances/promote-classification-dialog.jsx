@@ -10,6 +10,7 @@ import Alert from '@mui/material/Alert';
 import { apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { nombreFase } from 'src/lib/phase-labels';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 
 const MINIMO_CLASIFICAN = 2;
 
@@ -72,7 +73,8 @@ export function PromoteClassificationDialog({ open, onClose, catId, onPromoted }
               label="Cuántos clasifican"
               type="number"
               value={qualifiers}
-              onChange={(e) => setQualifiers(e.target.value)}
+              onChange={(e) => setQualifiers(soloDigitos(e.target.value))}
+              onKeyDown={bloquearNoEnteros}
               fullWidth
               helperText="Un empate en el corte nunca se parte: puede clasificar alguno más que este número."
               slotProps={{ htmlInput: { min: MINIMO_CLASIFICAN } }}

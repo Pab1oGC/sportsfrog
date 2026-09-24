@@ -100,6 +100,7 @@ public static class UpdateCategory
         category.QualifiersPerGroup = contract.QualifiersPerGroup;
         category.MinWeightKg = contract.MinWeightKg;
         category.MaxWeightKg = contract.MaxWeightKg;
+        category.UsesRepechage = contract.UsesRepechage;
 
         try
         {

@@ -167,10 +167,36 @@ export default function MatchesPage() {
     });
   const comp = competiciones?.find((c) => c.id === cascade.compId);
   const formato = comp?.format;
+  const catActual = (jornadaCategorias || []).find((c) => c.id === cascade.catId);
   // Que eventos aparecen para elegir depende del deporte, no de la
   // competencia: un gol o una tarjeta amarilla son del futbol, sea cual sea
   // el torneo que se esta jugando.
   const { data: sportInfo } = useApi(comp?.sportCode ? endpoints.sport(comp.sportCode) : null);
+
+  // Cuantos periodos tiene un partido y como se llaman lo decide el
+  // reglamento, no el deporte: `sportInfo.defaultPeriods` es solo el valor con
+  // el que arranca un reglamento nuevo, asi que un torneo de un solo tiempo
+  // seguia ofreciendo dos. El reglamento efectivo es el propio de la
+  // categoria si lo tiene y el de la competencia si no -- la misma resolucion
+  // que hace el servidor al validar (EventPolicy, MatchRulesLookup).
+  const { data: reglamentos } = useApi(endpoints.rulesets);
+  const categoriaDelPartido = (jornadaCategorias || []).find((c) => c.id === selMatch?.categoryId);
+  const reglamentoDelPartido = (reglamentos || []).find(
+    (r) => r.id === (categoriaDelPartido?.effectiveRulesetId ?? comp?.rulesetId),
+  );
+  const periodosDelPartido = reglamentoDelPartido?.config?.periods;
+  const sportInfoDelPartido = sportInfo && periodosDelPartido?.count
+    ? {
+        ...sportInfo,
+        defaultPeriods: periodosDelPartido.count,
+        periodLabel: periodosDelPartido.label || sportInfo.periodLabel,
+        // Para acotar el minuto de un evento al periodo elegido (ver
+        // ventanaDeMinuto): lo que dura un periodo y cuanto adicional admite
+        // este reglamento.
+        periodMinutes: periodosDelPartido.minutes ?? null,
+        periodMaxExtraMinutes: periodosDelPartido.maxExtraMinutes ?? null,
+      }
+    : sportInfo;
   const sorteable = comp && (comp.status === 'draft' || comp.status === 'scheduled');
   const yaJugados = filtered.filter((m) => m.status === 'finished' || m.status === 'walkover').length;
   const motivoSinSorteo = !comp ? null : !sorteable
@@ -184,6 +210,30 @@ export default function MatchesPage() {
     setLoading(true); setError('');
     try { const r = await apiPost(endpoints.categoryAdvanceBracket(cascade.catId), {}); mutate(); setDrawResult(r); setDrawOpen(true); }
     catch (err) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  // Kyorugi: en vez de un partido por el tercer puesto, quien perdio contra
+  // alguno de los dos finalistas tiene derecho a repechaje -- ver
+  // DrawRepechage del lado del servidor. Solo tiene sentido una vez que la
+  // final ya tiene los dos nombres puestos, lo que ese mismo endpoint valida
+  // -- este boton no repite esa condicion, solo la de que la categoria haya
+  // activado la opcion al configurarla.
+  const doRepechage = async () => {
+    if (!cascade.catId) return;
+    const ok = await confirm('Sortear repechaje?', { confirmLabel: 'Sortear' });
+    if (!ok) return;
+    setLoading(true); setError('');
+    try {
+      const r = await apiPost(endpoints.categoryDrawRepechage(cascade.catId), {});
+      mutate();
+      const nombreDe = (id) => (teams || []).find((t) => t.id === id)?.name || id;
+      const bronces = (r.automaticBronzeTeamIds || []).map(nombreDe).join(', ');
+      toast.success(
+        `${r.created} partido(s) de repechaje sorteados.`
+        + (bronces ? ` Bronce sin rival para: ${bronces}.` : ''),
+      );
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   };
 
   const abrirGenerarJornada = () => {
@@ -223,9 +273,19 @@ export default function MatchesPage() {
   const generarJornada = async () => {
     setJornadaSaving(true); setJornadaError('');
     try {
+      // La hora de inicio es de reloj de pared, sin zona: el servidor la
+      // guarda como un instante, asi que necesita saber a que reloj
+      // pertenece. Sin esto la leia como UTC y el partido aparecia horas
+      // antes en la propia pantalla donde se escribio. Se calcula para el dia
+      // elegido (hoy si no se eligio ninguno) para respetar horario de verano.
+      const dia = jornadaForm.from || new Date().toLocaleDateString('sv-SE');
+      const utcOffsetMinutes = jornadaForm.startTime
+        ? -new Date(`${dia}T${jornadaForm.startTime}`).getTimezoneOffset()
+        : null;
       const r = await apiPost(endpoints.competitionSchedule(cascade.compId), {
         from: jornadaForm.from || null,
         startTime: jornadaForm.startTime || null,
+        utcOffsetMinutes: Number.isFinite(utcOffsetMinutes) ? utcOffsetMinutes : null,
       });
       mutate();
       setJornadaOpen(false);
@@ -253,6 +313,14 @@ export default function MatchesPage() {
       toast.error(err.message);
     }
   };
+
+  // Hay llave en esta categoria, pero todavia sin final: una promovida antes
+  // de que se sortearan todas las rondas de una vez (ver el boton "Siguiente
+  // ronda" mas abajo). Con la final ya creada no hay ronda que sortear.
+  const partidosDeLlave = cascade.catId
+    ? (matches || []).filter((m) => m.categoryId === cascade.catId && m.phase && !m.isRepechage)
+    : [];
+  const quedaRondaPorSortear = partidosDeLlave.length > 0 && !partidosDeLlave.some((m) => m.phase === 'final');
 
   // Las rondas de fase de eliminatoria reusan numeros desde 1 (ver
   // AdvanceBracket) y no tienen relacion con las jornadas de la fase de
@@ -298,7 +366,10 @@ export default function MatchesPage() {
   const delMatch = async (id) => {
     const ok = await confirm('Eliminar partido?', { confirmLabel: 'Eliminar', danger: true });
     if (!ok) return;
-    await apiDelete(endpoints.match(id)); mutate();
+    // El servidor rechaza (409) borrar un partido con resultado y explica por
+    // que: sin capturarlo, ese mensaje no llegaba a ningun lado y el click
+    // parecia no hacer nada.
+    try { await apiDelete(endpoints.match(id)); mutate(); } catch (err) { toast.error(err.message); }
   };
 
   const columns = [
@@ -403,14 +474,18 @@ export default function MatchesPage() {
             Promover a eliminatoria
           </Button>
         )}
-        {/* Solo "groups": ahi PromoteGroupStage dibuja unicamente la ronda 1
-            de la eliminatoria y AdvanceBracket sigue siendo el unico camino
-            para la siguiente. Un knockout puro ya no lo necesita -- se
-            sortea completo de una vez (ver Bracket.FullDraw via
-            KnockoutCalendarDraw.DrawFull), asi que este boton ahi solo
-            llevaba al mismo rechazo de siempre ("todavia no hay resultado")
-            porque esa ronda ya existe con sus equipos por definir. */}
-        {cascade.catId && formato === 'groups' && <Button variant="outlined" startIcon={<Iconify icon="eva:arrow-forward-outline" />} onClick={doAdvance} disabled={loading}>Siguiente ronda</Button>}
+        {/* Ni un knockout puro ni una eliminatoria promovida desde grupos lo
+            necesitan: los dos se sortean completos de una vez, hasta la final
+            (ver Bracket.FullDraw), y cada ganador pasa solo a su lugar al
+            cargar el resultado. Solo queda para una promocion hecha antes de
+            eso, que dibujo unicamente la ronda 1 y todavia no llego a tener
+            final -- ahi AdvanceBracket sigue siendo el unico camino. */}
+        {cascade.catId && formato === 'groups' && quedaRondaPorSortear && <Button variant="outlined" startIcon={<Iconify icon="eva:arrow-forward-outline" />} onClick={doAdvance} disabled={loading}>Siguiente ronda</Button>}
+        {cascade.catId && catActual?.usesRepechage && (
+          <Button variant="outlined" startIcon={<Iconify icon="mdi:trophy-outline" />} onClick={doRepechage} disabled={loading}>
+            Sortear repechaje
+          </Button>
+        )}
         {cascade.catId && <Button variant="outlined" startIcon={<Iconify icon="eva:shuffle-2-outline" />} onClick={() => { setError(''); setBulkOpen(true); }} disabled={loading}>Reprogramar en bloque</Button>}
         {cascade.catId && rondasDisponibles.length > 0 && (
           <TextField
@@ -461,7 +536,7 @@ export default function MatchesPage() {
       />
 
       <ResultDialog
-        open={resOpen} onClose={() => setResOpen(false)} selMatch={selMatch} sportInfo={sportInfo} mutate={mutate}
+        open={resOpen} onClose={() => setResOpen(false)} selMatch={selMatch} sportInfo={sportInfoDelPartido} mutate={mutate}
         loading={loading} setLoading={setLoading} error={error} setError={setError}
       />
 
@@ -476,7 +551,7 @@ export default function MatchesPage() {
       />
 
       <EventsDialog
-        open={evOpen} onClose={() => setEvOpen(false)} selMatch={selMatch} sportInfo={sportInfo}
+        open={evOpen} onClose={() => setEvOpen(false)} selMatch={selMatch} sportInfo={sportInfoDelPartido} mutate={mutate}
         loading={loading} setLoading={setLoading} error={error} setError={setError}
       />
 

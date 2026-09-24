@@ -23,6 +23,7 @@ import { endpoints, default as axios } from 'src/lib/axios';
 import { downloadBlob } from 'src/lib/download-blob';
 import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
@@ -49,7 +50,17 @@ const FORMATO_INFO = {
 // con el resto de la app (Card, Button, DataGrid: todos redondeados).
 // overflow: 'hidden' recorta el tinte de ACCORDION_SUMMARY_SX a esas mismas
 // esquinas en vez de dejarlo asomar en punta por debajo.
-const ACCORDION_SX = { borderRadius: 1, overflow: 'hidden', '&:before': { display: 'none' } };
+//
+// flexShrink: 0 es el que evita que el acordeón se recorte: el Accordion es
+// un item flex dentro de la columna del DialogContent (CrudDialog), y la
+// propia regla de CSS que resuelve el tamaño mínimo de un item flex dice que
+// cuando tiene overflow distinto de "visible" -- que ahora tiene, por la
+// línea de arriba -- ese mínimo pasa a ser 0 en vez de "lo que ocupa su
+// contenido". Sin flexShrink:0, un Accordion expandido con más contenido del
+// que entra en el modal se aprieta hasta lo que sobre en vez de empujar al
+// diálogo a scrollear -- por eso se veía como si tuviera un alto fijo que
+// recortaba lo de más abajo.
+const ACCORDION_SX = { borderRadius: 1, overflow: 'hidden', flexShrink: 0, '&:before': { display: 'none' } };
 
 // Un fondo propio en la cabecera del accordion: "outlined" a secas se
 // confunde con un panel fijo (el borde es igual al de cualquier TextField de
@@ -312,7 +323,9 @@ export default function CompetitionsPage() {
               label="Minutos entre partidos"
               type="number"
               value={form.bufferMinutes}
-              onChange={(e) => setForm({ ...form, bufferMinutes: e.target.value })}
+              onChange={(e) => setForm({ ...form, bufferMinutes: soloDigitos(e.target.value) })}
+              onKeyDown={bloquearNoEnteros}
+              slotProps={{ htmlInput: { min: 0, step: 1 } }}
               fullWidth
               helperText="La duración del partido se calcula sola (o se declara, para un deporte sin reloj) desde el reglamento de cada categoría, esto es solo el margen entre el final de uno y el arranque del siguiente en la misma cancha (cambio de equipos, entrada en calor). Vacío usa un valor por defecto."
             />

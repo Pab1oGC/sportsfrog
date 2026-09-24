@@ -72,9 +72,15 @@ public static class AdvanceBracket
         // filter costs it nothing.
         var matches = await database.Matches
             .AsNoTracking()
-            .Where(match => match.CategoryId == categoryId && match.Phase != null)
+            // A repechage ladder also carries a phase, but it is a second,
+            // independent progression toward its own bronze medal rather
+            // than another round toward this one final — counting it in
+            // would let its match count corrupt "the current round" below.
+            .Where(match => match.CategoryId == categoryId && match.Phase != null && !match.IsRepechage)
             .Select(match => new
             {
+                match.HomeSourceMatchId,
+                match.AwaySourceMatchId,
                 match.RoundNumber,
                 match.Status,
                 match.HomeTeamId,
@@ -94,6 +100,19 @@ public static class AdvanceBracket
                     ? "Esta categoría todavía no tiene una fase eliminatoria sorteada. Promové a " +
                       "los clasificados de la fase de grupos primero."
                     : "Esta categoría todavía no tiene llaves. Sorteá su primera ronda antes de avanzar.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (matches.Any(match => match.HomeSourceMatchId != null || match.AwaySourceMatchId != null))
+        {
+            // Drawn in full: every round already exists, with its sides
+            // waiting on the winners before it, and BracketWinnerPropagation
+            // fills them in as each match is decided. There is no next round
+            // left to draw, and reading "the current round" off a bracket
+            // like this would only ever say the final is not finished.
+            return Results.Problem(
+                detail: "La llave de esta categoría ya está sorteada completa, hasta la final. " +
+                        "Los ganadores pasan solos a la ronda siguiente al cargar cada resultado.",
                 statusCode: StatusCodes.Status409Conflict);
         }
 

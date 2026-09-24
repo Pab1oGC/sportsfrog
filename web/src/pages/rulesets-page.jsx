@@ -15,6 +15,7 @@ import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { TIEBREAKER_CODES, etiquetasDesempate } from 'src/lib/tiebreaker-labels';
 import { esJuzgado } from 'src/lib/sport-shape';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 
 const EMPTY_FORM = {
   name: '',
@@ -257,6 +258,24 @@ export default function RulesetsPage() {
             // de "Deporte" mas arriba); el organizador la pisa si su liga
             // juega distinto.
             helperText="Se sugiere según el deporte — ajustala si tu competencia juega distinto."
+          />
+        )}
+        {tieneReloj && !esPorSets && !juzgado && (
+          // Solo donde el reloj sigue corriendo entre periodos (fútbol,
+          // futsal, básquet): ahi el minuto de un evento es el del partido y
+          // el tiempo adicional decide hasta donde llega cada periodo. En
+          // taekwondo el reloj arranca de nuevo en cada asalto, asi que no
+          // aplica (ver EventPolicy.InspectMinute).
+          <TextField
+            label="Tiempo adicional máximo (minutos)"
+            type="number"
+            value={form.config.periods.maxExtraMinutes ?? ''}
+            onChange={(e) => { const v = soloDigitos(e.target.value); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, maxExtraMinutes: v === '' ? null : +v } } }); }}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 0, max: 60, step: 1 } }}
+            placeholder="20"
+            fullWidth
+            helperText="Hasta cuántos minutos por encima de la duración se puede cargar un evento de ese período. Normalmente se añaden hasta 10 y, en un caso extremo, 20. Vacío = 20."
           />
         )}
         {tieneReloj && (

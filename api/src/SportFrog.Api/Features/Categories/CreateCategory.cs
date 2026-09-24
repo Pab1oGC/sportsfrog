@@ -84,6 +84,7 @@ public static class CreateCategory
             QualifiersPerGroup = contract.QualifiersPerGroup,
             MinWeightKg = contract.MinWeightKg,
             MaxWeightKg = contract.MaxWeightKg,
+            UsesRepechage = contract.UsesRepechage,
         };
 
         database.Categories.Add(category);

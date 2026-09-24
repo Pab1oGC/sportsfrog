@@ -139,6 +139,41 @@ public sealed class Match
     /// <summary>Anything the referee or the organizer needs written down.</summary>
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// Whether this fixture belongs to a repechage ladder rather than the
+    /// category's own run at the title.
+    /// </summary>
+    /// <remarks>
+    /// A repechage match still carries a non-null <see cref="Phase"/>
+    /// (<c>Repechage.LadderPhase</c> or <c>Repechage.BronzePhase</c>) and
+    /// still resolves through <c>BracketWinnerPropagation</c> exactly like
+    /// any other bracket match — this flag exists only for the two readers
+    /// that assume every phased match of a category belongs to the single
+    /// progression toward one final (<c>AdvanceBracket</c>'s current round,
+    /// and the public page's champion lookup): both would otherwise mistake
+    /// a bronze-medal ladder running alongside the final for a later round of
+    /// it. Everything else that reads <see cref="Phase"/> — the calendar, the
+    /// bracket display — needs no such guard, because it never assumed a
+    /// single progression in the first place.
+    /// </remarks>
+    public bool IsRepechage { get; set; }
+
+    /// <summary>
+    /// Which of the final's two competitors this repechage match settles the
+    /// bronze for — 1 for the home side of the final, 2 for the away side.
+    /// Null for every match that is not a repechage one.
+    /// </summary>
+    /// <remarks>
+    /// Set once, by <c>DrawRepechage</c>, at the moment each half's ladder is
+    /// actually built — that is the one place this is known for certain,
+    /// since the two halves never share a competitor and nothing else needs
+    /// to trace the bracket's source-match graph back out to rediscover it.
+    /// Exists so a reader — today, the public calendar — can put both halves
+    /// in their own section instead of interleaving them by
+    /// <see cref="RoundNumber"/>, which is only comparable within one half.
+    /// </remarks>
+    public short? RepechageBranch { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

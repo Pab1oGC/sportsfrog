@@ -14,6 +14,7 @@ import { useCascade } from 'src/hooks/use-cascade';
 import { useCrudDialog } from 'src/hooks/use-crud';
 import { endpoints } from 'src/lib/axios';
 import { esIndividual } from 'src/lib/sport-shape';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
@@ -278,7 +279,8 @@ export default function TeamsPage() {
           label="Bombo"
           type="number"
           value={form.seed}
-          onChange={(e) => setForm({ ...form, seed: e.target.value })}
+          onChange={(e) => setForm({ ...form, seed: soloDigitos(e.target.value) })}
+          onKeyDown={bloquearNoEnteros}
           fullWidth
           helperText={`Opcional. Para un sorteo de grupos por bombos: ${soloDeportista ? 'deportistas' : (individual ? 'inscripciones' : 'equipos')} del mismo bombo nunca caen en el mismo grupo.`}
           slotProps={{ htmlInput: { min: 1, max: 26 } }}

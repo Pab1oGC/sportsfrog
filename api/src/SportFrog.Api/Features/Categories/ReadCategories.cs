@@ -24,7 +24,8 @@ public static class ReadCategories
         short DisplayOrder,
         short? QualifiersPerGroup,
         decimal? MinWeightKg,
-        decimal? MaxWeightKg);
+        decimal? MaxWeightKg,
+        bool UsesRepechage = false);
 
     public static IEndpointRouteBuilder MapReadCategories(this IEndpointRouteBuilder routes)
     {
@@ -116,5 +117,6 @@ public static class ReadCategories
             category.DisplayOrder,
             category.QualifiersPerGroup,
             category.MinWeightKg,
-            category.MaxWeightKg));
+            category.MaxWeightKg,
+            category.UsesRepechage));
 }

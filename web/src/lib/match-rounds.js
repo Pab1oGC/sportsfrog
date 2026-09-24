@@ -73,3 +73,77 @@ export function agruparPorRonda(fixtures) {
 export function soloFaseEliminatoria(grupos) {
   return grupos.filter(function(g) { return g.clave.indexOf('f:') === 0; });
 }
+
+/**
+ * El repechaje de kyorugi, en dos secciones fijas -- una por cada mitad de
+ * la llave -- en vez de intercalado entre las jornadas y fases del cuadro
+ * principal por `agruparPorRonda`. Sus partidos también llevan `phase` y su
+ * propia `roundNumber` (ver `Repechage`/`DrawRepechage` del lado del
+ * servidor), numerada desde 1 dentro de cada mitad y sin relación con la
+ * ronda del cuadro principal -- agruparlos junto a esas rondas es lo que
+ * desordenaba el calendario: una ronda 1 de repechaje caía bajo el mismo
+ * encabezado que una ronda 1 de octavos que no tiene nada que ver.
+ *
+ * `repechageBranch` (1 o 2) es la única señal confiable de a qué mitad
+ * pertenece cada partido -- la decide `DrawRepechage` al sortear cada mitad,
+ * una vez, y no se puede reconstruir de forma confiable del lado del
+ * cliente. Un partido de una versión anterior al campo (sin `repechageBranch`)
+ * no entra en ninguna de las dos secciones -- se pierde antes que mostrarse
+ * bajo la mitad equivocada.
+ */
+export function agruparRepechajePorRama(fixtures) {
+  var ramas = { 1: [], 2: [] };
+  fixtures.forEach(function(m) {
+    if (ramas[m.repechageBranch]) ramas[m.repechageBranch].push(m);
+  });
+
+  var titulos = { 1: 'Repechaje Bronce A', 2: 'Repechaje Bronce B' };
+
+  return [1, 2]
+    .filter(function(rama) { return ramas[rama].length > 0; })
+    .map(function(rama) {
+      var matches = ramas[rama].slice().sort(function(a, b) { return (a.roundNumber || 0) - (b.roundNumber || 0); });
+      var pendientes = matches.filter(function(m) { return PENDIENTE[m.status]; }).length;
+      var jugados = matches.filter(function(m) { return m.homeTotal != null && m.awayTotal != null; }).length;
+
+      return {
+        clave: 'r:' + rama,
+        titulo: titulos[rama],
+        matches: matches,
+        pendientes: pendientes,
+        jugados: jugados,
+        terminada: pendientes === 0,
+        enCurso: pendientes > 0 && jugados > 0,
+      };
+    });
+}
+
+/**
+ * Todo agrupado para el calendario: jornadas y fases del cuadro principal
+ * (nunca incluyen un partido de repechaje), con las dos secciones fijas del
+ * repechaje intercaladas justo antes de la final -- nunca después. La final
+ * es el chip que cierra el calendario de cualquier categoría, con o sin
+ * repechaje; el repechaje se juega alrededor de ella, no es lo último que
+ * pasa en el torneo, así que su lugar es antes, no después.
+ *
+ * `agruparPorRonda(normales)` ya deja la final como su último grupo siempre
+ * que hay uno -- es el de mayor ronda entre los que sí tienen fase -- así
+ * que alcanza con separarlo del resto antes de intercalar el repechaje.
+ * Un solo punto de entrada para `CalendarView`, para no repetir en cada
+ * lugar que lo usa el filtro de `isRepechage` que separa las dos
+ * agrupaciones.
+ */
+export function agruparCalendario(fixtures) {
+  var normales = fixtures.filter(function(m) { return !m.isRepechage; });
+  var repechaje = fixtures.filter(function(m) { return m.isRepechage; });
+  var principales = agruparPorRonda(normales);
+  var deRepechaje = agruparRepechajePorRama(repechaje);
+
+  if (deRepechaje.length === 0 || principales.length === 0) {
+    return principales.concat(deRepechaje);
+  }
+
+  var final = principales[principales.length - 1];
+  var antesDeLaFinal = principales.slice(0, principales.length - 1);
+  return antesDeLaFinal.concat(deRepechaje, [final]);
+}

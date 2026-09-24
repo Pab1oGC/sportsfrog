@@ -34,12 +34,34 @@ var CRUCES = { standard: StandardCruce, compact: CompactCruce, detailed: Detaile
  * `m.id`, y el contenedor de columnas (`containerRef`) es un `position:
  * relative` *adentro* del `Box` que scrollea, no el que scrollea él
  * mismo -- así el overlay se mueve en conjunto con las columnas.
+ *
+ * Ese `ref` de cada tarjeta sale de `refCallback(m.id)`, no de una función
+ * nueva escrita ahí mismo en el `.map()`: una función literal ahí sería
+ * una identidad distinta en cada render de Llave (aunque la tarjeta sea
+ * la misma de siempre), y React reacciona a eso desconectando y volviendo
+ * a conectar el ref -- un vaivén que deja `refsMap` con huecos momentáneos
+ * en medio del cambio. Si `BracketConnectors` mide justo en ese instante
+ * (su ResizeObserver puede disparar en cualquier momento, no está atado
+ * al render de Llave), encuentra menos tarjetas de las que hay y calcula
+ * de menos -- sin que nada dispare un recálculo después, porque nada
+ * cambió de tamaño. Cacheado por id, la MISMA función sirve mientras la
+ * tarjeta siga siendo la misma, y React no toca el ref para nada.
  */
 export function Llave(props) {
   var grupos = props.grupos;
   var Cruce = props.esIndividual ? IndividualCruce : (CRUCES[props.variant] || StandardCruce);
   var containerRef = useRef(null);
   var refsMap = useRef(new Map());
+  var refCallbacks = useRef(new Map());
+
+  function refCallback(id) {
+    if (!refCallbacks.current.has(id)) {
+      refCallbacks.current.set(id, function(el) {
+        if (el) refsMap.current.set(id, el); else refsMap.current.delete(id);
+      });
+    }
+    return refCallbacks.current.get(id);
+  }
 
   // El campeón: la última ronda, cuando quedó en un solo cruce ya jugado.
   var ultima = grupos[grupos.length - 1];
@@ -89,7 +111,7 @@ export function Llave(props) {
                 <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: 2 }}>
                   {g.matches.map(function(m) {
                     return (
-                      <Box key={m.id} ref={function(el) { if (el) refsMap.current.set(m.id, el); else refsMap.current.delete(m.id); }}>
+                      <Box key={m.id} ref={refCallback(m.id)}>
                         <Cruce m={m} outcome={resolveMatchOutcome(m)} />
                       </Box>
                     );

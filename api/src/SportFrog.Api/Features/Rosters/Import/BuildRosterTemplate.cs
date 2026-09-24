@@ -45,16 +45,17 @@ public static class BuildRosterTemplate
         var team = await database.Teams
             .AsNoTracking()
             .Include(candidate => candidate.Category)
+                .ThenInclude(candidate => candidate!.Competition)
             .SingleOrDefaultAsync(candidate => candidate.Id == teamId, cancellationToken);
 
-        if (team?.Category is not { } category)
+        if (team?.Category is not { Competition: { } competition } category)
         {
             return Results.NotFound();
         }
 
         using var workbook = new XLWorkbook();
 
-        Compose(workbook, category);
+        Compose(workbook, category, competition.SportCode);
         Stamp(workbook, organization.RequireOrganizationId(), team, category);
 
         using var file = new MemoryStream();
@@ -67,10 +68,10 @@ public static class BuildRosterTemplate
     }
 
     /// <summary>Lays out the sheet somebody types into.</summary>
-    private static void Compose(XLWorkbook workbook, Category category)
+    private static void Compose(XLWorkbook workbook, Category category, string sportCode)
     {
         var sheet = workbook.AddWorksheet(RosterSheet.DataSheet);
-        var columns = Columns(category);
+        var columns = Columns(category, sportCode);
 
         for (var index = 0; index < columns.Count; index++)
         {
@@ -109,7 +110,9 @@ public static class BuildRosterTemplate
 
     /// <summary>
     /// The columns this category's template gets. The full set, minus the
-    /// guardian's name and phone when nobody it admits can be a minor.
+    /// guardian's name and phone when nobody it admits can be a minor, and
+    /// minus the weight where nothing about the sport or the category uses it
+    /// (see <see cref="RosterSheet.CollectsWeight"/>).
     /// </summary>
     /// <remarks>
     /// Those two columns exist for the categories that need them: a squad of
@@ -125,12 +128,25 @@ public static class BuildRosterTemplate
     /// filled them in on, which is exactly what an adult squad already looks
     /// like today.
     /// </remarks>
-    private static List<SheetColumn> Columns(Category category) =>
-        OnlyAdmitsAdults(category)
-            ? RosterSheet.Columns
-                .Where(column => column != RosterSheet.Guardian && column != RosterSheet.GuardianPhone)
-                .ToList()
-            : [.. RosterSheet.Columns];
+    private static List<SheetColumn> Columns(Category category, string sportCode)
+    {
+        var columns = RosterSheet.Columns.ToList();
+
+        if (OnlyAdmitsAdults(category))
+        {
+            columns.Remove(RosterSheet.Guardian);
+            columns.Remove(RosterSheet.GuardianPhone);
+        }
+
+        var restrictsWeight = category.MinWeightKg is not null || category.MaxWeightKg is not null;
+
+        if (!RosterSheet.CollectsWeight(sportCode, restrictsWeight))
+        {
+            columns.Remove(RosterSheet.Weight);
+        }
+
+        return columns;
+    }
 
     /// <summary>
     /// Whether every athlete this category could possibly admit is already

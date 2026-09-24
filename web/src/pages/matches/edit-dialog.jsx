@@ -9,6 +9,7 @@ import Alert from '@mui/material/Alert';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { aFechaInput } from 'src/lib/format-date';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { SelectionSpace } from 'src/components/selectors';
 import { toast } from 'sonner';
 
@@ -61,7 +62,9 @@ export function EditDialog({ open, onClose, selMatch, mutate, loading, setLoadin
           label="Ronda"
           type="number"
           value={form.roundNumber}
-          onChange={(e) => setForm({ ...form, roundNumber: e.target.value })}
+          onChange={(e) => setForm({ ...form, roundNumber: soloDigitos(e.target.value) })}
+          onKeyDown={bloquearNoEnteros}
+          slotProps={{ htmlInput: { min: 1, step: 1 } }}
           fullWidth
           helperText="Cambiar la ronda es lo que reordena en que jornada se juega este partido."
         />

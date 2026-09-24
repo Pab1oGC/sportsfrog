@@ -172,6 +172,7 @@ export const endpoints = {
   categoryDraw: (catId) => `${api}/categories/${catId}/draw`,
   categoryDrawGroups: (catId) => `${api}/categories/${catId}/draw/groups`,
   categoryAdvanceBracket: (catId) => `${api}/categories/${catId}/draw/next-round`,
+  categoryDrawRepechage: (catId) => `${api}/categories/${catId}/draw/repechage`,
   categoryPromoteGroupStage: (catId) => `${api}/categories/${catId}/draw/knockout`,
 
   // Un deporte individual (sports.isIndividual) inscribe por deportista, no

@@ -14,6 +14,7 @@ import { Iconify } from 'src/components/iconify';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { esJuzgado, aPuntaje, dePuntaje } from 'src/lib/sport-shape';
+import { bloquearNoEnteros, soloDigitos, bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 import { toast } from 'sonner';
 
 // El backend guarda cada periodo como {p,h,a} -- una letra por clave porque
@@ -66,10 +67,12 @@ function JudgedScoreField({ label, value, onChange }) {
       type="number"
       value={draft}
       onChange={(e) => {
-        setDraft(e.target.value);
-        const puntaje = dePuntaje(e.target.value);
+        const limpio = soloDecimales(e.target.value);
+        setDraft(limpio);
+        const puntaje = dePuntaje(limpio);
         if (puntaje !== null) onChange(puntaje);
       }}
+      onKeyDown={bloquearNegativos}
       placeholder="0.00"
       size="small"
       slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
@@ -150,9 +153,19 @@ export function ResultDialog({ open, onClose, selMatch, sportInfo, mutate, loadi
               </>
             ) : (
               <>
-                <TextField label="Loc" type="number" value={ps.home} onChange={(e) => actualizarPeriodo(i, 'home', Number(e.target.value))} size="small" sx={{ flex: 1 }} />
+                <TextField
+                  label="Loc" type="number" value={ps.home} size="small" sx={{ flex: 1 }}
+                  onChange={(e) => actualizarPeriodo(i, 'home', Number(soloDigitos(e.target.value)))}
+                  onKeyDown={bloquearNoEnteros}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                />
                 <Typography>-</Typography>
-                <TextField label="Vis" type="number" value={ps.away} onChange={(e) => actualizarPeriodo(i, 'away', Number(e.target.value))} size="small" sx={{ flex: 1 }} />
+                <TextField
+                  label="Vis" type="number" value={ps.away} size="small" sx={{ flex: 1 }}
+                  onChange={(e) => actualizarPeriodo(i, 'away', Number(soloDigitos(e.target.value)))}
+                  onKeyDown={bloquearNoEnteros}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                />
               </>
             )}
             {sportInfo?.isPlayedInSets && (

@@ -8,6 +8,7 @@ import { Iconify } from 'src/components/iconify';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { aPuntaje, dePuntaje } from 'src/lib/sport-shape';
+import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 import { toast } from 'sonner';
 
 /**
@@ -48,8 +49,8 @@ export function ScoreCell({ row, onSaved }) {
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
       <TextField
         value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') guardar(); }}
+        onChange={(e) => setValue(soloDecimales(e.target.value))}
+        onKeyDown={(e) => { bloquearNegativos(e); if (e.key === 'Enter') guardar(); }}
         placeholder="0.00"
         size="small"
         type="number"

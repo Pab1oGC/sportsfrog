@@ -34,7 +34,7 @@ import { ContentFigureBackground } from 'src/pages/public/content-figure';
 import { StandingsView } from 'src/pages/public/standings/standings-view';
 import { Partido } from 'src/pages/public/match-card/partido';
 import { BracketView } from 'src/pages/public/bracket/bracket-view';
-import { agruparPorRonda } from 'src/lib/match-rounds';
+import { agruparCalendario } from 'src/lib/match-rounds';
 import { etiquetasDesempate } from 'src/lib/tiebreaker-labels';
 
 var publicFetcher = function(url) { return publicAxios.get(url).then(function(r) { return r.data; }); };
@@ -656,10 +656,14 @@ function CalendarView(props) {
       })
     : fixtures;
 
-  // Agrupadas por jornada o por fase de eliminatoria -- ver
-  // src/lib/match-rounds.js, compartido con BracketView (la llave, que
-  // ahora es su propia pestaña y ya no un sub-modo de esta).
-  var grupos = agruparPorRonda(partidos);
+  // Agrupadas por jornada o por fase de eliminatoria, y el repechaje de
+  // kyorugi aparte en sus dos secciones fijas -- ver
+  // src/lib/match-rounds.js. El cuadro principal sigue agrupándose exactamente
+  // como antes (mismo criterio que BracketView, la llave); el repechaje
+  // quedaba intercalado ahí por número de ronda con rondas del cuadro
+  // principal que no tienen nada que ver -- por eso tiene su propio
+  // agrupamiento, por `repechageBranch` en vez de por ronda.
+  var grupos = agruparCalendario(partidos);
 
   // La primera sin terminar. Si están todas terminadas, la última: el torneo
   // se acabó y lo que alguien viene a ver es cómo cerró.

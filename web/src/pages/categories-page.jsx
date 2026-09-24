@@ -4,6 +4,9 @@ import { useCrudDialog } from 'src/hooks/use-crud';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import FormHelperText from '@mui/material/FormHelperText';
 import { DataGrid } from '@mui/x-data-grid';
 import { useApi } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
@@ -13,8 +16,10 @@ import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { SelectionCompetition, SelectionField } from 'src/components/selectors';
 import { DateField } from 'src/components/date-field';
 import { esIndividual } from 'src/lib/sport-shape';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 
-const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '', minWeightKg: '', maxWeightKg: '' });
+const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '', minWeightKg: '', maxWeightKg: '', usesRepechage: false });
 
 // Un deporte de equipo tiene tres niveles -- club, equipo, jugadores -- y
 // "Max. nomina" pregunta por el ultimo: cuantos jugadores entran en el
@@ -55,13 +60,14 @@ export default function CategoriesPage() {
     entityGender: 'f',
     savedMessage: 'Categoria guardada.',
     buildUrl: (base, id) => endpoints.category(compId, id),
-    mapToForm: (row) => ({ name: row.name || '', gender: row.gender || '', birthDateFrom: row.birthDateFrom || '', birthDateTo: row.birthDateTo || '', maxRosterSize: row.maxRosterSize || '', displayOrder: row.displayOrder || 0, rulesetId: row.rulesetId || '', qualifiersPerGroup: row.qualifiersPerGroup || '', minWeightKg: row.minWeightKg ?? '', maxWeightKg: row.maxWeightKg ?? '' }),
+    mapToForm: (row) => ({ name: row.name || '', gender: row.gender || '', birthDateFrom: row.birthDateFrom || '', birthDateTo: row.birthDateTo || '', maxRosterSize: row.maxRosterSize || '', displayOrder: row.displayOrder || 0, rulesetId: row.rulesetId || '', qualifiersPerGroup: row.qualifiersPerGroup || '', minWeightKg: row.minWeightKg ?? '', maxWeightKg: row.maxWeightKg ?? '', usesRepechage: row.usesRepechage || false }),
     mapToSend: (f) => ({
       name: f.name, gender: f.gender || null, birthDateFrom: f.birthDateFrom || null, birthDateTo: f.birthDateTo || null,
       maxRosterSize: f.maxRosterSize ? Number(f.maxRosterSize) : null, displayOrder: Number(f.displayOrder),
       rulesetId: f.rulesetId || null, qualifiersPerGroup: f.qualifiersPerGroup ? Number(f.qualifiersPerGroup) : null,
       minWeightKg: f.minWeightKg !== '' ? Number(f.minWeightKg) : null,
       maxWeightKg: f.maxWeightKg !== '' ? Number(f.maxWeightKg) : null,
+      usesRepechage: !!f.usesRepechage,
     }),
   });
 
@@ -119,14 +125,21 @@ export default function CategoriesPage() {
               : 'Cuántos compiten juntos en esta categoría.'}
           />
         ) : (
-          <TextField label="Max. nomina" type="number" value={form.maxRosterSize} onChange={(e) => setForm({ ...form, maxRosterSize: e.target.value })} fullWidth />
+          <TextField
+            label="Max. nomina" type="number" value={form.maxRosterSize} fullWidth
+            onChange={(e) => setForm({ ...form, maxRosterSize: soloDigitos(e.target.value) })}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 1, step: 1 } }}
+          />
         )}
         {comp?.format === 'groups' && (
           <TextField
             label="Clasifican por grupo"
             type="number"
             value={form.qualifiersPerGroup}
-            onChange={(e) => setForm({ ...form, qualifiersPerGroup: e.target.value })}
+            onChange={(e) => setForm({ ...form, qualifiersPerGroup: soloDigitos(e.target.value) })}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 1, step: 1 } }}
             helperText="Cuantos equipos de cada grupo pasan a la siguiente ronda. Se deja vacio para no resaltar nada en el portal publico."
             fullWidth
           />
@@ -141,7 +154,8 @@ export default function CategoriesPage() {
               label="Peso minimo (kg)"
               type="number"
               value={form.minWeightKg}
-              onChange={(e) => setForm({ ...form, minWeightKg: e.target.value })}
+              onChange={(e) => setForm({ ...form, minWeightKg: soloDecimales(e.target.value) })}
+              onKeyDown={bloquearNegativos}
               fullWidth
               slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
             />
@@ -149,7 +163,8 @@ export default function CategoriesPage() {
               label="Peso maximo (kg)"
               type="number"
               value={form.maxWeightKg}
-              onChange={(e) => setForm({ ...form, maxWeightKg: e.target.value })}
+              onChange={(e) => setForm({ ...form, maxWeightKg: soloDecimales(e.target.value) })}
+              onKeyDown={bloquearNegativos}
               fullWidth
               slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
             />
@@ -159,6 +174,29 @@ export default function CategoriesPage() {
           <MenuItem value="">Usar el de la competencia</MenuItem>
           {possibleRulesets.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
         </TextField>
+        {comp?.format !== 'league' && (
+          // No restringido a un deporte puntual del lado del servidor
+          // (DrawRepechage lo valida por la forma del cuadro, no por el
+          // deporte), pero kyorugi es el motivo de que esto exista: ahi no
+          // se juega un partido por el tercer puesto, se sortea un repechaje
+          // aparte para cada mitad de la llave. Sin sentido en una liga, que
+          // nunca llega a un cuadro de eliminacion directa.
+          <Box>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={!!form.usesRepechage}
+                  onChange={(e) => setForm({ ...form, usesRepechage: e.target.checked })}
+                />
+              }
+              label="Definir el tercer puesto por repechaje"
+            />
+            <FormHelperText sx={{ mt: -0.5, ml: 4 }}>
+              En vez de un partido por el tercer puesto, quienes perdieron contra alguno de los dos
+              finalistas se juegan dos bronces aparte, uno por cada mitad de la llave (kyorugi).
+            </FormHelperText>
+          </Box>
+        )}
       </CrudDialog>
     </div>
   );

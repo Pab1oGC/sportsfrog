@@ -13,6 +13,8 @@ export const FASES = {
   cuartos: 'Cuartos de final',
   semifinal: 'Semifinales',
   final: 'Final',
+  repechaje: 'Repechaje',
+  'repechaje bronce': 'Repechaje - Bronce',
 };
 
 // Mas alla de dieciseisavos, Bracket.Phase() no tiene nombre fijo -- devuelve

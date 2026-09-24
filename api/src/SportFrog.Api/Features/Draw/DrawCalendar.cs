@@ -167,26 +167,8 @@ public static class DrawCalendar
         {
             var plan = fullBracket.DrawFull(teams);
 
-            // Assigned up front so a later round's HomeSourceMatchId/
-            // AwaySourceMatchId can point at an earlier one's id before any
-            // of them exist as a row — nothing else needs these to be
-            // stable before SaveChangesAsync.
-            var ids = plan.Select(_ => Guid.NewGuid()).ToList();
-
-            database.Matches.AddRange(plan.Select((planned, index) => new Match
-            {
-                Id = ids[index],
-                OrgId = organization.RequireOrganizationId(),
-                CompetitionId = competition.Id,
-                CategoryId = categoryId,
-                HomeTeamId = planned.Home.TeamId,
-                AwayTeamId = planned.Away.TeamId,
-                HomeSourceMatchId = planned.Home.SourceMatchIndex is { } homeSource ? ids[homeSource] : null,
-                AwaySourceMatchId = planned.Away.SourceMatchIndex is { } awaySource ? ids[awaySource] : null,
-                RoundNumber = (short)planned.Round,
-                Phase = planned.Phase,
-                Status = MatchState.Scheduled,
-            }));
+            database.Matches.AddRange(PlannedBracket.ToMatches(
+                plan, organization.RequireOrganizationId(), competition.Id, categoryId));
 
             await database.SaveChangesAsync(cancellationToken);
 

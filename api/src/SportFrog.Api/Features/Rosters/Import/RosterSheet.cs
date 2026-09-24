@@ -94,6 +94,24 @@ internal static class RosterSheet
         Jersey, Position, Guardian, GuardianPhone,
     ];
 
+    /// <summary>
+    /// Whether a template for this sport asks for a weight at all.
+    /// </summary>
+    /// <remarks>
+    /// Weight only means something where a division is drawn along it, which
+    /// in the catalog is taekwondo. Handing it to a football squad is a column
+    /// nobody has anything to put in, on every row. The exception is a
+    /// category that does restrict weight whatever its sport: the roster check
+    /// refuses an athlete with no weigh-in there, so leaving the column off
+    /// would make that category impossible to fill from a sheet.
+    ///
+    /// Shared by both templates, since the two have to agree on it. The
+    /// readers do not need telling — Weight is optional in both, so a sheet
+    /// without the column reads exactly like one where nobody filled it in.
+    /// </remarks>
+    public static bool CollectsWeight(string sportCode, bool anyCategoryRestrictsWeight) =>
+        sportCode.StartsWith("taekwondo", StringComparison.Ordinal) || anyCategoryRestrictsWeight;
+
     /// <summary>Rows of the hidden sheet that says what this workbook is.</summary>
     public const int MarkerNote = 1;
     public const int MarkerVersion = 2;

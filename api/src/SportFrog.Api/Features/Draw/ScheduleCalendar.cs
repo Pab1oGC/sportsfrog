@@ -61,7 +61,14 @@ public static class ScheduleCalendar
     /// remarks), and a guessed default would be exactly the kind of
     /// scheduling assumption this software has no business making.
     /// </param>
-    public sealed record Request(DateOnly? From, TimeOnly? StartTime);
+    /// <param name="UtcOffsetMinutes">
+    /// How far the organizer's clock is from UTC, in minutes (UTC-4 is -240).
+    /// <paramref name="StartTime"/> is a wall-clock hour with no zone of its
+    /// own, and the column it lands in is a point in time — without this the
+    /// hour typed is read as UTC and shows up hours early on the organizer's
+    /// own screen. Left out, UTC, which is what this used to assume.
+    /// </param>
+    public sealed record Request(DateOnly? From, TimeOnly? StartTime, int? UtcOffsetMinutes = null);
 
     /// <param name="CategoryName">
     /// Which jornada this call advanced, so the organizer sees what just
@@ -99,6 +106,13 @@ public static class ScheduleCalendar
             RuleFor(request => request.StartTime)
                 .NotNull()
                 .WithMessage("La hora de inicio es obligatoria.");
+
+            // UTC-12 to UTC+14 are the zones that exist; anything past that
+            // is a slipped value, and DateTimeOffset would throw on it.
+            RuleFor(request => request.UtcOffsetMinutes)
+                .InclusiveBetween(-14 * 60, 14 * 60)
+                .When(request => request.UtcOffsetMinutes.HasValue)
+                .WithMessage("Ese desfase horario no es posible.");
         }
     }
 
@@ -137,6 +151,10 @@ public static class ScheduleCalendar
                         "usar antes de colocar sus partidos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The organizer's clock, for everything below that turns a wall-clock
+        // hour into an instant or an instant back into "which day is this".
+        var offset = TimeSpan.FromMinutes(request.UtcOffsetMinutes ?? 0);
 
         var proxima = await FindNextJornadaAsync(database, competitionId, cancellationToken);
 
@@ -202,22 +220,28 @@ public static class ScheduleCalendar
         // Saturday afternoon. Read across the whole competition rather than
         // only the spaces above: a team committed at a ground this schedule
         // does not mention is still committed.
-        var engaged = await database.Matches
-            .AsNoTracking()
-            .Where(match => match.CompetitionId == competitionId && match.ScheduledAt != null)
-            .Where(match => match.Status != MatchState.Cancelled)
+        //
+        // The day is the organizer's, not UTC's: at UTC-4 a match at 21:00 is
+        // already tomorrow in UTC, and reading it that way would let its team
+        // be placed again on the evening it is really playing.
+        var engaged = (await database.Matches
+                .AsNoTracking()
+                .Where(match => match.CompetitionId == competitionId && match.ScheduledAt != null)
+                .Where(match => match.Status != MatchState.Cancelled)
+                .Select(match => new { match.HomeTeamId, match.AwayTeamId, match.ScheduledAt })
+                .ToListAsync(cancellationToken))
             .Select(match => new
             {
                 match.HomeTeamId,
                 match.AwayTeamId,
-                Day = DateOnly.FromDateTime(match.ScheduledAt!.Value.UtcDateTime),
+                Day = DateOnly.FromDateTime(match.ScheduledAt!.Value.ToOffset(offset).DateTime),
             })
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         var from = request.From
             ?? LatestScheduledDay(engaged.Select(match => match.Day))
             ?? competition.StartsOn
-            ?? DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+            ?? DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(offset).DateTime);
 
         var placements = CalendarPlacement.Place(
             // The filter above already refused any of these a null side.
@@ -237,11 +261,12 @@ public static class ScheduleCalendar
             ],
             from,
 
-            // Stored with an offset because the column is timestamptz. UTC is
-            // the honest one to write: the organization's own zone is not
-            // recorded anywhere, and inventing one here would put every
-            // fixture an hour out for half the year.
-            TimeSpan.Zero,
+            // The organizer's own offset, as the browser reported it for the
+            // day being placed. The organization's zone is not recorded
+            // anywhere, so it is asked of the one clock that knows it —
+            // writing the typed hour as UTC put every fixture hours out on
+            // the screen it was typed on.
+            offset,
             // Guaranteed present — the Validator refuses a request without one.
             request.StartTime!.Value);
 
@@ -251,7 +276,11 @@ public static class ScheduleCalendar
         {
             var match = byId[placement.MatchId];
             match.VenueSpaceId = placement.VenueSpaceId;
-            match.ScheduledAt = placement.At;
+
+            // Npgsql writes timestamptz only from an offset-zero value and
+            // throws on anything else. Same instant, so the hour typed in the
+            // organizer's zone is what comes back out of it.
+            match.ScheduledAt = placement.At.ToUniversalTime();
         }
 
         await database.SaveChangesAsync(cancellationToken);

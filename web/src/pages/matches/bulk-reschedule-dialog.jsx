@@ -13,6 +13,7 @@ import { Iconify } from 'src/components/iconify';
 import { apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { aFechaInput } from 'src/lib/format-date';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { SelectionField, SelectionSpace } from 'src/components/selectors';
 import { toast } from 'sonner';
 
@@ -122,7 +123,8 @@ export function BulkRescheduleDialog({ open, onClose, matches, mutate, loading, 
             />
             <TextField
               label="Ronda" type="number" size="small" value={row.roundNumber}
-              onChange={(e) => editarFila(i, { roundNumber: e.target.value })} sx={{ width: 90 }}
+              onChange={(e) => editarFila(i, { roundNumber: soloDigitos(e.target.value) })} sx={{ width: 90 }}
+              onKeyDown={bloquearNoEnteros} slotProps={{ htmlInput: { min: 1, step: 1 } }}
             />
             <IconButton size="small" onClick={() => quitarFila(i)} sx={{ mt: 0.5 }}>
               <Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} />

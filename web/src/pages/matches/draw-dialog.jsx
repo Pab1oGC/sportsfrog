@@ -13,6 +13,7 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import { apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 
 const FORMATO_LABEL = { league: 'Todos vs todos', knockout: 'Eliminacion directa', groups: 'Fase de grupos' };
 
@@ -96,7 +97,8 @@ export function DrawDialog({ open, onClose, result, setResult, cascade, formato,
                   label="Numero de grupos"
                   type="number"
                   value={groupCount}
-                  onChange={(e) => setGroupCount(e.target.value)}
+                  onChange={(e) => setGroupCount(soloDigitos(e.target.value))}
+                  onKeyDown={bloquearNoEnteros}
                   fullWidth
                   required
                   helperText="Si algun equipo tiene bombo asignado, el sorteo respeta que ninguno se repita en un mismo grupo."

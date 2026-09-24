@@ -76,7 +76,23 @@ function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText,
       options={athletes}
       loading={isLoading}
       disabled={disabled}
-      getOptionLabel={(a) => `${a.lastName}, ${a.firstName}`}
+      getOptionLabel={(a) => `${a.lastName} ${a.firstName}`}
+      // Sin esto MUI usa la etiqueta como key de React, y dos deportistas con
+      // el mismo nombre repiten key: al filtrar, React deja filas viejas en
+      // la lista (opciones que ya no coinciden con lo tipeado).
+      getOptionKey={(a) => a.id}
+      // Cada palabra tipeada tiene que ser el comienzo de alguna palabra del
+      // nombre completo, en cualquier orden y sin importar tildes ni
+      // mayusculas: "juan perez" y "perez juan" encuentran lo mismo. Al
+      // comienzo y no en cualquier parte, para que "pe" no traiga a "Lopez".
+      filterOptions={(opciones, { inputValue }) => {
+        const normalizar = (texto) => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+        const buscadas = normalizar(inputValue).split(/\s+/).filter(Boolean);
+        return opciones.filter((a) => {
+          const nombre = normalizar(`${a.lastName} ${a.firstName}`).split(/\s+/);
+          return buscadas.every((buscada) => nombre.some((palabra) => palabra.startsWith(buscada)));
+        });
+      }}
       isOptionEqualToValue={(a, b) => a.id === b.id}
       value={multiple ? seleccionados : (seleccionados[0] || null)}
       onChange={(_, seleccion) => onChange(multiple ? seleccion.map((a) => a.id) : (seleccion?.id || ''))}

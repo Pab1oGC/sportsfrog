@@ -2,33 +2,16 @@ import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import Typography from '@mui/material/Typography';
 import Stepper from '@mui/material/Stepper';
 import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
-import { DataGrid } from '@mui/x-data-grid';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { SelectionClub } from 'src/components/selectors';
+import { ImportPreviewGrid, dialogoDeImportacion } from 'src/components/import-preview-grid';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { downloadBlob } from 'src/lib/download-blob';
-
-// Las columnas del import por equipo mas "Categoria": aca cada fila elige la
-// suya (ver DelegationRosterSheet.Category en el backend), a diferencia del
-// archivo de un plantel, que ya esta fijo a una sola.
-const PREVIEW_COLS = [
-  { field: 'number', headerName: '#', width: 50 },
-  { field: 'document', headerName: 'Documento', width: 120 },
-  { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 150 },
-  { field: 'category', headerName: 'Categoria', width: 140, renderCell: ({ value }) => value || '--' },
-  { field: 'outcome', headerName: 'Accion', width: 120, renderCell: ({ value }) => {
-    const colors = { register: 'success', create_and_register: 'info', already_registered: 'default', rejected: 'error' };
-    const labels = { register: 'Registrar', create_and_register: 'Crear+Registrar', already_registered: 'Ya registrado', rejected: 'Rechazado' };
-    return <Chip label={labels[value] || value} color={colors[value] || 'default'} size="small" />;
-  }},
-  { field: 'problems', headerName: 'Problemas', flex: 1, renderCell: ({ value }) => (value || []).join('; ') || '--' },
-];
 
 /**
  * El alta masiva de una delegacion en un deporte individual, de punta a
@@ -102,7 +85,7 @@ export function DelegationImportDialog({ open, onClose, competitionId, onApplied
 
   return (
     <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'overlay.scrim', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }} onClick={close}>
-      <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, width: { xs: '100%', sm: 500 }, maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+      <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, ...dialogoDeImportacion(step === 1), maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Importar delegación desde Excel</Typography>
         <Stepper activeStep={step} sx={{ mb: 3 }}>
           <Step><StepLabel>Club y archivo</StepLabel></Step>
@@ -132,7 +115,7 @@ export function DelegationImportDialog({ open, onClose, competitionId, onApplied
         )}
 
         {step === 1 && result && (
-          <DataGrid rows={(result.rows || []).map((r, i) => ({ ...r, id: i }))} columns={PREVIEW_COLS} autoHeight hideFooter disableRowSelectionOnClick sx={{ mb: 2 }} />
+          <ImportPreviewGrid rows={result.rows} conCategoria />
         )}
 
         {step === 2 && result && (

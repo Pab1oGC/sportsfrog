@@ -8,6 +8,7 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { SelectionSpace } from 'src/components/selectors';
 import { DateField } from 'src/components/date-field';
 import { toast } from 'sonner';
@@ -67,7 +68,9 @@ export function ScheduleDialog({ open, onClose, row, mutate }) {
         />
         <TextField
           label="Turno" type="number" value={form.orderNumber}
-          onChange={(e) => setForm({ ...form, orderNumber: e.target.value })}
+          onChange={(e) => setForm({ ...form, orderNumber: soloDigitos(e.target.value) })}
+          onKeyDown={bloquearNoEnteros}
+          slotProps={{ htmlInput: { min: 1, step: 1 } }}
           fullWidth helperText="Su posición en el orden de ese tapete, ese día."
         />
       </DialogContent>

@@ -413,6 +413,7 @@ api.MapDrawGroups();
 api.MapDrawCalendar();
 api.MapScheduleCalendar();
 api.MapAdvanceBracket();
+api.MapDrawRepechage();
 api.MapPromoteGroupStage();
 api.MapPromoteClassification();
 

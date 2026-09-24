@@ -76,7 +76,11 @@ public static class BuildDelegationRosterTemplate
 
         using var workbook = new XLWorkbook();
 
-        Compose(workbook, categories);
+        var collectsWeight = RosterSheet.CollectsWeight(
+            competition.SportCode,
+            categories.Any(category => category.MinWeightKg is not null || category.MaxWeightKg is not null));
+
+        Compose(workbook, categories, collectsWeight);
         Stamp(workbook, organization.RequireOrganizationId(), competition, club);
 
         using var file = new MemoryStream();
@@ -89,10 +93,12 @@ public static class BuildDelegationRosterTemplate
     }
 
     /// <summary>Lays out the sheet somebody types into.</summary>
-    private static void Compose(XLWorkbook workbook, IReadOnlyList<Category> categories)
+    private static void Compose(XLWorkbook workbook, IReadOnlyList<Category> categories, bool collectsWeight)
     {
         var sheet = workbook.AddWorksheet(DelegationRosterSheet.DataSheet);
-        var columns = DelegationRosterSheet.Columns.ToList();
+        var columns = DelegationRosterSheet.Columns
+            .Where(column => collectsWeight || column != DelegationRosterSheet.Weight)
+            .ToList();
 
         for (var index = 0; index < columns.Count; index++)
         {

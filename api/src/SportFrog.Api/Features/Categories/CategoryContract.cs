@@ -21,7 +21,8 @@ public sealed record CategoryContract(
     short DisplayOrder,
     short? QualifiersPerGroup,
     decimal? MinWeightKg = null,
-    decimal? MaxWeightKg = null);
+    decimal? MaxWeightKg = null,
+    bool UsesRepechage = false);
 
 internal sealed class CategoryContractValidator : AbstractValidator<CategoryContract>
 {

@@ -28,6 +28,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
     internal sealed record MatchContext(
         Match Match,
         string SportCode,
+        ScoreMode ScoreMode,
         CaptureLevel CaptureLevel,
         RulesetConfiguration Rules);
 
@@ -53,6 +54,7 @@ internal sealed class EventPolicy(SportFrogDbContext database)
             .Select(candidate => new
             {
                 candidate.Competition!.SportCode,
+                candidate.Competition.Sport!.ScoreMode,
                 candidate.Competition.CaptureLevel,
 
                 // The category's override where it has one, the competition's
@@ -68,7 +70,8 @@ internal sealed class EventPolicy(SportFrogDbContext database)
 
         return ruleset is null
             ? null
-            : new MatchContext(match, context.SportCode, context.CaptureLevel, ruleset.Config);
+            : new MatchContext(
+                match, context.SportCode, context.ScoreMode, context.CaptureLevel, ruleset.Config);
     }
 
     /// <summary>
@@ -109,6 +112,19 @@ internal sealed class EventPolicy(SportFrogDbContext database)
     }
 
     /// <summary>
+    /// Sports whose events happen one at a time: a goal, a card or a point is
+    /// one occurrence, and "three goals" is three events with three minutes.
+    /// </summary>
+    /// <remarks>
+    /// Quantity exists for a sport that tallies without timing each one, and
+    /// for these it only invites a wrong minute: two goals entered as one
+    /// event carry one minute for both. Kept as a list here and in the
+    /// front-end's <c>registraCantidad</c>, which hides the field.
+    /// </remarks>
+    private static readonly HashSet<string> OneAtATimeSports =
+        ["football", "futsal", "volleyball"];
+
+    /// <summary>
     /// Everything wrong with one event, or nothing.
     /// </summary>
     public async Task<IReadOnlyList<EventViolation>> InspectAsync(
@@ -116,6 +132,8 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         Guid rosterEntryId,
         Guid metricId,
         short? periodNumber,
+        short? minute,
+        int quantity,
         CancellationToken cancellationToken)
     {
         var violations = new List<EventViolation>();
@@ -124,8 +142,88 @@ internal sealed class EventPolicy(SportFrogDbContext database)
         await InspectPlayerAsync(context, rosterEntryId, violations, cancellationToken);
 
         InspectPeriod(context, periodNumber, violations);
+        InspectMinute(context, periodNumber, minute, violations);
+        InspectQuantity(context, quantity, violations);
 
         return violations;
+    }
+
+    /// <summary>
+    /// The minute has to be one the period it is filed under can reach.
+    /// </summary>
+    /// <remarks>
+    /// Only where the match clock runs on across periods and the reglamento
+    /// gives the periods a length — a sport decided in sets, or one with no
+    /// clock, has no such thing as "minute 60 of the second half" to check
+    /// against, and refusing on it would be inventing a rule. The blanket
+    /// 0–240 the request already carries stays as the floor under everything
+    /// else.
+    ///
+    /// An event with no period is held to the match as a whole: it cannot be
+    /// placed in any one period, but it still cannot be past the last one's
+    /// end plus its stoppage time. A period that does not exist is already
+    /// refused by <see cref="InspectPeriod"/>, so it says nothing here.
+    /// </remarks>
+    internal static void InspectMinute(
+        MatchContext context,
+        short? periodNumber,
+        short? minute,
+        List<EventViolation> violations)
+    {
+        var periods = context.Rules.Periods;
+
+        if (minute is not { } at
+            || context.ScoreMode != ScoreMode.Cumulative
+            || periods.Minutes is null)
+        {
+            return;
+        }
+
+        var extra = periods.MaxExtraMinutes ?? PeriodClock.DefaultMaxExtraMinutes;
+
+        if (periodNumber is not { } period)
+        {
+            if (PeriodClock.LastMinute(periods) is { } last && at > last)
+            {
+                violations.Add(new EventViolation(
+                    "Minute",
+                    $"El partido llega hasta el minuto {last}, contando hasta {extra} de tiempo " +
+                    $"adicional, así que el {at} no existe."));
+            }
+
+            return;
+        }
+
+        if (PeriodClock.MinuteWindow(periods, period) is not { } window)
+        {
+            return;
+        }
+
+        if (at < window.From || at > window.To)
+        {
+            violations.Add(new EventViolation(
+                "Minute",
+                $"El minuto {at} no corresponde a {periods.Label} {period}: ahí van del " +
+                $"{Math.Max(1, window.From)} al {period * periods.Minutes.Value}, más hasta {extra} " +
+                $"de tiempo adicional (hasta el {window.To})."));
+        }
+    }
+
+    /// <summary>
+    /// A sport that records one event at a time takes a quantity of one.
+    /// </summary>
+    private static void InspectQuantity(
+        MatchContext context,
+        int quantity,
+        List<EventViolation> violations)
+    {
+        if (quantity != 1 && OneAtATimeSports.Contains(context.SportCode))
+        {
+            violations.Add(new EventViolation(
+                "Quantity",
+                "En este deporte cada evento se registra de a uno: cargá uno por cada vez " +
+                "que ocurrió, cada uno con su minuto."));
+        }
     }
 
     /// <summary>

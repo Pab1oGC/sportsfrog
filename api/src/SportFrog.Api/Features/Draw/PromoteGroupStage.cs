@@ -23,6 +23,10 @@ namespace SportFrog.Api.Features.Draw;
 /// stage has to be finished and read before anyone can be told who plays
 /// next, in a way the opening draw never has to wait for.
 ///
+/// Draws the whole bracket, quarter-finals to final, the way a pure knockout
+/// does: only round one has teams in it, and every later match is created
+/// with its sides waiting on the winners of the ones before it.
+///
 /// How many advance is asked here rather than fixed on the competition,
 /// because the answer is a decision the organizer makes once the tables are
 /// final — two per group is common, but not universal, and "best thirds" is
@@ -41,11 +45,14 @@ public static class PromoteGroupStage
     /// </param>
     public sealed record Request(int QualifiersPerGroup, int BestThirdPlaced);
 
+    /// <param name="Created">Every match of the bracket, first round to final.</param>
+    /// <param name="Phase">The first round's name: the one about to be played.</param>
     /// <param name="RepeatedMatchups">
     /// How many of round one's pairings repeat a group-stage meeting —
     /// normally zero, and only ever positive when the numbers themselves
     /// leave no other way to pair everyone.
     /// </param>
+    /// <param name="Rounds">How many rounds the bracket has, first to final.</param>
     public sealed record Response(
         int Created,
         int Replaced,
@@ -53,7 +60,8 @@ public static class PromoteGroupStage
         int Direct,
         int Wildcards,
         int Byes,
-        int RepeatedMatchups);
+        int RepeatedMatchups,
+        int Rounds = 0);
 
     internal sealed class Validator : AbstractValidator<Request>
     {
@@ -163,6 +171,22 @@ public static class PromoteGroupStage
             return Results.Problem(detail: problem, statusCode: StatusCodes.Status409Conflict);
         }
 
+        // Every round down to the final, drawn now: round one from the
+        // qualifiers, and each later round from slots that say "whoever wins
+        // that match" — see Bracket.FullDraw. The same shape a pure knockout
+        // has, so dates and venues for the whole bracket can be booked before
+        // it is played, and BracketWinnerPropagation fills each slot in as its
+        // match is decided. Computed before anything is replaced: a plan with
+        // nothing in it must not cost the organizer the bracket they had.
+        var bracket = Bracket.FullDraw(plan.Seeded);
+
+        if (bracket.Count == 0)
+        {
+            return Results.Problem(
+                detail: "Hacen falta al menos dos clasificados para armar una eliminatoria.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
         var now = clock.GetUtcNow();
 
         // A promotion is ordinary to redraw too — an organizer who picked
@@ -173,37 +197,26 @@ public static class PromoteGroupStage
             match.DeletedAt = now;
         }
 
-        var (drawn, byes) = Bracket.FirstRound(plan.Seeded);
-        var phase = Bracket.Phase(drawn.Count, 1);
+        database.Matches.AddRange(PlannedBracket.ToMatches(
+            bracket, organization.RequireOrganizationId(), competition.Id, categoryId));
 
-        database.Matches.AddRange(drawn.Select(fixture => new Match
-        {
-            Id = Guid.NewGuid(),
-            OrgId = organization.RequireOrganizationId(),
-            CompetitionId = competition.Id,
-            CategoryId = categoryId,
-            HomeTeamId = fixture.HomeTeamId,
-            AwayTeamId = fixture.AwayTeamId,
-            RoundNumber = 1,
-            Phase = phase,
-            Status = MatchState.Scheduled,
-        }));
-
-        // Read back once the bracket is finished, so a later round can tell
-        // a genuine bye from a team the group stage eliminated — both are
-        // active teams that never play a knockout match, and only this list
-        // says which is which.
+        // Still recorded, though the bracket no longer needs it to tell a bye
+        // from an eliminated team: AdvanceBracket reads it for a bracket
+        // promoted before this drew every round, which has to keep working.
         category.KnockoutEntrants = [.. plan.Seeded];
 
         await database.SaveChangesAsync(cancellationToken);
 
+        var firstRound = bracket.Count(match => match.Round == 1);
+
         return Results.Ok(new Response(
-            drawn.Count,
+            bracket.Count,
             knockoutMatches.Count,
-            phase,
+            bracket[0].Phase,
             plan.Direct,
             plan.Wildcards,
-            byes.Count,
-            plan.RepeatedMatchups));
+            plan.Seeded.Count - firstRound * 2,
+            plan.RepeatedMatchups,
+            bracket.Max(match => match.Round)));
     }
 }

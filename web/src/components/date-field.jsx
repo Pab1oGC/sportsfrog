@@ -60,8 +60,14 @@ const renderCompactTimeColumn = (props) => renderMultiSectionDigitalClockTimeVie
  * backend (DateOnly). `onChange` llega envuelto en un evento sintetico
  * `{ target: { value } }` para que cada formulario pueda seguir
  * escribiendo `(e) => ...e.target.value` sin reescribirse.
+ *
+ * `minDate` y `maxDate` (strings "AAAA-MM-DD") apagan en el calendario los
+ * dias fuera de rango, para que no se puedan elegir. Una fecha tipeada a mano
+ * fuera de rango si llega a `onChange` -- el selector la marca en rojo pero no
+ * la descarta --, asi que quien fija un limite tambien tiene que validarlo al
+ * guardar. `error` fuerza el estado de error cuando lo decide el formulario.
  */
-export function DateField({ label, value, onChange, required, fullWidth, size, sx, helperText, disabled }) {
+export function DateField({ label, value, onChange, required, fullWidth, size, sx, helperText, disabled, minDate, maxDate, error }) {
   const parsed = value ? dayjs(value) : null;
 
   return (
@@ -73,7 +79,9 @@ export function DateField({ label, value, onChange, required, fullWidth, size, s
       }}
       format="DD/MM/YYYY"
       disabled={disabled}
-      slotProps={{ textField: { fullWidth, size, required, helperText, sx } }}
+      minDate={minDate ? dayjs(minDate) : undefined}
+      maxDate={maxDate ? dayjs(maxDate) : undefined}
+      slotProps={{ textField: { fullWidth, size, required, helperText, sx, error: error || undefined } }}
     />
   );
 }

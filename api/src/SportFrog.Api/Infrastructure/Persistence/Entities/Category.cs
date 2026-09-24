@@ -107,6 +107,24 @@ public sealed class Category
     /// </remarks>
     public Guid[]? KnockoutEntrants { get; set; }
 
+    /// <summary>
+    /// Whether this category's knockout stage settles third place by
+    /// repechage — two bronze medals, one per finalist's half of the draw,
+    /// fought for by whoever that finalist beat along the way — instead of
+    /// no third place at all.
+    /// </summary>
+    /// <remarks>
+    /// An organizer's own choice per category rather than something a sport
+    /// forces: kyorugi is why this exists (see <c>Repechage</c>), but nothing
+    /// here refuses it for another individual combat sport run the same way,
+    /// and nothing forces it onto every kyorugi category either — a small
+    /// bracket run as a plain knockout with no bronze at all is still a
+    /// legitimate way to run one. <c>DrawRepechage</c> is where this is
+    /// actually checked; a category that never turns it on simply never has
+    /// that endpoint do anything.
+    /// </remarks>
+    public bool UsesRepechage { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

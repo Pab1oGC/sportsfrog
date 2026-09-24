@@ -9,6 +9,8 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import { apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { nombreFase } from 'src/lib/phase-labels';
 
 const EMPTY_FORM = { qualifiersPerGroup: 2, bestThirdPlaced: 0 };
 
@@ -40,9 +42,15 @@ export function PromoteDialog({ open, onClose, cascade, mutate, loading, setLoad
         {result ? (
           <>
             <Alert severity="success">
-              {result.created} partido(s) creados — {result.direct} clasificado(s) directo(s)
+              {result.created} partido(s) creados{result.rounds > 1 ? `, de ${nombreFase(result.phase).toLowerCase()} hasta la final` : ''} — {result.direct} clasificado(s) directo(s)
               {result.wildcards > 0 ? ` + ${result.wildcards} mejor(es) ubicado(s)` : ''}.
             </Alert>
+            {result.rounds > 1 && (
+              <Alert severity="info">
+                La llave ya está completa: los equipos de las rondas siguientes se van definiendo solos a
+                medida que se cargan los resultados.
+              </Alert>
+            )}
             {result.byes > 0 && <Alert severity="info">{result.byes} equipo(s) pasa(n) sin jugar la primera ronda.</Alert>}
             {result.replaced > 0 && <Alert severity="warning">Se reemplazo una eliminatoria sorteada antes ({result.replaced} partidos).</Alert>}
             {result.repeatedMatchups > 0 && (
@@ -61,7 +69,8 @@ export function PromoteDialog({ open, onClose, cascade, mutate, loading, setLoad
               label="Clasifican por grupo"
               type="number"
               value={form.qualifiersPerGroup}
-              onChange={(e) => setForm({ ...form, qualifiersPerGroup: e.target.value })}
+              onChange={(e) => setForm({ ...form, qualifiersPerGroup: soloDigitos(e.target.value) })}
+              onKeyDown={bloquearNoEnteros}
               fullWidth
               slotProps={{ htmlInput: { min: 1, max: 8 } }}
             />
@@ -69,7 +78,8 @@ export function PromoteDialog({ open, onClose, cascade, mutate, loading, setLoad
               label="Mejores ubicados adicionales (mejores terceros, etc.)"
               type="number"
               value={form.bestThirdPlaced}
-              onChange={(e) => setForm({ ...form, bestThirdPlaced: e.target.value })}
+              onChange={(e) => setForm({ ...form, bestThirdPlaced: soloDigitos(e.target.value) })}
+              onKeyDown={bloquearNoEnteros}
               fullWidth
               helperText="Opcional: cupos extra para los mejores equipos que no clasificaron directo, comparados entre grupos."
               slotProps={{ htmlInput: { min: 0, max: 16 } }}

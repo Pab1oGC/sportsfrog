@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import TextField from '@mui/material/TextField';
 import Stepper from '@mui/material/Stepper';
@@ -20,24 +19,14 @@ import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { EstadoChip } from 'src/components/estado-chip';
+import { ImportPreviewGrid, dialogoDeImportacion } from 'src/components/import-preview-grid';
 import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionAthletes } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { esIndividual } from 'src/lib/sport-shape';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { toast } from 'sonner';
 
 const emptyForm = () => ({ athleteIds: [], jerseyNumber: '', position: '' });
-
-const PREVIEW_COLS = [
-  { field: 'number', headerName: '#', width: 50 },
-  { field: 'document', headerName: 'Documento', width: 120 },
-  { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 150 },
-  { field: 'outcome', headerName: 'Accion', width: 120, renderCell: ({ value }) => {
-    const colors = { register: 'success', create_and_register: 'info', already_registered: 'default', rejected: 'error' };
-    const labels = { register: 'Registrar', create_and_register: 'Crear+Registrar', already_registered: 'Ya registrado', rejected: 'Rechazado' };
-    return <Chip label={labels[value] || value} color={colors[value] || 'default'} size="small" />;
-  }},
-  { field: 'problems', headerName: 'Problemas', flex: 1, renderCell: ({ value }) => (value || []).join('; ') || '--' },
-];
 
 export default function RosterPage() {
   const confirm = useConfirm();
@@ -246,7 +235,12 @@ export default function RosterPage() {
             cada registro. */}
         {(editId || form.athleteIds.length <= 1) && (
           <>
-            <TextField label="Numero de camiseta" type="number" value={form.jerseyNumber} onChange={(e) => setForm({ ...form, jerseyNumber: e.target.value })} fullWidth />
+            <TextField
+              label="Numero de camiseta" type="number" value={form.jerseyNumber} fullWidth
+              onChange={(e) => setForm({ ...form, jerseyNumber: soloDigitos(e.target.value) })}
+              onKeyDown={bloquearNoEnteros}
+              slotProps={{ htmlInput: { min: 0, max: 999, step: 1 } }}
+            />
             <TextField label="Posicion" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth />
           </>
         )}
@@ -263,7 +257,7 @@ function ExcelImportDialog({ open, onClose, step, file, result, loading, onFileC
     <Box component="div">
       {open && (
         <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'overlay.scrim', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }} onClick={onClose}>
-          <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, width: { xs: '100%', sm: 500 }, maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+          <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, ...dialogoDeImportacion(step === 1), maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Importar nomina desde Excel</Typography>
             <Stepper activeStep={step} sx={{ mb: 3 }}>
               <Step><StepLabel>Subir archivo</StepLabel></Step>
@@ -281,7 +275,7 @@ function ExcelImportDialog({ open, onClose, step, file, result, loading, onFileC
               </Box>
             )}
             {step === 1 && result && (
-              <DataGrid rows={(result.rows || []).map((r, i) => ({ ...r, id: i }))} columns={PREVIEW_COLS} autoHeight hideFooter disableRowSelectionOnClick sx={{ mb: 2 }} />
+              <ImportPreviewGrid rows={result.rows} />
             )}
             {step === 2 && result && (
               <Alert severity="success">Registrados: {result.registered}, Creados: {result.created}, Ya existentes: {result.alreadyRegistered}, Rechazados: {result.rejected}</Alert>

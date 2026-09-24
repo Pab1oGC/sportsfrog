@@ -90,7 +90,23 @@ public static class ReadPublicCalendar
         /// <see cref="MatchState.InProgress"/>.
         /// </summary>
         int? LiveHomeTotal,
-        int? LiveAwayTotal);
+        int? LiveAwayTotal,
+
+        /// <summary>
+        /// Whether this fixture belongs to a repechage ladder rather than the
+        /// category's own run at the title — see <c>Repechage</c>. The public
+        /// bracket draws these as their own, separate graphic.
+        /// </summary>
+        bool IsRepechage = false,
+
+        /// <summary>
+        /// Which of the final's two halves this repechage match settles the
+        /// bronze for — 1 or 2, null for anything that is not a repechage
+        /// match. The public calendar groups a category's repechage into two
+        /// fixed sections by this, instead of interleaving both halves by
+        /// round number, which is only comparable within one of them.
+        /// </summary>
+        short? RepechageBranch = null);
 
     public sealed record Response(IReadOnlyList<Fixture> Fixtures);
 
@@ -179,6 +195,8 @@ public static class ReadPublicCalendar
                         match.AwayTotal,
                         match.PenaltyHomeScore,
                         match.PenaltyAwayScore,
+                        match.IsRepechage,
+                        match.RepechageBranch,
                     })
                     .ToListAsync(cancellationToken);
 
@@ -240,7 +258,9 @@ public static class ReadPublicCalendar
                         match.PenaltyHomeScore,
                         match.PenaltyAwayScore,
                         live?.Home,
-                        live?.Away));
+                        live?.Away,
+                        match.IsRepechage,
+                        match.RepechageBranch));
                 }
 
                 return new Response(fixtures);

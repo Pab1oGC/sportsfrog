@@ -24,6 +24,7 @@ import { SelectionField } from 'src/components/selectors';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { DateField } from 'src/components/date-field';
 import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from 'src/lib/inline-photo';
+import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 
 // Cuantos años cumplidos tiene hoy, para que a simple vista se note quien
 // necesita datos de apoderado sin tener que hacer la cuenta a mano.
@@ -37,6 +38,13 @@ function edad(birthDate) {
   if (aunNoCumple) años -= 1;
   return años;
 }
+
+// La misma regla que el servidor (CreateAthlete / UpdateAthlete): nadie nace
+// hoy ni despues, ni antes de 1900. Como fecha "AAAA-MM-DD", que se compara
+// bien como texto.
+const NACIMIENTO_MAS_ANTIGUO = '1900-01-02';
+const ayer = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE');
+const MENSAJE_NACIMIENTO = 'La fecha de nacimiento no puede ser de hoy ni futura.';
 
 const emptyForm = () => ({ firstName: '', lastName: '', documentId: '', birthDate: '', gender: '', guardianName: '', guardianPhone: '', weightKg: '', isActive: true });
 
@@ -81,7 +89,7 @@ export default function AthletesPage() {
   };
 
   const {
-    rows: data, isLoading, mutate, open, editId, form, setForm, error, openCreate, openEdit, close, save, remove,
+    rows: data, isLoading, mutate, open, editId, form, setForm, error, setError, openCreate, openEdit, close, save, remove,
   } = useCrudDialog({
     resourceUrl: athletesUrl,
     // El alta no lleva el filtro de busqueda -- search solo pinta que se
@@ -218,6 +226,16 @@ export default function AthletesPage() {
     return true;
   });
 
+  // El selector ya no deja elegir esas fechas, pero una tipeada a mano si
+  // llega al formulario: se avisa en el campo y no se manda. El servidor la
+  // rechazaria igual, solo que despues de un viaje de ida y vuelta.
+  const nacimientoInvalido = Boolean(form.birthDate)
+    && (form.birthDate > ayer() || form.birthDate < NACIMIENTO_MAS_ANTIGUO);
+  const guardar = () => {
+    if (nacimientoInvalido) { setError(MENSAJE_NACIMIENTO); return; }
+    save();
+  };
+
   const columns = [
     { field: 'firstName', headerName: 'Nombres', flex: 1, minWidth: 150 },
     { field: 'lastName', headerName: 'Apellidos', flex: 1, minWidth: 150 },
@@ -312,7 +330,7 @@ export default function AthletesPage() {
       </Paper>
       <DataGrid rows={filtered} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick />
 
-      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={save}>
+      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={guardar}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar src={photoPreview || undefined} sx={{ width: 64, height: 64 }}>
             <Iconify icon="eva:person-fill" width={32} />
@@ -329,7 +347,13 @@ export default function AthletesPage() {
         <TextField label="Nombres" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
         <TextField label="Apellidos" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
         <TextField label="Documento" value={form.documentId} onChange={(e) => setForm({ ...form, documentId: e.target.value })} fullWidth />
-        <DateField label="Fecha nacimiento" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} fullWidth />
+        <DateField
+          label="Fecha nacimiento" value={form.birthDate} fullWidth
+          onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+          minDate={NACIMIENTO_MAS_ANTIGUO} maxDate={ayer()}
+          error={nacimientoInvalido}
+          helperText={nacimientoInvalido ? MENSAJE_NACIMIENTO : undefined}
+        />
         {/* Solo M o F, o sin definir -- Sex.IsAcceptable en el backend no
             admite nada mas, porque una categoria con restriccion de sexo
             compara este valor contra el suyo (ver RosterPolicy.InspectAthlete):
@@ -347,7 +371,8 @@ export default function AthletesPage() {
           label="Peso (kg)"
           type="number"
           value={form.weightKg}
-          onChange={(e) => setForm({ ...form, weightKg: e.target.value })}
+          onChange={(e) => setForm({ ...form, weightKg: soloDecimales(e.target.value) })}
+          onKeyDown={bloquearNegativos}
           fullWidth
           helperText="Ultimo pesaje registrado. Lo lee la categoria con limite de peso, si la hay."
           slotProps={{ htmlInput: { min: 0, step: 0.1 } }}

@@ -35,6 +35,54 @@ export function esJuzgado(sportInfo) {
 }
 
 /**
+ * Si al cargar un evento tiene sentido elegir una cantidad. Futbol, futsal y
+ * voleibol registran cada gol, tarjeta o punto por separado, con su propio
+ * minuto: "cantidad" ahi solo permite juntar dos goles bajo un minuto que
+ * no es el de ninguno. Espejo de EventPolicy.OneAtATimeSports en el backend,
+ * que ademas lo exige -- ocultar el campo sin eso solo esconderia la regla.
+ */
+const DEPORTES_DE_A_UNO = ['football', 'futsal', 'volleyball'];
+
+export function registraCantidad(sportInfo) {
+  return !DEPORTES_DE_A_UNO.includes(sportInfo?.code);
+}
+
+/**
+ * Cuanto tiempo adicional se admite por periodo cuando el reglamento no lo
+ * dice -- espejo de PeriodClock.DefaultMaxExtraMinutes en el backend.
+ */
+export const ADICIONAL_POR_DEFECTO = 20;
+
+/**
+ * Los minutos que un evento puede llevar segun el periodo en el que se carga,
+ * o null si la pregunta no aplica (deporte por sets o juzgado, periodo sin
+ * reloj, o todavia sin periodo elegido).
+ *
+ * En un deporte cuyo reloj sigue corriendo entre periodos el minuto es el del
+ * partido: el 2.o tiempo de uno de 45 empieza en el 46, y el 48 del 1.o es
+ * 45+3. Espejo de PeriodClock.MinuteWindow, que es lo que el servidor exige --
+ * esto solo lo muestra antes de mandar. `sportInfo.periodMinutes` y
+ * `periodMaxExtraMinutes` no vienen de /sports: los pone la pantalla desde el
+ * reglamento efectivo del partido, que es quien manda (ver matches-page).
+ *
+ * `desde` es 0 en el primer periodo, igual que el servidor (un evento al
+ * pitazo inicial); `regular` es donde termina el tiempo reglamentario y
+ * `hasta` incluye el adicional.
+ */
+export function ventanaDeMinuto(sportInfo, periodo) {
+  const duracion = sportInfo?.periodMinutes;
+  if (sportInfo?.scoreMode !== 'cumulative' || !duracion || !periodo) return null;
+
+  const adicional = sportInfo.periodMaxExtraMinutes ?? ADICIONAL_POR_DEFECTO;
+  return {
+    desde: periodo === 1 ? 0 : (periodo - 1) * duracion + 1,
+    regular: periodo * duracion,
+    hasta: periodo * duracion + adicional,
+    adicional,
+  };
+}
+
+/**
  * El entero que guarda el backend para un puntaje de jueces, a texto para
  * mostrar: 765 -> "7.65". Ver PeriodScore en el backend: "the scale is a
  * presentation fact, not a domain one" -- el backend nunca hace esta

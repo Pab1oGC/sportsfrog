@@ -88,7 +88,7 @@ public static class RecordEvent
 
         var violations = await policy.InspectAsync(
             context, request.RosterEntryId, request.MetricId, request.PeriodNumber,
-            cancellationToken);
+            request.Minute, request.Quantity, cancellationToken);
 
         if (violations.Count > 0)
         {

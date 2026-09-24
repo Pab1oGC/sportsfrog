@@ -17,11 +17,11 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiDelete } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { useConfirm } from 'src/components/confirm-dialog';
-import { esIndividual } from 'src/lib/sport-shape';
+import { esIndividual, registraCantidad, ventanaDeMinuto } from 'src/lib/sport-shape';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { toast } from 'sonner';
 
 const EMPTY_FORM = { rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 };
-
 // Por posicion y despues por dorsal: buscar "el defensor numero 4" a ojo en
 // una lista sin ningun orden tactico era lo que hacia lenta la carga. Sin
 // posicion cargada queda al final, no mezclado en cualquier lado.
@@ -41,16 +41,29 @@ function porPosicionYDorsal(a, b) {
  * un segundo dialogo por cada evento — eso era la mitad de la demora al
  * cargar varios goles o tarjetas seguidos durante un partido en vivo.
  *
- * No recibe `mutate` de la lista de partidos: agregar o borrar un evento
- * refresca esta lista (mEv) pero no el marcador en vivo de la grilla de
- * partidos, exactamente como ya hacia MatchesPage antes de este archivo
- * existir.
+ * Agregar o borrar un evento refresca esta lista (mEv) y tambien la de
+ * partidos (`mutate`): el marcador en vivo de la grilla (liveHomeTotal /
+ * liveAwayTotal) sale de estos mismos eventos, y sin refrescarla un gol
+ * cargado no se veia hasta recargar la pagina.
  */
-export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setLoading, error, setError }) {
+export function EventsDialog({ open, onClose, selMatch, sportInfo, mutate, loading, setLoading, error, setError }) {
   const confirm = useConfirm();
   const [form, setForm] = useState(EMPTY_FORM);
   const playerFieldRef = useRef(null);
   const individual = esIndividual(sportInfo);
+  const conCantidad = registraCantidad(sportInfo);
+
+  // El minuto tiene que caber en el periodo elegido: el 99 no existe en el
+  // 1.er tiempo de un partido de 45 (ver ventanaDeMinuto). El servidor lo
+  // exige igual; esto lo avisa antes de mandar y le pone limites al campo.
+  const ventana = ventanaDeMinuto(sportInfo, Number(form.periodNumber));
+  const minuto = form.minute === '' ? null : Number(form.minute);
+  const minutoFuera = Boolean(ventana) && minuto !== null && (minuto < ventana.desde || minuto > ventana.hasta);
+  const rangoDeMinuto = ventana ? `${Math.max(1, ventana.desde)}–${ventana.regular} (+${ventana.adicional})` : null;
+  const ayudaDeMinuto = !ventana ? undefined
+    : minutoFuera ? `Fuera de ${sportInfo.periodLabel} ${form.periodNumber}: va de ${rangoDeMinuto}`
+    : minuto > ventana.regular ? `Adicional: ${ventana.regular}+${minuto - ventana.regular}`
+    : rangoDeMinuto;
 
   const { data: events, mutate: mEv } = useApi(open && selMatch ? endpoints.matchEvents(selMatch.id) : null);
   const { data: roster1 } = useApi(open && selMatch ? endpoints.roster(selMatch.homeTeamId) : null);
@@ -70,7 +83,7 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
     if (!selMatch) return;
     setLoading(true); setError('');
     try {
-      await apiPost(endpoints.matchEvents(selMatch.id), { ...form, periodNumber: form.periodNumber ? Number(form.periodNumber) : null, minute: form.minute ? Number(form.minute) : null, quantity: Number(form.quantity) || 1 });
+      await apiPost(endpoints.matchEvents(selMatch.id), { ...form, periodNumber: form.periodNumber ? Number(form.periodNumber) : null, minute: form.minute ? Number(form.minute) : null, quantity: conCantidad ? Number(form.quantity) || 1 : 1 });
       // Solo se limpia el jugador y el minuto: durante un partido en vivo el
       // tipo de evento y el periodo suelen repetirse de una carga a la otra
       // (varias tarjetas, varios goles seguidos en el mismo tiempo), asi que
@@ -79,6 +92,7 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
       // mouse.
       setForm({ ...form, rosterEntryId: '', minute: '' });
       mEv();
+      mutate?.();
       playerFieldRef.current?.focus();
     }
     catch (err) { setError(err.message); }
@@ -88,7 +102,7 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
   const delEvent = async (id) => {
     const ok = await confirm('Eliminar evento?', { confirmLabel: 'Eliminar', danger: true });
     if (!ok) return;
-    try { await apiDelete(endpoints.event(id)); mEv(); } catch (err) { toast.error(err.message); }
+    try { await apiDelete(endpoints.event(id)); mEv(); mutate?.(); } catch (err) { toast.error(err.message); }
   };
 
   return (
@@ -158,8 +172,22 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
               <MenuItem key={n} value={n}>{sportInfo.periodLabel} {n}</MenuItem>
             ))}
           </TextField>
-          <TextField label="Minuto" type="number" value={form.minute} onChange={(e) => setForm({ ...form, minute: e.target.value })} sx={{ width: 90 }} />
-          <TextField label="Cant." type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} sx={{ width: 80 }} />
+          <TextField
+            label="Minuto" type="number" value={form.minute} sx={{ width: ventana ? 150 : 90 }}
+            onChange={(e) => setForm({ ...form, minute: soloDigitos(e.target.value) })}
+            onKeyDown={bloquearNoEnteros}
+            error={minutoFuera}
+            helperText={ayudaDeMinuto}
+            slotProps={{ htmlInput: { min: ventana?.desde ?? 0, max: ventana?.hasta ?? 240, step: 1 } }}
+          />
+          {conCantidad && (
+            <TextField
+              label="Cant." type="number" value={form.quantity} sx={{ width: 80 }}
+              onChange={(e) => setForm({ ...form, quantity: soloDigitos(e.target.value) })}
+              onKeyDown={bloquearNoEnteros}
+              slotProps={{ htmlInput: { min: 1, step: 1 } }}
+            />
+          )}
           {/* Habilitado solo con los cinco datos cargados — jugador, evento,
               periodo y minuto incluidos, no solo jugador y evento — para que
               no se pueda cargar un evento a medio llenar. */}
@@ -167,7 +195,7 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
             variant="contained"
             startIcon={<Iconify icon="eva:plus-fill" />}
             onClick={doEvent}
-            disabled={loading || !form.rosterEntryId || !form.metricId || !form.periodNumber || !form.minute}
+            disabled={loading || !form.rosterEntryId || !form.metricId || !form.periodNumber || !form.minute || minutoFuera}
             sx={{ height: 56 }}
           >
             Agregar
@@ -200,7 +228,9 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, loading, setL
             return row.teamId === selMatch.homeTeamId ? selMatch.awayTeamName : selMatch.homeTeamName;
           } },
           { field: 'metricLabel', headerName: 'Evento', width: 120 },
-          { field: 'quantity', headerName: 'Cant.', width: 60 },
+          // Siempre 1 en un deporte de a uno: una columna que repite "1" en
+          // cada fila no informa nada.
+          conCantidad && { field: 'quantity', headerName: 'Cant.', width: 60 },
           { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => <IconButton size="small" onClick={() => delEvent(row.id)}><Iconify icon="eva:trash-2-outline" width={16} sx={{ color: 'error.main' }} /></IconButton> },
         ].filter(Boolean)} autoHeight hideFooter disableRowSelectionOnClick getRowId={(r) => r.id} />
       </DialogContent>

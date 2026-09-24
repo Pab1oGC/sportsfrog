@@ -38,6 +38,12 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
     private const short MaximumBreakMinutes = 60;
 
     /// <summary>
+    /// An hour of stoppage time is past anything a referee adds; the bound
+    /// catches a slipped digit, not a rule.
+    /// </summary>
+    private const short MaximumExtraMinutes = 60;
+
+    /// <summary>
     /// A win worth a hundred points is not a competition anyone is running,
     /// and a negative price for an outcome is a sanction rather than a rule
     /// of the table.
@@ -81,6 +87,20 @@ internal sealed class RulesetShapeValidator : AbstractValidator<RulesetConfigura
                 .When(configuration => configuration.Periods.BreakMinutes.HasValue
                     && configuration.Periods.Minutes.HasValue)
                 .WithMessage($"El descanso entre períodos dura entre 0 y {MaximumBreakMinutes} minutos.");
+
+            // El tiempo adicional también cuelga del reloj, igual que el
+            // descanso: sin Minutes no hay nada a lo que agregarle. Mismo
+            // par de RuleFor separados, por el mismo motivo.
+            RuleFor(configuration => configuration.Periods.MaxExtraMinutes)
+                .Must(extra => !extra.HasValue)
+                .When(configuration => !configuration.Periods.Minutes.HasValue)
+                .WithMessage("El tiempo adicional no aplica donde el período no corre por reloj.");
+
+            RuleFor(configuration => configuration.Periods.MaxExtraMinutes)
+                .InclusiveBetween((short)0, MaximumExtraMinutes)
+                .When(configuration => configuration.Periods.MaxExtraMinutes.HasValue
+                    && configuration.Periods.Minutes.HasValue)
+                .WithMessage($"El tiempo adicional máximo va de 0 a {MaximumExtraMinutes} minutos.");
 
             // Misma razón que el descanso: solo significa algo donde NO hay
             // reloj, así que el par de reglas va en el mismo sentido inverso.

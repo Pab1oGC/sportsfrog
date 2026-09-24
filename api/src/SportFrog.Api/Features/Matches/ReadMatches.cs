@@ -60,7 +60,16 @@ public static class ReadMatches
         /// </summary>
         int? LiveHomeTotal,
         int? LiveAwayTotal,
-        string? Notes);
+        string? Notes,
+
+        /// <summary>
+        /// Whether this fixture belongs to a repechage ladder rather than the
+        /// category's own run at the title — see <c>Repechage</c>.
+        /// </summary>
+        bool IsRepechage = false,
+
+        /// <summary>Which of the final's two halves this repechage match settles the bronze for. See <c>Repechage</c>.</summary>
+        short? RepechageBranch = null);
 
     public static IEndpointRouteBuilder MapReadMatches(this IEndpointRouteBuilder routes)
     {
@@ -469,5 +478,7 @@ public static class ReadMatches
             match.PenaltyAwayScore,
             null,
             null,
-            match.Notes));
+            match.Notes,
+            match.IsRepechage,
+            match.RepechageBranch));
 }

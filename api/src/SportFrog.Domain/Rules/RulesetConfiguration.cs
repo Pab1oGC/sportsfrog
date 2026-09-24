@@ -123,6 +123,20 @@ public sealed record PeriodRules
     /// single competition-wide number never let it do.
     /// </remarks>
     public short? EstimatedMinutes { get; init; }
+
+    /// <summary>
+    /// The most stoppage time a period may add on top of <see cref="Minutes"/>,
+    /// in minutes: how far past the 45th an event can honestly be logged.
+    /// </summary>
+    /// <remarks>
+    /// Only means something alongside <see cref="Minutes"/>, and only for a
+    /// sport whose clock runs on across periods — see <see cref="PeriodClock"/>,
+    /// which is what reads it. Null is "not declared", read as
+    /// <see cref="PeriodClock.DefaultMaxExtraMinutes"/> rather than as none, so
+    /// a reglamento written before this existed keeps accepting the stoppage
+    /// time it always implicitly did instead of suddenly refusing any.
+    /// </remarks>
+    public short? MaxExtraMinutes { get; init; }
 }
 
 /// <summary>The score awarded when a match is not played.</summary>

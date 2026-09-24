@@ -10,6 +10,7 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
+import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { toast } from 'sonner';
 
 /** Carga el desempate por penales de un cruce de eliminatoria empatado. */
@@ -42,9 +43,19 @@ export function PenaltiesDialog({ open, onClose, selMatch, mutate, loading, setL
           </Alert>
         )}
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField label={selMatch?.homeTeamName || 'Local'} type="number" value={form.homeScore} onChange={(e) => setForm({ ...form, homeScore: e.target.value })} fullWidth />
+          <TextField
+            label={selMatch?.homeTeamName || 'Local'} type="number" value={form.homeScore} fullWidth
+            onChange={(e) => setForm({ ...form, homeScore: soloDigitos(e.target.value) })}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }}
+          />
           <Typography>-</Typography>
-          <TextField label={selMatch?.awayTeamName || 'Visitante'} type="number" value={form.awayScore} onChange={(e) => setForm({ ...form, awayScore: e.target.value })} fullWidth />
+          <TextField
+            label={selMatch?.awayTeamName || 'Visitante'} type="number" value={form.awayScore} fullWidth
+            onChange={(e) => setForm({ ...form, awayScore: soloDigitos(e.target.value) })}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }}
+          />
         </Box>
       </DialogContent>
       <DialogActions>

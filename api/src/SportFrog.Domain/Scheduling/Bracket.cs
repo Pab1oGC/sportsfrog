@@ -128,9 +128,18 @@ public static class Bracket
     /// Anything larger than sixteenths falls back to a number, which is the
     /// point at which the names stop being ones anybody uses.
     /// </remarks>
+    /// <summary>
+    /// The final's own phase name — the one round every bracket ends in,
+    /// regardless of how it got there. Pulled out as a constant because
+    /// <see cref="Repechage"/> has to find this exact match to know who the
+    /// two finalists are, and a second literal copy of "final" is exactly
+    /// the kind of thing that quietly drifts from this one.
+    /// </summary>
+    public const string FinalPhase = "final";
+
     public static string Phase(int matches, int round) => matches switch
     {
-        1 => "final",
+        1 => FinalPhase,
         2 => "semifinal",
         4 => "cuartos",
         8 => "octavos",

@@ -16,9 +16,21 @@ import CircularProgress from '@mui/material/CircularProgress';
  */
 export function CrudDialog({ open, editId, entityName, entityGender = 'm', error, saving, onClose, onSave, children, maxWidth = 'sm' }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={maxWidth}
+      fullWidth
+      // Explicito, no confiado al comportamiento por defecto de MUI: un
+      // formulario largo (Competiciones, con sus tres acordeones) puede
+      // crecer mas alto que la ventana, y sin un tope fijo acá el Paper del
+      // diálogo simplemente sigue creciendo hacia afuera de la pantalla en
+      // vez de quedarse del tamaño de la ventana y dejar que el contenido
+      // interno (el DialogContent de abajo) sea lo que scrollea.
+      slotProps={{ paper: { sx: { maxHeight: 'calc(100% - 64px)' } } }}
+    >
       <DialogTitle>{editId ? 'Editar' : (entityGender === 'f' ? 'Nueva' : 'Nuevo')} {entityName}</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important', overflowY: 'auto' }}>
         {error && <Alert severity="error" onClose={onClose}>{error}</Alert>}
         {children}
       </DialogContent>

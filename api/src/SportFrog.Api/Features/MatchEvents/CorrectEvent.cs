@@ -68,11 +68,12 @@ public static class CorrectEvent
             return Results.NotFound();
         }
 
-        // Only the period is worth re-checking: the player and the metric are
-        // not moving, and they were judged when the event was recorded.
+        // The period and the quantity are what a correction can change; the
+        // player and the metric are not moving, and they were judged when the
+        // event was recorded.
         var violations = await policy.InspectAsync(
             context, recorded.RosterEntryId, recorded.MetricId, request.PeriodNumber,
-            cancellationToken);
+            request.Minute, request.Quantity, cancellationToken);
 
         if (violations.Count > 0)
         {

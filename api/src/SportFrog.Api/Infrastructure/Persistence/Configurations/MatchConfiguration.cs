@@ -58,6 +58,8 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(x => x.ModifiedBy).HasColumnName("modified_by");
         builder.Property(x => x.ModifiedAt).HasColumnName("modified_at");
         builder.Property(x => x.Notes).HasColumnName("notes");
+        builder.Property(x => x.IsRepechage).HasColumnName("is_repechage");
+        builder.Property(x => x.RepechageBranch).HasColumnName("repechage_branch");
         builder.Property(x => x.DeletedAt).HasColumnName("deleted_at");
 
         builder.Property(x => x.PeriodScores)

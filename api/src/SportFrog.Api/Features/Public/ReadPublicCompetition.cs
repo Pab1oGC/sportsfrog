@@ -475,7 +475,11 @@ public static class ReadPublicCompetition
     {
         var bracket = await database.Matches
             .AsNoTracking()
-            .Where(match => match.CategoryId == categoryId && match.Phase != null)
+            // A repechage ladder carries a phase too, but it decides a bronze
+            // medal on its own, independent progression — not another round
+            // of this one final. Left in, its matches could outrank the
+            // actual final below and get read as though they were it.
+            .Where(match => match.CategoryId == categoryId && match.Phase != null && !match.IsRepechage)
             .OrderByDescending(match => match.RoundNumber)
             .Select(match => new
             {

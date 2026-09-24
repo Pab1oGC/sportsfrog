@@ -167,6 +167,55 @@ public sealed class RulesetShapeValidatorTests
             .Should().BeTrue();
     }
 
+    // ---- MaxExtraMinutes --------------------------------------------------
+
+    [Fact]
+    public void Validate_MaxExtraMinutesOnAClockedPeriod_IsValid()
+    {
+        var withStoppage = Valid() with
+        {
+            Periods = new PeriodRules { Count = 2, Label = "tiempo", Minutes = 45, MaxExtraMinutes = 10 },
+        };
+
+        Validator.Validate(withStoppage).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_MaxExtraMinutesNotDeclared_IsValid()
+    {
+        // Absent means the default (see PeriodClock), so a reglamento written
+        // before this field existed still validates.
+        Validator.Validate(Valid()).IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(61)]
+    public void Validate_MaxExtraMinutesOutOfRange_IsRejected(short extra)
+    {
+        var outOfRange = Valid() with
+        {
+            Periods = new PeriodRules { Count = 2, Label = "tiempo", Minutes = 45, MaxExtraMinutes = extra },
+        };
+
+        Validator.Validate(outOfRange).Errors.Should().Contain(error => error.PropertyName == "Periods.MaxExtraMinutes");
+    }
+
+    [Fact]
+    public void Validate_MaxExtraMinutesWithoutAClock_IsRejected()
+    {
+        // Stoppage time is added to a clock; a set decided on score has none.
+        var noClock = Valid() with
+        {
+            Periods = new PeriodRules
+            {
+                Count = 3, Label = "set", Minutes = null, EstimatedMinutes = 30, MaxExtraMinutes = 10,
+            },
+        };
+
+        Validator.Validate(noClock).Errors.Should().Contain(error => error.PropertyName == "Periods.MaxExtraMinutes");
+    }
+
     // ---- EstimatedMinutes -------------------------------------------------
 
     [Fact]
