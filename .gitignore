@@ -22,3 +22,8 @@ api/tests/**/obj/
 graphify-out/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Vitest coverage y salida de Playwright test (web/)
+web/coverage/
+web/playwright-report/
+web/test-results/
