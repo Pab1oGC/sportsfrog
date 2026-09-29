@@ -31,6 +31,21 @@ internal sealed class PlayerEventConfiguration : IEntityTypeConfiguration<Player
             .HasDefaultValueSql("now()")
             .ValueGeneratedOnAddOrUpdate();
 
+        // Same reasoning as Match.UseXminAsConcurrencyToken(): correcting or
+        // deleting an event someone else just corrected or deleted should
+        // fail loudly (409), not overwrite the newer row or silently no-op.
+        // A concurrent delete is not a special case this needs to reason
+        // about separately -- if the row is gone by the time this saves, EF
+        // throws the same DbUpdateConcurrencyException (zero rows matched),
+        // and the handler reports it the same way. A row that never existed
+        // in the first place is caught earlier, by the ordinary
+        // load-or-NotFound check every handler already does.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+
         // Visible while the match it belongs to is. The table has no
         // deleted_at of its own, so this is entirely a fact about the fixture
         // — a withdrawn competition takes its statistics with it, and a

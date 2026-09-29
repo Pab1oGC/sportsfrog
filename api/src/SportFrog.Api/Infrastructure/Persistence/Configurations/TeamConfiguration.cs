@@ -33,6 +33,21 @@ internal sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
             .HasDefaultValueSql("now()")
             .ValueGeneratedOnAddOrUpdate();
 
+        // Same reasoning as Match.UseXminAsConcurrencyToken(): DrawGroups
+        // reads every active team as a precondition and then reassigns all
+        // of their group labels together, the same read-then-write-later
+        // shape RecordResult had. Two draws racing on the same category used
+        // to both report success and silently leave whichever one saved
+        // last; now the second save fails loudly instead. UpdateTeam,
+        // DeleteTeam and the two roster handlers that rename an individual
+        // entry's team all save an existing Team too, and all get the same
+        // protection for free.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+
         // One entry per club per category, among the living: a club that
         // withdrew and is re-entered takes the place it left. Individual
         // sports are exempt — several athletes of the same delegation, each

@@ -41,18 +41,22 @@ public static class ReadClubs
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
         ClubPhoto photos,
+        HttpContext httpContext,
         CancellationToken cancellationToken,
-        string? search = null)
+        string? search = null,
+        int? skip = null,
+        int? take = null)
     {
         search = QueryFilter.OrAbsent(search);
 
-        var clubs = await database.Clubs
+        var query = database.Clubs
             // Not a club a delegate manages, so it has no place in a list or
             // a picker built for those — see UnaffiliatedClub.
             .Where(club => !club.IsUnaffiliated)
             .Where(club => search == null || EF.Functions.ILike(club.Name, $"%{search}%"))
-            .OrderBy(club => club.Name)
-            .ToListAsync(cancellationToken);
+            .OrderBy(club => club.Name);
+
+        var clubs = await PagedListing.ApplyAsync(query, httpContext, skip, take, cancellationToken);
 
         var listing = new List<Summary>(clubs.Count);
 

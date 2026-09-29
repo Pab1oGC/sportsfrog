@@ -1,0 +1,19 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using SportFrog.Api.Infrastructure.Persistence;
+
+namespace SportFrog.Api.Migrations;
+
+/// <summary>
+/// TODO: describe in one line what this migration changes and why.
+/// </summary>
+[DbContext(typeof(SportFrogDbContext))]
+[Migration("20260925231804_AddCompetitionNameUniqueness")]
+public sealed class AddCompetitionNameUniqueness : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder)
+        => migrationBuilder.Sql(EmbeddedSql.Read("20260925231804_AddCompetitionNameUniqueness.Up.sql"));
+
+    protected override void Down(MigrationBuilder migrationBuilder)
+        => migrationBuilder.Sql(EmbeddedSql.Read("20260925231804_AddCompetitionNameUniqueness.Down.sql"));
+}

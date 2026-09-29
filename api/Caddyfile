@@ -15,4 +15,33 @@
 
 {$DOMAIN} {
 	reverse_proxy web:80
+
+	# Cabeceras de respuesta. Relevadas contra lo que el frontend realmente
+	# carga -- no copiadas de una plantilla -- para no romper nada que ya
+	# funciona:
+	#   - Tipografias de Google (fonts.googleapis.com / fonts.gstatic.com):
+	#     web/src/pages/landing/playful-hero.jsx y portal-studio.jsx.
+	#   - Mosaicos de OpenStreetMap y busqueda de Nominatim:
+	#     web/src/components/location-picker.jsx.
+	#   - Iconos via Iconify, que resuelve el SVG contra su API en tiempo de
+	#     ejecucion (con los dos espejos que la libreria usa como respaldo):
+	#     web/src/components/iconify.jsx.
+	#   - MUI/Emotion inyecta <style> sin nonce, asi que style-src necesita
+	#     'unsafe-inline' o el panel entero pierde su estilo.
+	#   - /api/ y /sportfrog/ (API y MinIO) son mismo origen via nginx
+	#     (web/nginx.conf), asi que no hace falta nombrarlos aparte.
+	#
+	# Content-Security-Policy va en modo Report-Only: no se pudo dar una
+	# vuelta visual completa por el sitio real con esta cabecera puesta antes
+	# de subirla (los contenedores de api/web quedaron fuera de esta tarea a
+	# pedido explicito). Reporta en la consola del navegador lo que
+	# bloquearia sin bloquear nada todavia -- es el paso responsable antes de
+	# hacerla exigible, no el reemplazo de esa verificacion.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.iconify.design https://api.simplesvg.com https://api.unisvg.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+	}
 }

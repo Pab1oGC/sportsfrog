@@ -98,7 +98,19 @@ public static class RecordPenalties
         match.ModifiedAt = clock.GetUtcNow();
 
         await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else changed this same match in the meantime.
+            return Results.Problem(
+                detail: "Alguien más cambió este partido mientras vos lo tenías abierto. Volvé a " +
+                        "leerlo antes de cargar los penales.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         // A match reaches Finished only through RecordResult, which already
         // refuses one without both teams named.

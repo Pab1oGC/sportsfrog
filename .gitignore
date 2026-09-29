@@ -20,3 +20,5 @@ api/tests/**/obj/
 *.suo
 
 graphify-out/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

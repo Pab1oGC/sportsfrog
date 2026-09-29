@@ -80,6 +80,23 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
             .HasDefaultValueSql("now()")
             .ValueGeneratedOnAddOrUpdate();
 
+        // Two people loading the same match and saving different corrections
+        // moments apart used to both succeed silently: whichever save landed
+        // last won, and the other caller was told 200 with a total it never
+        // actually persisted. xmin -- the row version Postgres already keeps
+        // for every row, no column of our own needed -- makes EF include the
+        // version it read in every UPDATE's WHERE clause; if the row moved
+        // since, zero rows match and SaveChangesAsync throws
+        // DbUpdateConcurrencyException instead of silently overwriting. Every
+        // handler that saves a Match (result, penalties, walkover, status,
+        // reschedule) catches that and reports 409, the same way a unique
+        // violation already does elsewhere in this codebase.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+
         // One live fixture per space and moment, matching uq_space_schedule.
         // Declared here as well as in the schema so the model knows a write
         // can fail on it, and because a reader of this file should not have to

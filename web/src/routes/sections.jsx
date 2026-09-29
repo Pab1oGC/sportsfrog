@@ -60,7 +60,10 @@ export var routesSection = [
   { path: "/", element: <LazyPage Component={LandingPage} /> },
   { path: "/public", element: <LazyPage Component={PublicPortalPage} /> },
   { path: "/public/:orgSlug/:compSlug", element: <PortalLazyPage Component={PublicCompetitionPage} /> },
-  { path: "/public/:orgSlug/:compSlug/verify/:serial", element: <PortalLazyPage Component={PublicCompetitionPage} /> },
+  // Desconectada a propósito (2026-09-27): la verificación pública de
+  // credenciales no hace falta todavía. La API ya no mapea
+  // /public/verify/{org}/{serie} (ver Program.cs); esta ruta tampoco apunta
+  // a nada del lado del cliente (PublicCompetitionPage no lee :serial).
 
   // Auth
   { path: "/auth/jwt/sign-in", element: <GuestGuard><SignInPage /></GuestGuard> },

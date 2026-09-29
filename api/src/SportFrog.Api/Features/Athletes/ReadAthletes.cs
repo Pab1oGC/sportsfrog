@@ -49,7 +49,8 @@ public static class ReadAthletes
     }
 
     /// <summary>
-    /// Searches by name or by document.
+    /// Searches by name or by document, and optionally narrows by gender, by
+    /// an age range, and by a weight range.
     /// </summary>
     /// <remarks>
     /// Searching by document is what makes the register usable: it answers
@@ -61,23 +62,78 @@ public static class ReadAthletes
     /// duplicate check when a new person is registered — is a question of its
     /// own, answered by <see cref="Athletes.CreateAthlete"/> directly against
     /// the database, not by filtering this listing.
+    ///
+    /// Gender, age and weight moved here from the panel's own filtering,
+    /// which used to run in the browser over whatever this endpoint already
+    /// handed it — correct only as long as that was every athlete in the
+    /// organization. <c>minAge</c>/<c>maxAge</c> translate to a birth date
+    /// range the same way the panel's own <c>edad()</c> counts a birthday —
+    /// exact years, one already had — not to a plain year-of-birth
+    /// subtraction, and an athlete with no birth date or no weight on file
+    /// is excluded by an active range rather than guessed into either side
+    /// of it, the same rule the panel's filter already followed.
     /// </remarks>
-    private static async Task<IResult> ListAsync(
+    // internal, not private: testable directly against a real database, the
+    // same convention CreateCompetition.HandleAsync already uses — the
+    // age-range boundary math below is exactly the kind of off-by-one that
+    // a test needs to pin, not just read.
+    internal static async Task<IResult> ListAsync(
         SportFrogDbContext database,
         AthletePhoto photos,
+        HttpContext httpContext,
+        TimeProvider clock,
         CancellationToken cancellationToken,
-        string? search = null)
+        string? search = null,
+        string? gender = null,
+        int? minAge = null,
+        int? maxAge = null,
+        decimal? minWeight = null,
+        decimal? maxWeight = null,
+        int? skip = null,
+        int? take = null)
     {
         search = QueryFilter.OrAbsent(search);
+        gender = QueryFilter.OrAbsent(gender);
 
-        var athletes = await database.Athletes
+        var query = database.Athletes
             .Where(athlete => search == null
                 || EF.Functions.ILike(athlete.DocumentId, $"%{search}%")
                 || EF.Functions.ILike(athlete.LastName, $"%{search}%")
                 || EF.Functions.ILike(athlete.FirstName, $"%{search}%"))
+            .Where(athlete => gender == null || athlete.Gender == gender);
+
+        if (minAge is not null || maxAge is not null)
+        {
+            var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+
+            // Age A is every birth date strictly after today minus (A+1)
+            // years and no later than today minus A years — the same
+            // one-year window edad() counts by comparing month and day, not
+            // by subtracting calendar years. A birth date right on either
+            // boundary is handled the same way edad() itself would count it.
+            if (maxAge is { } max)
+            {
+                query = query.Where(athlete => athlete.BirthDate > today.AddYears(-(max + 1)));
+            }
+
+            if (minAge is { } min)
+            {
+                query = query.Where(athlete => athlete.BirthDate <= today.AddYears(-min));
+            }
+        }
+
+        if (minWeight is not null || maxWeight is not null)
+        {
+            query = query.Where(athlete => athlete.WeightKg != null
+                && (minWeight == null || athlete.WeightKg >= minWeight)
+                && (maxWeight == null || athlete.WeightKg <= maxWeight));
+        }
+
+        query = query
             .OrderBy(athlete => athlete.LastName)
-            .ThenBy(athlete => athlete.FirstName)
-            .ToListAsync(cancellationToken);
+            .ThenBy(athlete => athlete.FirstName);
+
+        var athletes = await PagedListing.ApplyAsync(query, httpContext, skip, take, cancellationToken);
 
         var listing = new List<Summary>(athletes.Count);
 

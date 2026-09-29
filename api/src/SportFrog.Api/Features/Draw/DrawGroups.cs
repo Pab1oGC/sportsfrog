@@ -133,7 +133,23 @@ public static class DrawGroups
             team.GroupLabel = labelByTeam[team.Id];
         }
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else drew this same category's groups, or edited one
+            // of its teams, between when this request read the category as
+            // still-safe-to-draw and when it tried to save every team's new
+            // label. The precondition checks above (format, status,
+            // settled matches) are re-read from scratch on the next attempt,
+            // so retrying is always the right next step, never a stale one.
+            return Results.Problem(
+                detail: "Alguien más sorteó esta categoría, o cambió uno de sus equipos, mientras " +
+                        "este sorteo estaba en curso. Volvé a revisarla antes de sortear de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Ok(new Response(
             [.. teams

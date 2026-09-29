@@ -101,39 +101,16 @@ public static class ChangePassword
 
         user.PasswordHash = passwordHasher.Hash(request.NewPassword);
 
-        await RevokeEverySessionAsync(database, userId, clock, cancellationToken);
+        // A password change is exactly the moment a session riding on the
+        // old one — a stolen renewal token, a device left signed in —
+        // should stop working. The caller that just proved it knows the new
+        // password signs in again with it, the same way SignOut already
+        // expects a client to. Shared with RenewSession's own reuse
+        // detection: see SessionRevocation.
+        await SessionRevocation.RevokeEveryTokenAsync(database, userId, clock.GetUtcNow(), cancellationToken);
 
         await database.SaveChangesAsync(cancellationToken);
 
         return Results.NoContent();
-    }
-
-    /// <summary>
-    /// Ends every session this account holds, not only the one this request
-    /// happens to ride on.
-    /// </summary>
-    /// <remarks>
-    /// A password change is exactly the moment a session riding on the old
-    /// one — a stolen renewal token, a device left signed in — should stop
-    /// working. The caller that just proved it knows the new password signs
-    /// in again with it, the same way <see cref="SignOut"/> already expects a
-    /// client to.
-    /// </remarks>
-    private static async Task RevokeEverySessionAsync(
-        SportFrogDbContext database,
-        Guid userId,
-        TimeProvider clock,
-        CancellationToken cancellationToken)
-    {
-        var now = clock.GetUtcNow();
-
-        var activeTokens = await database.RefreshTokens
-            .Where(token => token.UserId == userId && token.RevokedAt == null)
-            .ToListAsync(cancellationToken);
-
-        foreach (var token in activeTokens)
-        {
-            token.RevokedAt = now;
-        }
     }
 }

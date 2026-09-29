@@ -63,7 +63,19 @@ public static class DeleteTeam
         // same clock the rest of the application is tested against.
         team.DeletedAt = clock.GetUtcNow();
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else edited this same team, or a group draw reseated
+            // it, between the check above and this save.
+            return Results.Problem(
+                detail: "Alguien más cambió este equipo mientras vos lo tenías abierto. Volvé a " +
+                        "leerlo antes de anular su inscripción.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.NoContent();
     }

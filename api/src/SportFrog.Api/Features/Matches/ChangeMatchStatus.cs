@@ -119,6 +119,15 @@ public static class ChangeMatchStatus
                         "calendario. Moverlo antes de ponerlo de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else changed this same match's status, or its result,
+            // in the meantime.
+            return Results.Problem(
+                detail: "Alguien más cambió este partido mientras vos lo tenías abierto. Volvé a " +
+                        "leerlo antes de cambiar su estado.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.NoContent();
     }

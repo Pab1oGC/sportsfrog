@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -29,7 +28,7 @@ public static class CreateCompetition
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    internal static async Task<IResult> HandleAsync(
         CompetitionContract contract,
         SportFrogDbContext database,
         OrganizationContext organization,
@@ -61,9 +60,13 @@ public static class CreateCompetition
         if (await database.Competitions.AnyAsync(
                 competition => competition.Slug == slug, cancellationToken))
         {
-            return Results.Problem(
-                detail: "Ya hay una competencia usando esa dirección.",
-                statusCode: StatusCodes.Status409Conflict);
+            return CompetitionUniqueness.SlugTaken();
+        }
+
+        if (await CompetitionUniqueness.IsNameTakenAsync(
+                database, contract.Name, except: null, cancellationToken))
+        {
+            return CompetitionUniqueness.NameTaken();
         }
 
         var settings = contract.Settings;
@@ -115,14 +118,11 @@ public static class CreateCompetition
             await database.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException
-                  { SqlState: PostgresErrorCodes.UniqueViolation })
+            when (CompetitionUniqueness.ConflictFor(exception) is not null)
         {
-            // Two requests claiming the same address at once. The check above
-            // answers the ordinary case; only the index sees this one.
-            return Results.Problem(
-                detail: "Ya hay una competencia usando esa dirección.",
-                statusCode: StatusCodes.Status409Conflict);
+            // Two requests claiming the same address or name at once. The
+            // checks above answer the ordinary case; only the index sees this.
+            return CompetitionUniqueness.ConflictFor(exception)!;
         }
 
         return Results.Created(

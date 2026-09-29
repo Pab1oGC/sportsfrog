@@ -81,10 +81,13 @@ public static class ReadCompetitions
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
         PortalPicture pictures,
+        HttpContext httpContext,
         CancellationToken cancellationToken,
         string? status = null,
         string? sport = null,
-        string? search = null)
+        string? search = null,
+        int? skip = null,
+        int? take = null)
     {
         // A query parameter reaches no validator — the contract filter only
         // sees arguments that have one — so an unrecognized state is answered
@@ -113,14 +116,15 @@ public static class ReadCompetitions
             state = parsed;
         }
 
-        var competitions = await Project(database, database.Competitions
-                .Where(competition => state == null || competition.Status == state)
-                .Where(competition => sport == null || competition.SportCode == sport)
-                .Where(competition => search == null
-                    || EF.Functions.ILike(competition.Name, $"%{search}%"))
-                .OrderByDescending(competition => competition.Season)
-                .ThenBy(competition => competition.Name))
-            .ToListAsync(cancellationToken);
+        var query = Project(database, database.Competitions
+            .Where(competition => state == null || competition.Status == state)
+            .Where(competition => sport == null || competition.SportCode == sport)
+            .Where(competition => search == null
+                || EF.Functions.ILike(competition.Name, $"%{search}%"))
+            .OrderByDescending(competition => competition.Season)
+            .ThenBy(competition => competition.Name));
+
+        var competitions = await PagedListing.ApplyAsync(query, httpContext, skip, take, cancellationToken);
 
         var listing = new List<Summary>(competitions.Count);
 

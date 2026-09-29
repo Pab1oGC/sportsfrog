@@ -170,7 +170,14 @@ public static class DrawCalendar
             database.Matches.AddRange(PlannedBracket.ToMatches(
                 plan, organization.RequireOrganizationId(), competition.Id, categoryId));
 
-            await database.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await database.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ConcurrentRedrawConflict();
+            }
 
             var firstRound = plan.Count(match => match.Round == 1);
 
@@ -197,7 +204,14 @@ public static class DrawCalendar
             Status = MatchState.Scheduled,
         }));
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConcurrentRedrawConflict();
+        }
 
         return Results.Ok(new Response(
             drawn.Count,
@@ -206,4 +220,16 @@ public static class DrawCalendar
             phase,
             byes));
     }
+
+    /// <summary>
+    /// One of the fixtures this redraw was about to strike changed under it
+    /// — a result or a reschedule landed between reading it as still-safe-
+    /// to-replace and saving the redraw. Shared by both draw shapes above,
+    /// since the race and the answer are identical either way.
+    /// </summary>
+    private static IResult ConcurrentRedrawConflict() =>
+        Results.Problem(
+            detail: "Uno de los partidos que este sorteo iba a reemplazar cambió justo ahora. " +
+                    "Volvé a revisar la categoría antes de sortear de nuevo.",
+            statusCode: StatusCodes.Status409Conflict);
 }

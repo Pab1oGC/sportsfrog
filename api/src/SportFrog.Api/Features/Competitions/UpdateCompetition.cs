@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -44,7 +43,7 @@ public static class UpdateCompetition
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    internal static async Task<IResult> HandleAsync(
         Guid id,
         CompetitionContract contract,
         SportFrogDbContext database,
@@ -113,6 +112,12 @@ public static class UpdateCompetition
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (await CompetitionUniqueness.IsNameTakenAsync(
+                database, contract.Name, except: id, cancellationToken))
+        {
+            return CompetitionUniqueness.NameTaken();
+        }
+
         var previousPublic = competition.Settings.Public;
         var settings = contract.Settings;
 
@@ -143,12 +148,9 @@ public static class UpdateCompetition
             await database.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException
-                  { SqlState: PostgresErrorCodes.UniqueViolation })
+            when (CompetitionUniqueness.ConflictFor(exception) is not null)
         {
-            return Results.Problem(
-                detail: "Ya hay una competencia usando esa dirección.",
-                statusCode: StatusCodes.Status409Conflict);
+            return CompetitionUniqueness.ConflictFor(exception)!;
         }
 
         // Only once the row is safely saved: a picture forgotten before that

@@ -69,14 +69,26 @@ public static class RenewSession
         if (stored.RevokedAt is not null)
         {
             // A token that was already exchanged is being presented again.
-            // Either a copy outlived the real client, or two of them renewed
-            // at once. Worth noticing, and refused either way.
+            // Two of them renewing at once — a page opened twice, a flaky
+            // network retry — looks identical to this from the outside, but
+            // it is also the standard signal that a copy of the token
+            // exists somewhere the real client's own rotation never reached:
+            // the whole reason renewal tokens rotate at all is so a copy
+            // taken from storage stops working the moment the genuine one
+            // is used, and this is that moment. Ending every session this
+            // account holds is what actually answers "this token might be
+            // stolen" rather than only logging that it might be — a warning
+            // nobody is paged on is not a mitigation.
             loggerFactory
                 .CreateLogger(typeof(RenewSession))
                 .LogWarning(
-                    "A renewal token already revoked at {RevokedAt} was presented for user {UserId}.",
+                    "A renewal token already revoked at {RevokedAt} was presented for user {UserId}. " +
+                    "Every session for that account is being ended.",
                     stored.RevokedAt,
                     stored.UserId);
+
+            await SessionRevocation.RevokeEveryTokenAsync(database, stored.UserId, now, cancellationToken);
+            await database.SaveChangesAsync(cancellationToken);
 
             return Rejected();
         }

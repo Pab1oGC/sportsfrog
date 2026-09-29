@@ -50,6 +50,13 @@ QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 builder.Host.UseSportFrogLogging();
 builder.Services.AddSportFrogRateLimiting();
 
+// A safety net for whatever an endpoint's own Results.Problem calls do not
+// anticipate. See GlobalExceptionHandler for what this does and, as
+// important, does not change: every deliberate 4xx an endpoint already
+// returns never reaches this at all.
+builder.Services.AddExceptionHandler<SportFrog.Api.Infrastructure.Observability.GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException(
         "Missing connection string 'ConnectionStrings:Default'.");
@@ -142,7 +149,16 @@ builder.Services.AddCors(options =>
         // named after its batch. Without this the front-end reads nothing
         // there and falls back to one generic name for all of them, which
         // only shows up when somebody stops using the development proxy.
-        .WithExposedHeaders("Content-Disposition"));
+        //
+        // X-Total-Count is the same story for a paged listing (see
+        // PagedListing): the header carries the real row count across the
+        // network correctly either way, but a script reading it needs to be
+        // told it may, or it reads nothing back and cannot tell "5 rows,
+        // page 1 of 1" from "5 rows, page 1 of many" — in production this
+        // never mattered (the panel is same-origin behind nginx, where CORS
+        // does not apply at all), only in local development against this
+        // policy.
+        .WithExposedHeaders("Content-Disposition", "X-Total-Count"));
 });
 
 builder.Services.AddScoped<OrganizationContext>();
@@ -212,11 +228,14 @@ builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
 // URL, which ManageVenues.ResolveMapsLinkAsync enforces by host allowlist
 // before this is ever reached. Redirects and the response body are capped
 // tight: this exists to read where a redirect landed, not to fetch content.
+// AllowAutoRedirect is off on purpose: SafeRedirectResolver follows the
+// chain itself, one hop at a time, so every address it lands on — not only
+// the first — is checked before this connects to it. See its own remarks
+// for why the handler's own redirect-chasing was not enough by itself.
 builder.Services.AddHttpClient("MapsLinkResolver", client => client.Timeout = TimeSpan.FromSeconds(5))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
-        AllowAutoRedirect = true,
-        MaxAutomaticRedirections = 5,
+        AllowAutoRedirect = false,
     });
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.FixturePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRescheduleNotificationJob>();
@@ -264,6 +283,12 @@ builder.Services
 builder.Services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);
 
 var app = builder.Build();
+
+// The very first thing in the pipeline, ahead of even the forwarded-headers
+// handling below: it has to wrap everything downstream, including
+// UseSerilogRequestLogging's own re-throw, to catch whatever none of those
+// anticipated.
+app.UseExceptionHandler();
 
 // First in the pipeline, ahead of logging, rate limiting and everything else
 // that reads Connection.RemoteIpAddress: behind any reverse proxy that
@@ -426,7 +451,12 @@ api.MapReadPublicClassification();
 api.MapReadPublicCalendar();
 api.MapReadPublicRoster();
 api.MapReadPublicMatchEvents();
-api.MapVerifyDocument();
+
+// Desconectado a propósito (2026-09-27): la verificación pública de
+// credenciales no hace falta todavía — la emisión y el diseño siguen activos,
+// solo esta ruta queda sin mapear. VerifyDocument.cs no se tocó: para volver
+// a activarla alcanza con descomentar la línea de abajo.
+// api.MapVerifyDocument();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

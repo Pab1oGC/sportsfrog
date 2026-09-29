@@ -15,25 +15,29 @@ namespace SportFrog.Api.Tests.Features.Performances;
 /// about SQL text.
 /// </summary>
 /// <remarks>
-/// AddPerformances granted the table to <c>sportfrog_app</c> only, because
-/// nothing public read it yet. Two ways that migration could have been
-/// wrong, and neither would have raised an error at write time: the grant
-/// could still be missing (every read fails closed with a permission error,
-/// which <see cref="ReadPublicClassification"/> has no code path to turn
-/// into a 404 — a competition's public page would break outright) or the
-/// grant could have come attached to a policy wide enough to leak another
-/// organization's scores (which fails open, and is the one direction this
-/// codebase treats as unforgivable — see the tenant-isolation remarks
-/// throughout <c>api/README.md</c>). This asserts the actual boundary: a
-/// row is visible with the right organization's context set, and invisible
-/// with none.
+/// Updated by ScopePublicReadsToPublishedCompetitions: performances used to
+/// carry the grant but no policy of their own, so <c>sportfrog_public</c>
+/// only ever saw one through the same broad <c>tenant_isolation</c> rule
+/// every table had — visible whenever the caller's own context happened to
+/// match, published or not. That was the actual gap; matching context was
+/// never the real boundary anywhere else public reads scopes itself by
+/// (<c>published_competitions</c>, <c>published_matches</c>,
+/// <c>published_teams</c> all key on <c>is_public</c> alone, with no org
+/// check at all — a visitor is never asked which organization they're
+/// looking for, and this platform's public directory spans every
+/// organization that has published something, by design). Performances now
+/// follows that same, already-established shape:
+/// <c>published_performances</c> keys on the owning competition's
+/// <c>is_public</c>, not on <c>app.current_org</c>. The boundary these tests
+/// prove is publication, not organization context — matching context no
+/// longer matters, and no longer should.
 /// </remarks>
 [Collection(nameof(SportFrogDatabaseCollection))]
 public sealed class PerformancesPublicReadTests(SportFrogDatabaseFixture fixture)
 {
     private sealed record Seeded(Guid OrgId, Guid PerformanceId);
 
-    private async Task<Seeded> SeedPerformanceAsync()
+    private async Task<Seeded> SeedPerformanceAsync(bool competitionIsPublic = true)
     {
         var orgId = Guid.NewGuid();
         var competitionId = Guid.NewGuid();
@@ -80,7 +84,7 @@ public sealed class PerformancesPublicReadTests(SportFrogDatabaseFixture fixture
             Slug = $"comp-{competitionId:N}",
             Season = "2026",
             Format = "knockout",
-            IsPublic = true,
+            IsPublic = competitionIsPublic,
             Settings = new CompetitionSettings(),
         });
 
@@ -161,23 +165,57 @@ public sealed class PerformancesPublicReadTests(SportFrogDatabaseFixture fixture
         count.Should().Be(1);
     }
 
+    /// <summary>
+    /// No context is exactly how the real public portal reads this row:
+    /// <c>ReadPublicClassification</c> never sets <c>app.current_org</c> for
+    /// <c>PerformancesQuery</c> at all, because <c>published_performances</c>
+    /// does not need it — the same as every other published_* policy.
+    /// </summary>
     [Fact]
-    public async Task SportfrogPublic_WithNoOrganizationContext_SeesNothing()
+    public async Task SportfrogPublic_WithNoOrganizationContext_SeesThePublishedRow()
     {
-        var seeded = await SeedPerformanceAsync();
+        var seeded = await SeedPerformanceAsync(competitionIsPublic: true);
 
         var count = await CountAsPublicAsync(organizationContext: null, seeded.PerformanceId);
 
-        count.Should().Be(0);
+        count.Should().Be(1);
     }
 
+    /// <summary>
+    /// Publication, not a matching organization, is the real boundary: a
+    /// visitor claiming to be an unrelated organization still sees a
+    /// performance whose own competition chose to publish it — the same
+    /// cross-organization directory shape <c>published_competitions</c>
+    /// already has. A future change that starts scoping this by
+    /// organization would need to change <c>published_competitions</c> and
+    /// its siblings too, deliberately, not by accident here.
+    /// </summary>
     [Fact]
-    public async Task SportfrogPublic_WithADifferentOrganizationsContextSet_SeesNothing()
+    public async Task SportfrogPublic_WithAnUnrelatedOrganizationsContextSet_StillSeesThePublishedRow()
     {
-        var seeded = await SeedPerformanceAsync();
+        var seeded = await SeedPerformanceAsync(competitionIsPublic: true);
 
         var count = await CountAsPublicAsync(Guid.NewGuid(), seeded.PerformanceId);
 
-        count.Should().Be(0);
+        count.Should().Be(1);
+    }
+
+    /// <summary>
+    /// The boundary this table actually needs: a performance whose
+    /// competition was never published stays invisible to
+    /// <c>sportfrog_public</c> no matter what context is or isn't set —
+    /// proven both ways in one test so a fix that satisfies only one of
+    /// them doesn't read as green.
+    /// </summary>
+    [Fact]
+    public async Task SportfrogPublic_WhenTheCompetitionIsNotPublished_SeesNothingRegardlessOfContext()
+    {
+        var seeded = await SeedPerformanceAsync(competitionIsPublic: false);
+
+        var withNoContext = await CountAsPublicAsync(organizationContext: null, seeded.PerformanceId);
+        var withOwningContext = await CountAsPublicAsync(seeded.OrgId, seeded.PerformanceId);
+
+        withNoContext.Should().Be(0);
+        withOwningContext.Should().Be(0);
     }
 }

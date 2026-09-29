@@ -1,5 +1,5 @@
 import Box from '@mui/material/Box';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -25,6 +25,7 @@ import { useConfirm } from 'src/components/confirm-dialog';
 import { DateField } from 'src/components/date-field';
 import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from 'src/lib/inline-photo';
 import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
+import { withQueryParams } from 'src/lib/query-string';
 
 // Cuantos años cumplidos tiene hoy, para que a simple vista se note quien
 // necesita datos de apoderado sin tener que hacer la cuenta a mano.
@@ -53,20 +54,15 @@ export default function AthletesPage() {
 
   // Busca por nombre o documento -- ReadAthletes.ListAsync ya acepta este
   // parametro (ILIKE parcial contra las tres columnas por igual), asi que la
-  // busqueda corre en el servidor en vez de filtrar a mano una lista que en
-  // una organizacion grande no conviene traer entera solo para tipear tres
-  // letras. Mismo patron que ya usa el directorio publico (public-portal.jsx).
+  // busqueda corre en el servidor. Mismo patron que ya usa el directorio
+  // publico (public-portal.jsx).
   const [search, setSearch] = useState('');
-  const athletesUrl = search
-    ? `${endpoints.athletes}?search=${encodeURIComponent(search)}`
-    : endpoints.athletes;
 
-  // Genero, edad y peso, en cambio, filtran en el cliente sobre lo que ya
-  // llego: no ameritan un segundo parametro en el backend, y la lista de una
-  // organizacion ya esta completa en memoria para mostrar la grilla. Edad no
-  // es una columna real -- se deriva de birthDate con la misma funcion edad()
-  // que ya usa la grilla, asi que el filtro compara exactamente lo que se ve
-  // en pantalla.
+  // Genero, edad y peso corrian en el cliente, sobre lo que ya habia
+  // llegado -- correcto solo mientras la lista completa de la organizacion
+  // cupiera en una sola respuesta. ReadAthletes.ListAsync ahora acepta los
+  // tres directamente (ver el backend), asi que se arman como parametros de
+  // consulta en vez de filtrar un arreglo ya completo.
   const [genderFilter, setGenderFilter] = useState('');
 
   // Limites fijos, no calculados de `data`: si dependieran del maximo/minimo
@@ -77,21 +73,63 @@ export default function AthletesPage() {
   // los campos vacios.
   const AGE_BOUNDS = [0, 80];
   const WEIGHT_BOUNDS = [0, 150];
+
+  // Dos estados por control, no uno: `ageRange`/`weightRange` son el valor
+  // visual del Slider (se mueven en cada pixel mientras se arrastra, para
+  // que el control y la leyenda respondan al instante, igual que antes).
+  // `ageQuery`/`weightQuery` son lo que realmente viaja al servidor, y solo
+  // cambian al soltar (onChangeCommitted) -- antes filtrar en cada pixel era
+  // gratis (un .filter en memoria); ahora cada cambio dispara una peticion
+  // de red, y una por pixel arrastrado seria un disparo de peticiones que
+  // nadie pidio.
   const [ageRange, setAgeRange] = useState(AGE_BOUNDS);
   const [weightRange, setWeightRange] = useState(WEIGHT_BOUNDS);
+  const [ageQuery, setAgeQuery] = useState(AGE_BOUNDS);
+  const [weightQuery, setWeightQuery] = useState(WEIGHT_BOUNDS);
   const ageFilterActive = ageRange[0] !== AGE_BOUNDS[0] || ageRange[1] !== AGE_BOUNDS[1];
   const weightFilterActive = weightRange[0] !== WEIGHT_BOUNDS[0] || weightRange[1] !== WEIGHT_BOUNDS[1];
+  const ageQueryActive = ageQuery[0] !== AGE_BOUNDS[0] || ageQuery[1] !== AGE_BOUNDS[1];
+  const weightQueryActive = weightQuery[0] !== WEIGHT_BOUNDS[0] || weightQuery[1] !== WEIGHT_BOUNDS[1];
 
   const clearFilters = () => {
     setGenderFilter('');
     setAgeRange(AGE_BOUNDS);
     setWeightRange(WEIGHT_BOUNDS);
+    setAgeQuery(AGE_BOUNDS);
+    setWeightQuery(WEIGHT_BOUNDS);
   };
 
+  const athletesUrl = withQueryParams(endpoints.athletes, {
+    search: search || undefined,
+    gender: genderFilter || undefined,
+    minAge: ageQueryActive ? ageQuery[0] : undefined,
+    maxAge: ageQueryActive ? ageQuery[1] : undefined,
+    minWeight: weightQueryActive ? weightQuery[0] : undefined,
+    maxWeight: weightQueryActive ? weightQuery[1] : undefined,
+  });
+
+  // 0-indexado, como lo pide DataGrid -- skip/take (lo que el backend
+  // realmente entiende, ver PagedListing) se arman a partir de esto adentro
+  // de useCrudDialog.
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 25 });
+
+  // Volver a la primera pagina cuando cambia cualquier filtro que en verdad
+  // le llega al servidor -- quedarse en la pagina 3 de un resultado que
+  // ahora tiene una sola pagina mostraria una grilla vacia sin que se note
+  // por que. Deliberadamente atado a los valores *comprometidos*
+  // (ageQuery/weightQuery), no a los visuales: arrastrar el slider no
+  // deberia reiniciar la pagina en cada pixel, solo cuando el filtro que de
+  // verdad se manda cambia.
+  useEffect(() => {
+    setPaginationModel((current) => (current.page === 0 ? current : { ...current, page: 0 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, genderFilter, ageQuery, weightQuery]);
+
   const {
-    rows: data, isLoading, mutate, open, editId, form, setForm, error, setError, openCreate, openEdit, close, save, remove,
+    rows: data, rowCount, isLoading, mutate, open, editId, form, setForm, error, setError, openCreate, openEdit, close, save, remove,
   } = useCrudDialog({
     resourceUrl: athletesUrl,
+    pageParams: { skip: paginationModel.page * paginationModel.pageSize, take: paginationModel.pageSize },
     // El alta no lleva el filtro de busqueda -- search solo pinta que se
     // lee, no cambia adonde se escribe. Sin esto, crear con un termino de
     // busqueda tipeado postearia a /athletes?search=... : el backend lo
@@ -206,26 +244,6 @@ export default function AthletesPage() {
     finally { setPhotoLoading(false); }
   };
 
-  const filtered = (data || []).filter((a) => {
-    if (genderFilter && a.gender !== genderFilter) return false;
-
-    // Sin fecha de nacimiento o sin peso registrado no hay nada que comparar
-    // -- un filtro de rango no puede decir "cumple" sobre un dato ausente,
-    // asi que lo saca en vez de adivinar un lado. Solo se aplica cuando el
-    // rango en verdad achico el maximo (ver ageFilterActive/weightFilterActive
-    // mas arriba); en el rango completo nadie queda afuera por esto.
-    if (ageFilterActive) {
-      const años = edad(a.birthDate);
-      if (años == null || años < ageRange[0] || años > ageRange[1]) return false;
-    }
-
-    if (weightFilterActive) {
-      if (a.weightKg == null || a.weightKg < weightRange[0] || a.weightKg > weightRange[1]) return false;
-    }
-
-    return true;
-  });
-
   // El selector ya no deja elegir esas fechas, pero una tipeada a mano si
   // llega al formulario: se avisa en el campo y no se manda. El servidor la
   // rechazaria igual, solo que despues de un viaje de ida y vuelta.
@@ -298,6 +316,7 @@ export default function AthletesPage() {
             <Slider
               value={ageRange}
               onChange={(_, v) => setAgeRange(v)}
+              onChangeCommitted={(_, v) => setAgeQuery(v)}
               min={AGE_BOUNDS[0]}
               max={AGE_BOUNDS[1]}
               size="small"
@@ -313,6 +332,7 @@ export default function AthletesPage() {
             <Slider
               value={weightRange}
               onChange={(_, v) => setWeightRange(v)}
+              onChangeCommitted={(_, v) => setWeightQuery(v)}
               min={WEIGHT_BOUNDS[0]}
               max={WEIGHT_BOUNDS[1]}
               size="small"
@@ -328,7 +348,18 @@ export default function AthletesPage() {
           </Button>
         )}
       </Paper>
-      <DataGrid rows={filtered} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick />
+      <DataGrid
+        rows={data || []}
+        columns={columns}
+        loading={isLoading}
+        autoHeight
+        disableRowSelectionOnClick
+        paginationMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        pageSizeOptions={[25, 50, 100]}
+      />
 
       <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={guardar}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

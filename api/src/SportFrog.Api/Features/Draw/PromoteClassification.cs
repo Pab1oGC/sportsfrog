@@ -151,7 +151,19 @@ public static class PromoteClassification
         // never play a knockout match, and only this says which is which.
         category.KnockoutEntrants = [.. plan.Seeded];
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // One of the fixtures this promotion was about to replace
+            // changed under it since it was read as still-safe-to-replace.
+            return Results.Problem(
+                detail: "Uno de los partidos que se iban a reemplazar cambió justo ahora. Volvé a " +
+                        "revisar la categoría antes de promoverla de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Ok(new Response(drawn.Count, existing.Count, phase, plan.Seeded.Count, byes.Count));
     }

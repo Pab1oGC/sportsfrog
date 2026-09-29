@@ -174,6 +174,16 @@ public static class RegisterPlayersBulk
                         "leer la nómina e intentá de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Only reachable for an individual-sport team: somebody else
+            // changed this same team's roster between when this request
+            // read it and when it tried to save its own recomputed name.
+            return Results.Problem(
+                detail: "Alguien más cambió el plantel de este equipo mientras se registraba este " +
+                        "lote. Volvé a leer la nómina e intentá de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Created(
             $"/teams/{team.Id}/roster",

@@ -1,18 +1,21 @@
+import { useState } from 'react';
 import Avatar from '@mui/material/Avatar';
-import Switch from '@mui/material/Switch';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { DataGrid } from '@mui/x-data-grid';
+import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { useCrudDialog } from 'src/hooks/use-crud';
+import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
+import { EstadoChip } from 'src/components/estado-chip';
+import { useConfirm } from 'src/components/confirm-dialog';
 
 // El logo viaja como data URL, igual que la foto de un deportista: el
 // backend la normaliza y la guarda en el almacenamiento de objetos, no en la
@@ -25,8 +28,16 @@ import { EditDeleteActions } from 'src/components/edit-delete-actions';
 const emptyForm = () => ({ name: '', shortName: '', logoUrl: null, currentLogo: null, contactEmail: '', isActive: true });
 
 export default function ClubsPage() {
-  const { rows, isLoading, open, editId, form, setForm, error, saving, openCreate, openEdit, close, save, remove } = useCrudDialog({
+  const confirm = useConfirm();
+
+  // 0-indexado, como lo pide DataGrid -- skip/take (lo que el backend
+  // realmente entiende, ver PagedListing) se arman a partir de esto adentro
+  // de useCrudDialog.
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 25 });
+
+  const { rows, rowCount, isLoading, mutate, open, editId, form, setForm, error, saving, openCreate, openEdit, close, save, remove } = useCrudDialog({
     resourceUrl: endpoints.clubs,
+    pageParams: { skip: paginationModel.page * paginationModel.pageSize, take: paginationModel.pageSize },
     emptyForm,
     entityName: 'club',
     // isActive es obligatorio para el backend al editar y no tiene valor por
@@ -52,6 +63,29 @@ export default function ClubsPage() {
 
   const vistaPrevia = form.logoUrl || form.currentLogo;
 
+  // Activar es reversible con el mismo click, pero desactivar saca al club de
+  // la oferta para competencias nuevas (ver UpdateClub en el backend) — vale
+  // la pena avisar antes. Reenvia el registro completo porque UpdateClub
+  // exige IsActive como parte de una correccion entera; logoUrl: null es "no
+  // tocar el logo" (ver el comentario de emptyForm).
+  const toggleClubActive = async (row, event) => {
+    event.stopPropagation();
+    if (row.isActive) {
+      const ok = await confirm(
+        `Desactivar "${row.name}"? Deja de ofrecerse para competencias nuevas. Lo que ya tiene inscrito no se ve afectado.`,
+        { confirmLabel: 'Desactivar', danger: true },
+      );
+      if (!ok) return;
+    }
+    try {
+      await apiPut(endpoints.club(row.id), {
+        name: row.name, shortName: row.shortName || null, logoUrl: null,
+        contactEmail: row.contactEmail || null, isActive: !row.isActive,
+      });
+      mutate();
+    } catch (err) { toast.error(err.message); }
+  };
+
   const columns = [
     { field: 'logoUrl', headerName: '', width: 60, sortable: false, renderCell: ({ value }) => (
       <Avatar src={value || undefined} variant="rounded" sx={{ width: 32, height: 32, bgcolor: 'action.hover', '& img': { objectFit: 'contain' } }}>
@@ -61,7 +95,9 @@ export default function ClubsPage() {
     { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 200 },
     { field: 'shortName', headerName: 'Abrev.', width: 120 },
     { field: 'contactEmail', headerName: 'Correo de contacto', width: 200, renderCell: ({ value }) => value || '--' },
-    { field: 'isActive', headerName: 'Activo', width: 80, renderCell: ({ value }) => <Switch checked={value} disabled size="small" /> },
+    { field: 'isActive', headerName: 'Estado', width: 120, sortable: false, renderCell: ({ value, row }) => (
+      <EstadoChip activo={value} onClick={(e) => toggleClubActive(row, e)} />
+    )},
     { field: 'actions', headerName: 'Acciones', width: 90, align: 'center', headerAlign: 'center', renderCell: ({ row }) => (
       <EditDeleteActions onEdit={() => openEdit(row)} onDelete={() => remove(row.id)} />
     )},
@@ -70,7 +106,20 @@ export default function ClubsPage() {
   return (
     <Box>
       <PageHeader title="Clubes" actionLabel="Nuevo club" onAction={openCreate} />
-      <DataGrid rows={rows} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} rowHeight={52} />
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        loading={isLoading}
+        autoHeight
+        disableRowSelectionOnClick
+        getRowId={(r) => r.id}
+        rowHeight={52}
+        paginationMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        pageSizeOptions={[25, 50, 100]}
+      />
       <CrudDialog open={open} editId={editId} entityName="Club" error={error} saving={saving} onClose={close} onSave={save}>
         <TextField label="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth />
         <TextField label="Abreviatura" value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} fullWidth />
@@ -98,7 +147,9 @@ export default function ClubsPage() {
         <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
           PNG, JPEG o WebP. Opcional — un club sin logo se muestra con un icono generico.
         </Typography>
-        <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Activo" />
+        {/* El estado activo/inactivo se alterna desde la columna "Estado" de
+            la grilla (EstadoChip). form.isActive sigue viajando en el
+            guardado (UpdateClub lo exige), solo que ya no se toca desde aca. */}
       </CrudDialog>
     </Box>
   );

@@ -205,7 +205,20 @@ public static class PromoteGroupStage
         // promoted before this drew every round, which has to keep working.
         category.KnockoutEntrants = [.. plan.Seeded];
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // One of the knockout fixtures this promotion was about to
+            // replace changed under it since it was read as still-safe-to-
+            // replace.
+            return Results.Problem(
+                detail: "Uno de los partidos de la fase eliminatoria que se iban a reemplazar " +
+                        "cambió justo ahora. Volvé a revisar la categoría antes de promoverla de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         var firstRound = bracket.Count(match => match.Round == 1);
 

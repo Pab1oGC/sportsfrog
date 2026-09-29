@@ -211,11 +211,18 @@ public static class ManageVenues
 
         try
         {
-            // Headers only: the redirect chain is all this needs, and the
-            // destination is a full Maps page nothing here has to download.
-            using var response = await client.GetAsync(parsed, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            // Followed by hand, one hop revalidated at a time — see
+            // SafeRedirectResolver for why the client's own AllowAutoRedirect
+            // is not enough on its own for a chain no admin controls the end
+            // of.
+            var (finalUri, problem) = await SafeRedirectResolver.FollowAsync(client, parsed, cancellationToken);
 
-            return Results.Ok(new ResolvedLink(response.RequestMessage?.RequestUri?.ToString() ?? url));
+            if (problem is not null)
+            {
+                return Results.Problem(detail: problem, statusCode: StatusCodes.Status502BadGateway);
+            }
+
+            return Results.Ok(new ResolvedLink(finalUri?.ToString() ?? url));
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {

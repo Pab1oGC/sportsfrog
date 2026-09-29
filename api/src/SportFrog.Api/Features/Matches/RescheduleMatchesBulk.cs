@@ -306,6 +306,17 @@ public static class RescheduleMatchesBulk
                         "Volvé a intentar.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // At least one match in this batch was changed by somebody else
+            // between when this request read it and when it tried to save —
+            // the whole batch is refused rather than applying the moves that
+            // still matched and silently dropping the rest.
+            return Results.Problem(
+                detail: "Alguno de estos partidos cambió mientras armabas este reprogramado en lote. " +
+                        "Volvé a leer el calendario y aplicá los movimientos de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         if (changedMatchIds.Count > 0)
         {

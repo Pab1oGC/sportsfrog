@@ -283,7 +283,20 @@ public static class ScheduleCalendar
             match.ScheduledAt = placement.At.ToUniversalTime();
         }
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // One of these pending fixtures was itself changed (rescheduled,
+            // given a result) by somebody else since it was read as
+            // "pending" moments ago.
+            return Results.Problem(
+                detail: "Alguno de estos partidos cambió justo ahora. Volvé a pedir el próximo " +
+                        "grupo de fechas antes de programarlas.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         if (placements.Count > 0)
         {

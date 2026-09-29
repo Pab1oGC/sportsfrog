@@ -29,6 +29,11 @@ internal static class DelegationRosterSheetReader
 
     public static DelegationSheetContents Read(Stream file)
     {
+        if (WorkbookGuard.Inspect(file) is { } problem)
+        {
+            return new DelegationSheetContents(problem, null, null, null, []);
+        }
+
         XLWorkbook workbook;
 
         try

@@ -44,7 +44,21 @@ public static class DeleteEvent
         }
 
         database.PlayerEvents.Remove(recorded);
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else corrected or deleted this same event in the
+            // meantime — deleting a row that is already gone is not treated
+            // as success.
+            return Results.Problem(
+                detail: "Alguien más corrigió o eliminó este evento mientras vos lo tenías abierto. " +
+                        "Volvé a leer los eventos del partido antes de eliminarlo de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.NoContent();
     }

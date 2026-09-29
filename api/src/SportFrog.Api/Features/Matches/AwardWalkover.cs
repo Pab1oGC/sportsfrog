@@ -146,7 +146,21 @@ public static class AwardWalkover
         }
 
         await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else changed this same match (a result, another
+            // walkover, a reschedule) between when this request read it and
+            // when it tried to save.
+            return Results.Problem(
+                detail: "Alguien más cambió este partido mientras vos lo tenías abierto. Volvé a " +
+                        "leerlo antes de otorgar el walkover.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Ok(new Response(match.HomeTotal.Value, match.AwayTotal.Value));
     }

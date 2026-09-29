@@ -83,6 +83,11 @@ internal sealed class CompetitionConfiguration : IEntityTypeConfiguration<Compet
             .IsUnique()
             .HasFilter("deleted_at IS NULL");
 
+        // The name is unique among the living too, but case-insensitively --
+        // uq_competitions_name is built on lower(name), an expression HasIndex
+        // cannot describe, so it lives only in the migration. See
+        // CompetitionUniqueness for the pre-check that agrees with it.
+
         builder.HasQueryFilter(x => x.DeletedAt == null);
 
         builder.HasOne(x => x.Sport).WithMany().HasForeignKey(x => x.SportCode);

@@ -196,7 +196,19 @@ public static class DrawRepechage
 
         database.Matches.AddRange(newMatches);
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // One of the repechage fixtures this redraw was about to replace
+            // changed under it since it was read as still-safe-to-replace.
+            return Results.Problem(
+                detail: "Uno de los partidos de repechaje que se iban a reemplazar cambió justo " +
+                        "ahora. Volvé a revisar la categoría antes de sortear de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Ok(new Response(newMatches.Count, automaticBronze));
     }

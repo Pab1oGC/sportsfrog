@@ -88,7 +88,22 @@ public static class CorrectEvent
         recorded.Minute = request.Minute;
         recorded.Quantity = request.Quantity;
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else corrected or deleted this same event between
+            // when this request read it and when it tried to save — if it
+            // was deleted, this is exactly the "not found" this handler
+            // would have reported had the delete landed first, just told
+            // through the other door.
+            return Results.Problem(
+                detail: "Alguien más corrigió o eliminó este evento mientras vos lo tenías abierto. " +
+                        "Volvé a leer los eventos del partido antes de corregirlo de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.NoContent();
     }

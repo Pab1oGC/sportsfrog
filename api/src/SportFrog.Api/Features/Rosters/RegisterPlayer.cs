@@ -151,6 +151,17 @@ public static class RegisterPlayer
                         "nómina e intentá de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Only reachable for an individual-sport team: somebody else
+            // registered or withdrew a teammate of this same team — which
+            // also recomputes its name — between when this request read it
+            // and when it tried to save its own recomputed name.
+            return Results.Problem(
+                detail: "Alguien más cambió el plantel de este equipo mientras se registraba a " +
+                        "este deportista. Volvé a leer la nómina e intentá de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Created($"/roster/{entry.Id}", new Response(entry.Id));
     }

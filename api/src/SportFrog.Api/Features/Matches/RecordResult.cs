@@ -298,7 +298,23 @@ public static class RecordResult
         }
 
         await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else saved a result for this same match between when
+            // this request read it and when it tried to save — the exact
+            // race two scorekeepers submitting near-simultaneously produces.
+            // Reported as a conflict instead of silently keeping whichever
+            // save happened to land last, which is what this used to do.
+            return Results.Problem(
+                detail: "Alguien más cargó o corrigió el resultado de este partido mientras vos lo " +
+                        "tenías abierto. Volvé a leerlo y aplicá tu corrección de nuevo si todavía hace falta.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.Ok(new Response(home, away));
     }

@@ -136,6 +136,15 @@ public static class RescheduleMatch
                         "cancha, así que movés uno de los dos.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else rescheduled, or recorded a result for, this same
+            // match in the meantime.
+            return Results.Problem(
+                detail: "Alguien más cambió este partido mientras vos lo tenías abierto. Volvé a " +
+                        "leerlo antes de reprogramarlo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         if (scheduleChanged)
         {

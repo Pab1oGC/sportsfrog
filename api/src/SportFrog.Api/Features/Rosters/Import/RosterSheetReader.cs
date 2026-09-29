@@ -69,6 +69,11 @@ internal static class RosterSheetReader
 
     public static SheetContents Read(Stream file)
     {
+        if (WorkbookGuard.Inspect(file) is { } problem)
+        {
+            return new SheetContents(problem, null, null, []);
+        }
+
         XLWorkbook workbook;
 
         try

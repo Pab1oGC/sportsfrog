@@ -100,11 +100,17 @@ export default function CompetitionsPage() {
 
   const [slugTouched, setSlugTouched] = useState(false);
 
+  // 0-indexado, como lo pide DataGrid -- skip/take (lo que el backend
+  // realmente entiende, ver PagedListing) se arman a partir de esto adentro
+  // de useCrudDialog.
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 25 });
+
   const {
-    rows: data, isLoading, mutate, open, editId, form, setForm, error, setError, saving, openCreate: openCreateBase,
+    rows: data, rowCount, isLoading, mutate, open, editId, form, setForm, error, setError, saving, openCreate: openCreateBase,
     openEdit: openEditBase, close, save: saveBase, remove,
   } = useCrudDialog({
     resourceUrl: endpoints.competitions,
+    pageParams: { skip: paginationModel.page * paginationModel.pageSize, take: paginationModel.pageSize },
     emptyForm,
     entityName: 'competencia',
     entityGender: 'f',
@@ -280,7 +286,19 @@ export default function CompetitionsPage() {
   return (
     <Box>
       <PageHeader title="Competiciones" actionLabel="Nueva" onAction={() => openDialog(null)} />
-      <DataGrid rows={data || []} columns={columns} loading={isLoading} autoHeight disableRowSelectionOnClick getRowId={(r) => r.id} />
+      <DataGrid
+        rows={data || []}
+        columns={columns}
+        loading={isLoading}
+        autoHeight
+        disableRowSelectionOnClick
+        getRowId={(r) => r.id}
+        paginationMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        pageSizeOptions={[25, 50, 100]}
+      />
       <CrudDialog open={open} editId={editId} entityName="Competición" entityGender="f" error={error} saving={saving} onClose={close} onSave={save} maxWidth="md">
         <TextField label="Nombre" value={form.name} onChange={handleNameChange} fullWidth required />
         {/* La direccion queda fija desde que se crea: cambiarla romperia
