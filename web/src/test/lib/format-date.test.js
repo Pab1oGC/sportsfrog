@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fechaHora, aFechaInput } from "./format-date";
+import { fechaHora, aFechaInput } from "src/lib/format-date";
 
 // Estas pruebas dependen de que el corredor tenga la zona horaria fijada
 // en America/Argentina/Buenos_Aires (UTC-3, sin horario de verano) -- ver

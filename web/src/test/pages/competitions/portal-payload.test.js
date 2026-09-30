@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from "./portal-payload";
+import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from "src/pages/competitions/portal-payload";
 import { DEFAULT_PORTAL_THEME, PORTAL_SECTIONS, resolvePortalSections } from "src/lib/portal-theme";
 
 describe("readPortalForm", () => {

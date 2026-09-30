@@ -16,7 +16,7 @@ import {
   resolvePortalSections,
   heroBackground,
   buildPortalTheme,
-} from "./portal-theme";
+} from "src/lib/portal-theme";
 
 describe("parseHex / isHex", () => {
   it("acepta '#rrggbb' y descompone los tres canales", () => {

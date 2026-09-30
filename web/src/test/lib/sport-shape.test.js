@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esIndividual, esJuzgado, registraCantidad, ventanaDeMinuto, aPuntaje, dePuntaje, ADICIONAL_POR_DEFECTO } from "./sport-shape";
+import { esIndividual, esJuzgado, registraCantidad, ventanaDeMinuto, aPuntaje, dePuntaje, ADICIONAL_POR_DEFECTO } from "src/lib/sport-shape";
 
 describe("esIndividual", () => {
   it("true solo cuando isIndividual es estrictamente true", () => {

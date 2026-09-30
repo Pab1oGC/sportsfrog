@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FASES, nombreFase } from "./phase-labels";
+import { FASES, nombreFase } from "src/lib/phase-labels";
 
 describe("FASES", () => {
   it("mapea las claves reales que devuelve Bracket.Phase() en el backend", () => {

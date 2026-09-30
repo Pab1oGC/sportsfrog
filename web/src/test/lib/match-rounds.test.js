@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agruparPorRonda, soloFaseEliminatoria, agruparRepechajePorRama, agruparCalendario } from "./match-rounds";
-import { FASES } from "./phase-labels";
+import { agruparPorRonda, soloFaseEliminatoria, agruparRepechajePorRama, agruparCalendario } from "src/lib/match-rounds";
+import { FASES } from "src/lib/phase-labels";
 
 /** Un partido mínimo, con los campos que agruparPorRonda/agruparCalendario leen. */
 function partido(overrides = {}) {

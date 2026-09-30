@@ -22,17 +22,26 @@ export function useConfirm() {
 }
 
 export function ConfirmProvider({ children }) {
-  const [state, setState] = useState(null);
+  // Una cola, no un solo `state`: con un solo state, un segundo confirm()
+  // llamado antes de que la persona conteste el primero pisaba su `resolve`
+  // sin dejar rastro -- esa primera promesa quedaba pendiente para siempre.
+  // Encolando, cada pedido conserva su propio resolve y se muestra recién
+  // cuando le toca el turno; el de adelante (queue[0]) es el que se ve.
+  const [queue, setQueue] = useState([]);
+  const state = queue[0] || null;
 
   const confirm = useCallback((message, options = {}) => {
     return new Promise((resolve) => {
-      setState({ message, resolve, ...options });
+      setQueue((q) => [...q, { message, resolve, ...options }]);
     });
   }, []);
 
   const close = (result) => {
-    state?.resolve(result);
-    setState(null);
+    setQueue((q) => {
+      const [actual, ...resto] = q;
+      actual?.resolve(result);
+      return resto;
+    });
   };
 
   return (

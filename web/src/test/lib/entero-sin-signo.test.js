@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { bloquearNoEnteros, soloDigitos, bloquearNegativos, soloDecimales } from "./entero-sin-signo";
+import { bloquearNoEnteros, soloDigitos, bloquearNegativos, soloDecimales } from "src/lib/entero-sin-signo";
 
 function eventoDeTecla(key) {
   return { key, preventDefault: vi.fn() };

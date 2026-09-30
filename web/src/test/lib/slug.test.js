@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SLUG_MIN, SLUG_MAX, aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion } from "./slug";
+import { SLUG_MIN, SLUG_MAX, aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion } from "src/lib/slug";
 
 describe("aSlug", () => {
   it("baja a minúsculas", () => {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -15,6 +16,22 @@ import CircularProgress from '@mui/material/CircularProgress';
  * calcula para el borrado no tiene que inventar un segundo valor aca.
  */
 export function CrudDialog({ open, editId, entityName, entityGender = 'm', error, saving, onClose, onSave, children, maxWidth = 'sm' }) {
+  // El "×" del Alert de abajo tiene que descartar solo el mensaje de error,
+  // no el diálogo entero -- antes reusaba el mismo onClose del diálogo y de
+  // paso perdía el formulario cargado. errorDescartado guarda el último
+  // mensaje ya cerrado y se compara por valor (no un booleano) para que un
+  // error nuevo -- incluso con el mismo texto, tras reintentar guardar -- se
+  // vuelva a mostrar: se limpia apenas arranca un guardado nuevo (saving
+  // pasa a true), que es el único momento en que un mensaje viejo deja de
+  // ser válido.
+  const [errorDescartado, setErrorDescartado] = useState(null);
+
+  useEffect(() => {
+    if (saving) setErrorDescartado(null);
+  }, [saving]);
+
+  const mostrarError = Boolean(error) && error !== errorDescartado;
+
   return (
     <Dialog
       open={open}
@@ -31,7 +48,7 @@ export function CrudDialog({ open, editId, entityName, entityGender = 'm', error
     >
       <DialogTitle>{editId ? 'Editar' : (entityGender === 'f' ? 'Nueva' : 'Nuevo')} {entityName}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important', overflowY: 'auto' }}>
-        {error && <Alert severity="error" onClose={onClose}>{error}</Alert>}
+        {mostrarError && <Alert severity="error" onClose={() => setErrorDescartado(error)}>{error}</Alert>}
         {children}
       </DialogContent>
       <DialogActions>

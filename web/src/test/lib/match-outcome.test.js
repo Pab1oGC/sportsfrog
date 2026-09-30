@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveMatchOutcome } from "./match-outcome";
+import { resolveMatchOutcome } from "src/lib/match-outcome";
 
 function partido(overrides = {}) {
   return {

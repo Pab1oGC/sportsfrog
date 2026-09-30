@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TIEBREAKER_CODES, unidadDeMarcador, etiquetasDesempate, columnasMarcador } from "./tiebreaker-labels";
+import { TIEBREAKER_CODES, unidadDeMarcador, etiquetasDesempate, columnasMarcador } from "src/lib/tiebreaker-labels";
 
 describe("TIEBREAKER_CODES", () => {
   it("expone los cinco códigos que espeja SportFrog.Domain.Rules.Tiebreaker", () => {

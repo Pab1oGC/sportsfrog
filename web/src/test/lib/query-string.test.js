@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withQueryParams } from "./query-string";
+import { withQueryParams } from "src/lib/query-string";
 
 describe("withQueryParams", () => {
   it("agrega un único parámetro con '?'", () => {

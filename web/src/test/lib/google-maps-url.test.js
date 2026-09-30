@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLatLng, esEnlaceCorto, linkFromLatLng, embedSrc } from "./google-maps-url";
+import { parseLatLng, esEnlaceCorto, linkFromLatLng, embedSrc } from "src/lib/google-maps-url";
 
 describe("parseLatLng", () => {
   it("null, undefined o cadena vacía dan null", () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from "./inline-photo";
+import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from "src/lib/inline-photo";
 
 // MAX_LENGTH no se exporta (es un detalle interno del módulo) -- se replica
 // acá solo para poder construir los casos límite. Si el módulo cambia este
