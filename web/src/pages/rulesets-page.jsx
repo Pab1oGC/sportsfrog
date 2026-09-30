@@ -16,6 +16,7 @@ import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { TIEBREAKER_CODES, etiquetasDesempate } from 'src/lib/tiebreaker-labels';
 import { esJuzgado } from 'src/lib/sport-shape';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { desenlacesDeSets, etiquetaDesenlace, actualizarConfig } from 'src/pages/rulesets/outcome-config';
 
 const EMPTY_FORM = {
   name: '',
@@ -30,24 +31,6 @@ const EMPTY_FORM = {
   },
 };
 
-// Mismo calculo que SportFrog.Domain.Rules.SetsMatchOutcomeRules.RequiredOutcomes
-// en el backend: un partido a la mejor de `count` se gana en toWin =
-// ceil(count/2), y cada desenlace posible se nombra desde los dos lados.
-// Se recalcula aca (en vez de pedirselo al backend) porque `count` cambia
-// mientras el organizador todavia esta escribiendo el formulario — lo que
-// terminara guardado siempre pasa por RulesetPolicy en el servidor, asi que
-// una diferencia aca en el peor caso muestra el campo equivocado, nunca
-// guarda un reglamento invalido.
-function desenlacesDeSets(count) {
-  const toWin = Math.ceil((count || 1) / 2);
-  const desenlaces = [];
-  for (let lost = 0; lost < toWin; lost++) {
-    desenlaces.push(`win_${toWin}_${lost}`);
-    desenlaces.push(`loss_${lost}_${toWin}`);
-  }
-  return desenlaces;
-}
-
 // React no resincroniza el valor de un <input type="number"> mientras esta
 // enfocado (para no interrumpir mientras alguien termina de escribir "1." o
 // "-5"), asi que un cero que ya estaba en el campo se queda pegado en
@@ -60,17 +43,6 @@ function limpiarCeroInicial(e) {
   return limpio;
 }
 
-// "win_2_0" -> "Pts 2-0 (ganado)"; "loss_0_2" -> "Pts 0-2 (perdido)".
-function etiquetaDesenlace(code) {
-  if (code === 'win') return 'Pts victoria';
-  if (code === 'draw') return 'Pts empate';
-  if (code === 'loss') return 'Pts derrota';
-  const m = /^(win|loss)_(\d+)_(\d+)$/.exec(code);
-  if (!m) return code;
-  const [, resultado, propio, rival] = m;
-  return `Pts ${propio}-${rival} (${resultado === 'win' ? 'ganado' : 'perdido'})`;
-}
-
 export default function RulesetsPage() {
   const { data: sports } = useApi(endpoints.sports);
   const { rows, isLoading, open, editId, form, setForm, error, saving, openCreate, openEdit, close, save, remove } = useCrudDialog({
@@ -80,14 +52,10 @@ export default function RulesetsPage() {
     mapToForm: (row) => ({ name: row.name, sportCode: row.sportCode, config: row.config }),
   });
 
-  const updateConfig = (path, value) => {
-    const c = { ...form.config };
-    const keys = path.split('.');
-    let obj = c;
-    for (let i = 0; i < keys.length - 1; i++) obj = { ...obj[keys[i]] };
-    obj[keys[keys.length - 1]] = value;
-    setForm({ ...form, config: c });
-  };
+  // Ver pages/rulesets/outcome-config.js -- incluye un defecto conocido con
+  // una ruta de dos niveles (el único caso real, más abajo, es
+  // "points.<code>": el puntaje por desenlace).
+  const updateConfig = (path, value) => setForm({ ...form, config: actualizarConfig(form.config, path, value) });
 
   const tiebreakers = form.config.tiebreakers || [];
   const tiebreakersDisponibles = TIEBREAKER_CODES.filter((code) => !tiebreakers.includes(code));

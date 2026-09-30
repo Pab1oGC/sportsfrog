@@ -21,6 +21,7 @@ import { fechaHora } from 'src/lib/format-date';
 import { PageHeader } from 'src/components/page-header';
 import { CascadeFilters } from 'src/components/cascade-filters';
 import { SelectionTeam, SelectionField } from 'src/components/selectors';
+import { edad as ageFromBirthDate } from 'src/lib/age';
 import { toast } from 'sonner';
 
 const SC = { scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error', walkover: 'warning', postponed: 'default' };
@@ -335,15 +336,4 @@ function MetricsChart({ metrics }) {
       hideLegend
     />
   );
-}
-
-function ageFromBirthDate(birthDate) {
-  if (!birthDate) return null;
-  const nacimiento = new Date(birthDate);
-  const hoy = new Date();
-  let edad = hoy.getFullYear() - nacimiento.getFullYear();
-  const aunNoCumplio = hoy.getMonth() < nacimiento.getMonth()
-    || (hoy.getMonth() === nacimiento.getMonth() && hoy.getDate() < nacimiento.getDate());
-  if (aunNoCumplio) edad--;
-  return edad;
 }

@@ -17,24 +17,13 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost, apiDelete } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { useConfirm } from 'src/components/confirm-dialog';
-import { esIndividual, registraCantidad, ventanaDeMinuto } from 'src/lib/sport-shape';
+import { esIndividual, registraCantidad } from 'src/lib/sport-shape';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { porPosicionYDorsal } from 'src/pages/matches/roster-order';
+import { validarMinuto } from 'src/pages/matches/minute-validation';
 import { toast } from 'sonner';
 
 const EMPTY_FORM = { rosterEntryId: '', metricId: '', periodNumber: '', minute: '', quantity: 1 };
-// Por posicion y despues por dorsal: buscar "el defensor numero 4" a ojo en
-// una lista sin ningun orden tactico era lo que hacia lenta la carga. Sin
-// posicion cargada queda al final, no mezclado en cualquier lado.
-function porPosicionYDorsal(a, b) {
-  const posA = a.position || '';
-  const posB = b.position || '';
-  if (posA !== posB) {
-    if (!posA) return 1;
-    if (!posB) return -1;
-    return posA.localeCompare(posB, 'es');
-  }
-  return (a.jerseyNumber ?? 999) - (b.jerseyNumber ?? 999);
-}
 
 /**
  * Carga y ver la lista de eventos de un partido en el mismo lugar, sin abrir
@@ -53,17 +42,8 @@ export function EventsDialog({ open, onClose, selMatch, sportInfo, mutate, loadi
   const individual = esIndividual(sportInfo);
   const conCantidad = registraCantidad(sportInfo);
 
-  // El minuto tiene que caber en el periodo elegido: el 99 no existe en el
-  // 1.er tiempo de un partido de 45 (ver ventanaDeMinuto). El servidor lo
-  // exige igual; esto lo avisa antes de mandar y le pone limites al campo.
-  const ventana = ventanaDeMinuto(sportInfo, Number(form.periodNumber));
-  const minuto = form.minute === '' ? null : Number(form.minute);
-  const minutoFuera = Boolean(ventana) && minuto !== null && (minuto < ventana.desde || minuto > ventana.hasta);
-  const rangoDeMinuto = ventana ? `${Math.max(1, ventana.desde)}–${ventana.regular} (+${ventana.adicional})` : null;
-  const ayudaDeMinuto = !ventana ? undefined
-    : minutoFuera ? `Fuera de ${sportInfo.periodLabel} ${form.periodNumber}: va de ${rangoDeMinuto}`
-    : minuto > ventana.regular ? `Adicional: ${ventana.regular}+${minuto - ventana.regular}`
-    : rangoDeMinuto;
+  // Ver matches/minute-validation.js para el porqué de cada camino.
+  const { ventana, minutoFuera, ayudaDeMinuto } = validarMinuto(sportInfo, form.periodNumber, form.minute);
 
   const { data: events, mutate: mEv } = useApi(open && selMatch ? endpoints.matchEvents(selMatch.id) : null);
   const { data: roster1 } = useApi(open && selMatch ? endpoints.roster(selMatch.homeTeamId) : null);

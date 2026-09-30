@@ -28,12 +28,16 @@ import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
 import { slugDeOrganizacion } from 'src/lib/slug';
 import {
-  PORTAL_FONTS, PORTAL_CORNERS, PORTAL_HERO_STYLES, PORTAL_SECTIONS,
+  PORTAL_FONTS, PORTAL_CORNERS, PORTAL_HERO_STYLES,
   PORTAL_DENSITIES, PORTAL_DECORATIONS, PORTAL_CONTENT_FIGURES, PORTAL_HERO_LAYOUTS, PORTAL_HERO_VARIANTS,
   PORTAL_STANDINGS_VARIANTS, PORTAL_MATCH_CARD_VARIANTS, PORTAL_BRACKET_VARIANTS,
   buildPortalTheme, portalFontHref, portalFontStack, contrastRatio, readableTextOn, isHex, darken,
 } from 'src/lib/portal-theme';
-import { readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
+import { readPortalForm } from 'src/pages/competitions/portal-payload';
+import { seccionesVisibles, ordenTrasMover } from 'src/pages/competitions/portal-studio-sections';
+import { previewImg, fakeComp, formToPreviewPortal, defaultSectionLabel } from 'src/pages/competitions/portal-studio-preview';
+import { buildCompetitionUpdatePayload } from 'src/pages/competitions/portal-studio-save';
+import { puntoFocalDesdeClic } from 'src/pages/competitions/focal-point';
 import { PortalHero } from 'src/pages/public/portal-hero';
 import { ContentFigureBackground } from 'src/pages/public/content-figure';
 import { StandingsView } from 'src/pages/public/standings/standings-view';
@@ -99,11 +103,8 @@ export default function PortalStudioPage() {
   // cambia el orden y, si se tocó, el nombre.
   const moveSection = useCallback((index, direction) => {
     setForm((f) => {
-      const target = index + direction;
-      if (target < 0 || target >= f.sectionOrder.length) return f;
-      const next = f.sectionOrder.slice();
-      [next[index], next[target]] = [next[target], next[index]];
-      return { ...f, sectionOrder: next };
+      const next = ordenTrasMover(f.sectionOrder, index, direction);
+      return next === f.sectionOrder ? f : { ...f, sectionOrder: next };
     });
   }, []);
 
@@ -115,40 +116,16 @@ export default function PortalStudioPage() {
     });
   }, []);
 
-  // Las mismas secciones, filtradas por lo que "Secciones visibles" dejó
-  // prendido -- lo que la vista previa necesita para dibujar sus pestañas de
-  // a mentira, en el mismo orden que verá el visitante. La galería además
-  // necesita al menos una foto, igual que en el portal real.
-  const visibleSections = useMemo(() => {
-    if (!form) return [];
-    const visible = {
-      standings: form.showStandings, leaders: form.showLeaders, classification: form.showClassification,
-      calendar: true, gallery: form.showGallery && form.gallery.some((p) => p.key),
-    };
-    return form.sectionOrder.filter((s) => visible[s.key]);
-  }, [form]);
+  // Ver portal-studio-sections.js para el porqué de cada una.
+  const visibleSections = useMemo(() => seccionesVisibles(form), [form]);
 
   const save = async () => {
     setSaving(true);
     setSaveError('');
     try {
-      await apiPut(endpoints.competition(id), {
-        rulesetId: row.rulesetId,
-        name: row.name,
-        slug: row.slug,
-        season: row.season,
-        format: row.format,
-        captureLevel: row.captureLevel,
-        startsOn: row.startsOn,
-        endsOn: row.endsOn,
-        settings: {
-          // Reenviados tal cual: este editor no los toca y el PUT reemplaza
-          // el objeto entero.
-          schedule: (row.settings && row.settings.schedule) || null,
-          bulletin: (row.settings && row.settings.bulletin) || null,
-          public: buildPortalPayload(form),
-        },
-      });
+      // Ver portal-studio-save.js: el PUT es la competencia entera, así que
+      // schedule/bulletin se reenvían intactos junto con settings.public.
+      await apiPut(endpoints.competition(id), buildCompetitionUpdatePayload(row, form));
       toast.success('Portal actualizado.');
       navigate('/dashboard/competitions');
     } catch (e) {
@@ -567,11 +544,8 @@ export default function PortalStudioPage() {
 }
 
 /* --- helpers de datos --------------------------------------------------------- */
-
-function previewImg(key, currentUrl) {
-  if (!key) return null;
-  return String(key).startsWith('data:') ? key : currentUrl;
-}
+// previewImg/fakeComp/formToPreviewPortal/defaultSectionLabel viven en
+// portal-studio-preview.js -- puros los cuatro, sin nada propio del render.
 
 function editSponsor(setForm, i, patch) {
   setForm((f) => ({ ...f, sponsors: f.sponsors.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
@@ -579,71 +553,6 @@ function editSponsor(setForm, i, patch) {
 
 function editGalleryPhoto(setForm, i, patch) {
   setForm((f) => ({ ...f, gallery: f.gallery.map((p, idx) => (idx === i ? { ...p, ...patch } : p)) }));
-}
-
-/** row de la API → el `comp` mínimo que PortalHero necesita. */
-function fakeComp(row) {
-  return {
-    name: row.name,
-    organizationName: '(tu organización)',
-    season: row.season,
-    sportName: row.sportName || row.sportCode,
-    status: row.status,
-    format: row.format,
-    startsOn: row.startsOn,
-    endsOn: row.endsOn,
-  };
-}
-
-/** form del estudio → objeto con la forma de comp.portal, para el tema y la portada. */
-function formToPreviewPortal(form) {
-  if (!form) return null;
-  const t = form.theme;
-  return {
-    accentColor: form.accentColor || null,
-    theme: {
-      primary: t.primary || null,
-      primaryContrast: t.primaryContrast || null,
-      secondary: t.secondary || null,
-      surface: t.surface || null,
-      headingFont: t.headingFont,
-      corners: t.corners,
-      heroStyle: t.heroStyle,
-      heroGradientTo: t.heroGradientTo || null,
-      focusX: t.focusX,
-      focusY: t.focusY,
-      density: t.density,
-      decoration: t.decoration,
-      contentFigure: t.contentFigure,
-      contentFigureColor: t.contentFigureColor || null,
-      showLogoBackground: t.showLogoBackground,
-      heroLayout: t.heroLayout,
-      heroVariant: t.heroVariant,
-      standingsVariant: t.standingsVariant,
-      matchCardVariant: t.matchCardVariant,
-      bracketVariant: t.bracketVariant,
-    },
-    sectionOrder: form.sectionOrder,
-    bannerUrl: previewImg(form.bannerKey, form.currentBannerUrl),
-    logoUrl: previewImg(form.logoKey, form.currentLogoUrl),
-    description: form.description || null,
-    instagram: form.instagram || null,
-    facebook: form.facebook || null,
-    whatsApp: form.whatsApp || null,
-    website: form.website || null,
-    sponsors: form.sponsors
-      .map((s) => ({ name: s.name || null, url: s.url || null, logoUrl: previewImg(s.logoKey, s.currentLogoUrl) }))
-      .filter((s) => s.logoUrl),
-    gallery: form.gallery
-      .map((p) => ({ caption: p.caption || null, url: previewImg(p.key, p.currentUrl) }))
-      .filter((p) => p.url),
-  };
-}
-
-/** El nombre por defecto de una sección, para mostrar junto al campo que lo puede reemplazar. */
-function defaultSectionLabel(key) {
-  const section = PORTAL_SECTIONS.find((s) => s.key === key);
-  return section ? section.label : key;
 }
 
 /* --- piezas de UI ----------------------------------------------------------- */
@@ -765,9 +674,8 @@ function ImagePicker({ label, url, onPick, onClear, ratio, help }) {
 function FocalPointPicker({ url, x, y, onChange }) {
   const pick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const nx = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-    const ny = Math.round(((e.clientY - rect.top) / rect.height) * 100);
-    onChange(Math.max(0, Math.min(100, nx)), Math.max(0, Math.min(100, ny)));
+    const punto = puntoFocalDesdeClic(rect, e.clientX, e.clientY);
+    onChange(punto.x, punto.y);
   };
 
   return (

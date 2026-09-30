@@ -24,6 +24,7 @@ import { EstadoChip } from 'src/components/estado-chip';
 import { useConfirm } from 'src/components/confirm-dialog';
 import { SelectionClub, SelectionAthletes } from 'src/components/selectors';
 import { MembersPanel } from 'src/pages/teams/members-panel';
+import { derivarVocabulario } from 'src/pages/teams/roster-vocabulary';
 
 const emptyForm = () => ({ clubId: '', name: '', groupLabel: '', seed: '', isActive: true, athleteIds: [] });
 
@@ -58,31 +59,16 @@ export default function TeamsPage() {
   // la pantalla una regla que el backend ya tiene.
   const categoria = cascade.categorias.find((c) => c.id === cascade.catId);
 
-  // Cuantos pueden competir juntos sale de dos lugares, y manda el menor: el
-  // techo del deporte (Sport.MaxEntrySize -- Kyorugi 1, Poomsae 3) y el cupo
-  // de la categoria, que puede achicarlo (Poomsae individual dentro del techo
-  // de trio) pero nunca ensancharlo. Es la misma cuenta que hace RosterPolicy
-  // del lado del servidor, que es quien de verdad lo hace cumplir.
-  //
   // Sin nada declarado se asume individual: en un deporte individual la
   // enorme mayoria de las categorias se compiten de a uno, y entre
   // equivocarse mostrando un panel de integrantes que sobra o escondiendo uno
   // que hace falta, lo segundo se nota y se corrige eligiendo la modalidad,
   // mientras que lo primero deja a la vista una capa del modelo que
   // justamente estamos tratando de no mostrar.
-  const cupos = [sport?.maxEntrySize, categoria?.maxRosterSize].filter((v) => v != null);
-  const cupo = cupos.length > 0 ? Math.min(...cupos) : 1;
-  const soloDeportista = individual && cupo === 1;
-
-  // "Equipo" es el nombre correcto del lado del backend (ver el comentario
-  // de Team.cs: "la unidad que compite", no un sinonimo de club) pero desde
-  // el frontend eso se lee raro en un deporte individual: para el usuario,
-  // una inscripcion de una sola persona *es* el deportista, y llamarla
-  // equipo -- o incluso "inscripcion" -- es hablarle de una capa interna que
-  // no le importa. El backend no se entera de este cambio de vocabulario:
-  // mismos endpoints, mismo contrato, mismo Team por debajo.
-  const entityName = soloDeportista ? 'deportista' : (individual ? 'inscripción' : 'equipo');
-  const entityGender = individual && !soloDeportista ? 'f' : 'm';
+  //
+  // Ver teams/roster-vocabulary.js para el porqué de cupo/soloDeportista/
+  // entityName/entityGender.
+  const { cupo, soloDeportista, entityName, entityGender } = derivarVocabulario({ individual, sport, categoria });
 
   const {
     rows: teams, isLoading, mutate, open, editId, form, setForm, error, openCreate, openEdit, close, save, remove,

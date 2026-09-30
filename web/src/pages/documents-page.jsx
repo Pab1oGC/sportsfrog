@@ -26,6 +26,7 @@ import { useLastCompetition } from 'src/hooks/use-last-competition';
 import { DateField } from 'src/components/date-field';
 import { SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
 import { toast } from 'sonner';
+import { EN_VUELO, hayLoteEnVuelo, intervaloDeListaDeLotes, intervaloDeDetalleDeLote } from 'src/pages/documents/batch-polling';
 
 // Los cuatro estados de DocumentBatchState. El mapa anterior decia
 // "processing" y "completed", que la API no usa: un lote terminado llegaba
@@ -33,9 +34,6 @@ import { toast } from 'sonner';
 // crudo en ingles — parecia que no habia pasado nada.
 var BS = { queued: 'info', running: 'warning', finished: 'success', failed: 'error' };
 var BL = { queued: 'En cola', running: 'Procesando', finished: 'Terminado', failed: 'Fallido' };
-
-/** Mientras esta en alguno de estos, el lote todavia se mueve solo. */
-var EN_VUELO = { queued: true, running: true };
 
 var KINDS = ['credential', 'certificate'];
 var KL = { credential: 'Credencial', certificate: 'Certificado' };
@@ -75,25 +73,20 @@ export default function DocumentsPage() {
   // Un lote se procesa en segundo plano: el POST contesta "en cola" y nada
   // mas vuelve a preguntar. Antes se refrescaba una sola vez, justo cuando
   // todavia no habia empezado, y la fila se quedaba en "En cola" hasta
-  // recargar la pagina a mano.
-  //
-  // El intervalo es una funcion de lo ultimo que llego, que es lo que deja
-  // que la consulta se apague sola: mientras haya algo en vuelo pregunta, y
-  // cuando todos terminaron deja de preguntar.
+  // recargar la pagina a mano. Ver documents/batch-polling.js para el
+  // porqué del sondeo que se apaga solo.
   var { data: batches, mutate: mutateBatches, isLoading: loadingBatches } = useApi(endpoints.documentBatches, {
-    refreshInterval: function(ultimo) {
-      return (ultimo || []).some(function(b) { return EN_VUELO[b.status]; }) ? 2000 : 0;
-    }
+    refreshInterval: intervaloDeListaDeLotes,
   });
 
-  var enVuelo = (batches || []).some(function(b) { return EN_VUELO[b.status]; });
+  var enVuelo = hayLoteEnVuelo(batches);
 
   var urlEmitidos = endpoints.issuedDocuments + (compId ? '?competitionId=' + compId : '');
   var { data: issued, mutate: mutateIssued, isLoading: loadingIssued } = useApi(urlEmitidos);
   var { data: templates } = useApi(endpoints.templates);
 
   var { data: detalle } = useApi(detalleId ? endpoints.documentBatch(detalleId) : null, {
-    refreshInterval: function(ultimo) { return ultimo && EN_VUELO[ultimo.status] ? 1500 : 0; }
+    refreshInterval: intervaloDeDetalleDeLote,
   });
 
   var handleOpenRequest = function() {

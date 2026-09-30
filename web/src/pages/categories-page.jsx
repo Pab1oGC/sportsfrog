@@ -18,27 +18,9 @@ import { DateField } from 'src/components/date-field';
 import { esIndividual } from 'src/lib/sport-shape';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
+import { modalidadDe, modalidadesDisponibles } from 'src/pages/categories/modalidad';
 
 const emptyForm = () => ({ name: '', gender: '', birthDateFrom: '', birthDateTo: '', maxRosterSize: '', displayOrder: 0, rulesetId: '', qualifiersPerGroup: '', minWeightKg: '', maxWeightKg: '', usesRepechage: false });
-
-// Un deporte de equipo tiene tres niveles -- club, equipo, jugadores -- y
-// "Max. nomina" pregunta por el ultimo: cuantos jugadores entran en el
-// plantel. Un deporte individual, para quien lo usa, tiene dos: el club y
-// sus deportistas. La unidad que compite (una persona, o la pareja de
-// Poomsae) es una capa del modelo que el usuario no tiene por que conocer,
-// asi que preguntarle "cuantos entran en la nomina" lo hace adivinar sobre
-// un nivel que en su cabeza no existe -- y lo mas probable es que conteste
-// pensando en cuantos deportistas puede anotar el club, que es otra cosa.
-//
-// Misma columna por debajo (Category.MaxRosterSize, que RosterPolicy ya hace
-// cumplir), otra pregunta arriba: como se compite esta categoria.
-const MODALIDADES = [
-  { value: '1', label: 'Individual' },
-  { value: '2', label: 'Pareja' },
-  { value: '3', label: 'Trío' },
-];
-
-const modalidadDe = (value) => MODALIDADES.find((m) => m.value === String(value))?.label;
 
 export default function CategoriesPage() {
   const [searchParams] = useSearchParams();
@@ -117,9 +99,7 @@ export default function CategoriesPage() {
             // Individual, así que no hay forma de inventar una dupla que la
             // categoría no puede tener. Sin techo declarado se ofrecen las
             // tres y manda lo que diga la categoría.
-            options={sport?.maxEntrySize != null
-              ? MODALIDADES.filter((m) => Number(m.value) <= sport.maxEntrySize)
-              : MODALIDADES}
+            options={modalidadesDisponibles(sport?.maxEntrySize)}
             helperText={sport?.maxEntrySize === 1
               ? `${sportName} se compite de a uno, así que la categoría no admite otra modalidad.`
               : 'Cuántos compiten juntos en esta categoría.'}

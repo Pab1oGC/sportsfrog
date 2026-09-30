@@ -14,6 +14,7 @@ import Alert from '@mui/material/Alert';
 import { apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { calcularBombos } from 'src/pages/matches/draw-pots';
 
 const FORMATO_LABEL = { league: 'Todos vs todos', knockout: 'Eliminacion directa', groups: 'Fase de grupos' };
 
@@ -33,24 +34,8 @@ export function DrawDialog({ open, onClose, result, setResult, cascade, formato,
     if (open) { setLegs(1); setGroupCount(''); setAllowSamePot(false); }
   }, [open]);
 
-  // Fase de grupos sin ningun equipo todavia sorteado en un grupo: "Sortear"
-  // tiene que empezar por ahi, no fallar pidiendo algo que el propio sorteo
-  // deberia resolver.
-  const sinGrupos = formato === 'groups' && (teams || []).length > 0 && !(teams || []).some((t) => t.groupLabel);
-
-  // Los bombos se cargan en Equipos, en otro momento — y por eso es facil
-  // que un numero quede viejo o suelto. Se muestran aca, junto a la cantidad
-  // de grupos, para que sea una sola decision y no dos separadas por dias.
-  const bombos = {};
-  (teams || []).forEach((t) => {
-    const clave = t.seed != null ? t.seed : 'sin';
-    (bombos[clave] = bombos[clave] || []).push(t.name);
-  });
-  const bombosNumerados = Object.keys(bombos).filter((k) => k !== 'sin').map(Number).sort((a, b) => a - b);
-  const gruposElegidos = Number(groupCount) || 0;
-  // Si se permite que un mismo bombo se enfrente, esa restriccion deja de
-  // aplicar del todo: no hay promesa que un bombo grande pueda incumplir.
-  const bomboExcedido = !allowSamePot && gruposElegidos > 0 && bombosNumerados.some((b) => bombos[b].length > gruposElegidos);
+  // Ver matches/draw-pots.js para el porqué de cada uno.
+  const { sinGrupos, bombos, bombosNumerados, gruposElegidos, bomboExcedido } = calcularBombos({ teams, formato, groupCount, allowSamePot });
 
   const doDraw = async () => {
     if (!cascade.catId) return;

@@ -13,44 +13,10 @@ import Divider from '@mui/material/Divider';
 import { Iconify } from 'src/components/iconify';
 import { apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
-import { esJuzgado, aPuntaje, dePuntaje } from 'src/lib/sport-shape';
+import { esJuzgado, dePuntaje, aPuntaje } from 'src/lib/sport-shape';
 import { bloquearNoEnteros, soloDigitos, bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
+import { periodScoresIniciales, aPeriodoApi, totalDelPartido } from 'src/pages/matches/result-conversion';
 import { toast } from 'sonner';
-
-// El backend guarda cada periodo como {p,h,a} -- una letra por clave porque
-// PeriodScore documenta que son cientos de estos guardados por temporada
-// (ver el tipo en el dominio). Este dialogo lee y escribe {period,home,away}
-// puertas adentro, mas legible para el resto del archivo; estas dos
-// funciones son el unico lugar donde una forma se convierte en la otra.
-//
-// Sin esta conversion, PUT /matches/{id}/result nunca funciono: mandaba
-// {period,home,away} contra un contrato que exige p/h/a como campos
-// obligatorios, y System.Text.Json lo rechaza de entrada (verificado contra
-// el tipo real del backend, no asumido). No es parte del modo juzgado -- es
-// un bug preexistente en cualquier deporte, encontrado al tocar este mismo
-// archivo para agregarlo.
-function deApiAPeriodo(p) {
-  return { period: p.p, home: p.h, away: p.a };
-}
-function aPeriodoApi(p) {
-  return { p: p.period, h: p.home, a: p.away };
-}
-
-// Un deporte de suma (futbol, basquet) siempre juega todos sus periodos
-// configurados: la cantidad del deporte es la cantidad correcta. Uno por
-// sets rara vez llega al maximo (una mejor-de-cinco que termina 3-0 solo jugo
-// tres), asi que ahi se arranca en uno y el dialogo deja agregar los que
-// hagan falta. Uno juzgado es siempre una sola actuacion por lado
-// (JudgedRulesetShape ya lo exige al guardar el reglamento) -- misma
-// respuesta que ya da un deporte por sets, por la misma razon: no hay mas
-// que un periodo que jugar.
-function periodScoresIniciales(selMatch, sportInfo) {
-  if (selMatch.periodScores?.length) {
-    return selMatch.periodScores.map(deApiAPeriodo);
-  }
-  const cantidad = (sportInfo?.isPlayedInSets || esJuzgado(sportInfo)) ? 1 : (sportInfo?.defaultPeriods || 2);
-  return Array.from({ length: cantidad }, (_, i) => ({ period: i + 1, home: 0, away: 0 }));
-}
 
 // El puntaje de un juez, con su propio borrador de texto -- convertir a
 // entero (dePuntaje) en cada tecla y volver a mostrar el resultado
@@ -132,6 +98,8 @@ export function ResultDialog({ open, onClose, selMatch, sportInfo, mutate, loadi
     finally { setLoading(false); }
   };
 
+  const total = totalDelPartido(sportInfo, form.periodScores);
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Registrar Resultado</DialogTitle>
@@ -191,11 +159,7 @@ export function ResultDialog({ open, onClose, selMatch, sportInfo, mutate, loadi
             puntaje de cada juez, decodificado -- una sola actuacion, nada
             que consolidar. */}
         <Typography fontWeight={600}>
-          Total: {sportInfo?.isPlayedInSets
-            ? `${form.periodScores.filter((p) => p.home > p.away).length} - ${form.periodScores.filter((p) => p.away > p.home).length}`
-            : juzgado
-              ? `${aPuntaje(form.periodScores[0]?.home)} - ${aPuntaje(form.periodScores[0]?.away)}`
-              : `${form.periodScores.reduce((s, p) => s + p.home, 0)} - ${form.periodScores.reduce((s, p) => s + p.away, 0)}`}
+          Total: {total.home} - {total.away}
         </Typography>
       </DialogContent>
       <DialogActions>

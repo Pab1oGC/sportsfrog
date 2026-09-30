@@ -26,19 +26,7 @@ import { DateField } from 'src/components/date-field';
 import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from 'src/lib/inline-photo';
 import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 import { withQueryParams } from 'src/lib/query-string';
-
-// Cuantos años cumplidos tiene hoy, para que a simple vista se note quien
-// necesita datos de apoderado sin tener que hacer la cuenta a mano.
-function edad(birthDate) {
-  if (!birthDate) return null;
-  const nacimiento = new Date(birthDate);
-  const hoy = new Date();
-  let años = hoy.getFullYear() - nacimiento.getFullYear();
-  const aunNoCumple = hoy.getMonth() < nacimiento.getMonth()
-    || (hoy.getMonth() === nacimiento.getMonth() && hoy.getDate() < nacimiento.getDate());
-  if (aunNoCumple) años -= 1;
-  return años;
-}
+import { edad } from 'src/lib/age';
 
 // La misma regla que el servidor (CreateAthlete / UpdateAthlete): nadie nace
 // hoy ni despues, ni antes de 1900. Como fecha "AAAA-MM-DD", que se compara

@@ -24,6 +24,7 @@ import { SelectionCompetition, SelectionCategory, SelectionTeam, SelectionAthlet
 import { useConfirm } from 'src/components/confirm-dialog';
 import { esIndividual } from 'src/lib/sport-shape';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { crearUrlDeAlta, mapearEnvioDeNomina } from 'src/pages/roster/registration-mapping';
 import { toast } from 'sonner';
 
 const emptyForm = () => ({ athleteIds: [], jerseyNumber: '', position: '' });
@@ -56,35 +57,16 @@ export default function RosterPage() {
   // `roster` de arriba, asi que mutar desde aca tambien actualiza esa lista.
   const { open, editId, form, setForm, error, openCreate, openEdit, close, save } = useCrudDialog({
     resourceUrl: rosterUrl,
-    // Elegir mas de uno pasa por RegisterPlayersBulk en vez de
-    // RegisterPlayer -- todo o nada, igual que ya promete la importacion por
-    // Excel: cinco personas revisadas de a una contra un cupo de tres
-    // dejarian pasar a las primeras tres y rechazarian a las ultimas dos por
-    // una razon que no tiene nada que ver con ellas. Funcion y no string
-    // porque a que direccion ir depende de cuantos terminen elegidos, y eso
-    // solo se sabe con el `form` mas reciente -- useCrudDialog lo resuelve
-    // en save(), igual que ya hace con mapToSend.
-    createUrl: (f) => (cascade.teamId
-      ? (f.athleteIds.length > 1 ? endpoints.rosterRegisterBulk(cascade.teamId) : endpoints.roster(cascade.teamId))
-      : null),
+    // Función y no string porque a qué dirección ir depende de cuántos
+    // terminen elegidos, y eso solo se sabe con el `form` más reciente --
+    // useCrudDialog lo resuelve en save(), igual que con mapToSend. Ver
+    // roster/registration-mapping.js para el porqué de las dos.
+    createUrl: (f) => crearUrlDeAlta(cascade.teamId, f),
     emptyForm,
     entityName: 'deportista',
     buildUrl: (base, id) => endpoints.rosterEntry(id),
     mapToForm: (entry) => ({ athleteIds: [], jerseyNumber: entry.jerseyNumber || '', position: entry.position || '' }),
-    mapToSend: (f, wasEdit) => {
-      if (wasEdit) {
-        // CorrectRegistration ni acepta un athleteId -- "la persona no se
-        // edita aca" es su propio contrato, ver el comentario del backend.
-        return { jerseyNumber: f.jerseyNumber ? Number(f.jerseyNumber) : null, position: f.position || null };
-      }
-      if (f.athleteIds.length > 1) {
-        // El alta multiple no pide dorsal ni posicion: son por persona, y no
-        // hay uno solo que pedir para varios a la vez. Se cargan despues,
-        // editando cada registro.
-        return { athleteIds: f.athleteIds };
-      }
-      return { athleteId: f.athleteIds[0], jerseyNumber: f.jerseyNumber ? Number(f.jerseyNumber) : null, position: f.position || null };
-    },
+    mapToSend: mapearEnvioDeNomina,
   });
 
   const [impOpen, setImpOpen] = useState(false);

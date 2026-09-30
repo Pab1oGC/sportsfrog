@@ -21,20 +21,8 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { useConfirm } from 'src/components/confirm-dialog';
-
-/* ---------------------------------------------------------------------------
-   Los limites son los de LayoutPolicy.cs, repetidos aca a proposito: sujetar
-   el arrastre dentro de lo que la API acepta es la unica forma de que mover
-   una caja con el mouse no termine en un 400 al guardar. "La imagen se sale
-   de la cara" es literalmente el error que un editor de arrastre provoca.
-   --------------------------------------------------------------------------- */
-
-var MINIMO = 0.005;         // LayoutPolicy.MinimumExtent
-var TAMANO_MAXIMO = 0.5;    // LayoutPolicy.MaximumTextSize
-var MAXIMO_CAMPOS = 60;     // LayoutPolicy.MaximumFields
-
-/** Las unicas propiedades que TemplateField conoce. Cualquier otra es un 400. */
-var PROPIEDADES = ['source', 'x', 'y', 'w', 'h', 'size', 'font', 'align', 'fit', 'minSize', 'color', 'bold', 'text'];
+import { MINIMO, TAMANO_MAXIMO, limitar, cajaDe, cambiosDesdeCaja, calcular } from 'src/pages/template-designer/layout-geometry';
+import { MAXIMO_CAMPOS, caraVacia, limpiarCara } from 'src/pages/template-designer/layout-serialization';
 
 /**
  * Las asas, por que borde mueve cada una.
@@ -53,32 +41,6 @@ var ASAS = [
   { id: 'sw', izq: true,  arr: false, der: false, aba: true,  cx: 0,   cy: 1,   cursor: 'nesw-resize' },
   { id: 'w',  izq: true,  arr: false, der: false, aba: false, cx: 0,   cy: 0.5, cursor: 'ew-resize' }
 ];
-
-function limitar(v, min, max) {
-  return Math.min(max, Math.max(min, v));
-}
-
-function caraVacia(proporcion) {
-  return { backgroundKey: null, aspectRatio: proporcion || 1.5875, fields: [] };
-}
-
-/** Solo lo que TemplateFace declara, con los campos podados igual. */
-function limpiarCara(cara) {
-  if (!cara) return null;
-  return {
-    backgroundKey: cara.backgroundKey || null,
-    aspectRatio: cara.aspectRatio || 1.5875,
-    fields: (cara.fields || []).map(limpiarCampo)
-  };
-}
-
-function limpiarCampo(campo) {
-  var limpio = {};
-  PROPIEDADES.forEach(function(p) {
-    if (campo[p] !== undefined) limpio[p] = campo[p];
-  });
-  return limpio;
-}
 
 export default function TemplateDesignerPage() {
   var confirm = useConfirm();
@@ -233,69 +195,11 @@ export default function TemplateDesignerPage() {
   }
 
   /* ------------------------------------------------- geometria y arrastre */
-
-  // Un campo de texto tambien es una caja: su alto es `size`, que es como lo
-  // trata el generador. Tratar los dos por igual deja un solo modelo de
-  // arrastre en lugar de dos que se parecen.
-  function cajaDe(campo, imagen) {
-    return {
-      x: campo.x || 0,
-      y: campo.y || 0,
-      w: campo.w != null ? campo.w : (1 - (campo.x || 0)),
-      h: imagen ? (campo.h || 0.1) : (campo.size || 0.06)
-    };
-  }
+  // cajaDe/cambiosDesdeCaja/calcular viven en
+  // template-designer/layout-geometry.js -- ver ahí el porqué de cada límite.
 
   function guardarCaja(idx, caja, imagen) {
-    if (imagen) {
-      cambiarCampo(idx, { x: caja.x, y: caja.y, w: caja.w, h: caja.h });
-      return;
-    }
-
-    var tam = Math.min(caja.h, TAMANO_MAXIMO);
-    var cambios = { x: caja.x, y: caja.y, w: caja.w, size: tam };
-
-    // El minimo del ajuste "shrink" no puede quedar por encima del tamano, y
-    // achicar la caja con el mouse es justo lo que lo deja por encima.
-    var campo = campos[idx];
-    if (campo && campo.minSize != null && campo.minSize > tam) cambios.minSize = tam;
-
-    cambiarCampo(idx, cambios);
-  }
-
-  function calcular(g, dx, dy) {
-    var c = g.caja;
-    var techo = g.imagen ? 1 : TAMANO_MAXIMO;
-
-    if (!g.asa) {
-      return {
-        x: limitar(c.x + dx, 0, Math.max(0, 1 - c.w)),
-        y: limitar(c.y + dy, 0, Math.max(0, 1 - c.h)),
-        w: c.w,
-        h: c.h
-      };
-    }
-
-    var x = c.x, y = c.y, w = c.w, h = c.h;
-
-    if (g.asa.izq) {
-      var nx = limitar(c.x + dx, 0, c.x + c.w - MINIMO);
-      w = c.w + (c.x - nx);
-      x = nx;
-    }
-    if (g.asa.der) {
-      w = limitar(c.w + dx, MINIMO, 1 - c.x);
-    }
-    if (g.asa.arr) {
-      var ny = limitar(c.y + dy, 0, c.y + c.h - MINIMO);
-      h = limitar(c.h + (c.y - ny), MINIMO, techo);
-      y = c.y + c.h - h;
-    }
-    if (g.asa.aba) {
-      h = limitar(c.h + dy, MINIMO, Math.min(techo, 1 - c.y));
-    }
-
-    return { x: x, y: y, w: w, h: h };
+    cambiarCampo(idx, cambiosDesdeCaja(caja, imagen, campos[idx]));
   }
 
   function iniciar(e, idx, asa) {

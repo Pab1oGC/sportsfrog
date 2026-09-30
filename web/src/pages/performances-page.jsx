@@ -19,6 +19,7 @@ import { PromoteClassificationDialog } from 'src/pages/performances/promote-clas
 import { ScheduleDialog } from 'src/pages/performances/schedule-dialog';
 import { BulkOrderDialog } from 'src/pages/performances/bulk-order-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { estaAbierta, estanTodosPuntuados, hayAlgunoPuntuado } from 'src/pages/performances/classification-status';
 
 const STATUS_LABEL = { pending: 'Pendiente', scored: 'Puntuado' };
 const STATUS_COLOR = { pending: 'default', scored: 'success' };
@@ -59,16 +60,10 @@ export default function PerformancesPage() {
   const [schedOpen, setSchedOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 
-  // Una categoria sin clasificacion abierta todavia lee un array vacio, no
-  // un 404 -- ver ReadPerformances en el backend. "Abierta" es exactamente
-  // eso: hay filas.
-  const abierta = rows.length > 0;
-  const todosPuntuados = abierta && rows.every((row) => row.status === 'scored');
-  // OpenClassificationStage rechaza reabrir en cuanto CUALQUIER competidor
-  // ya tiene puntaje cargado (no solo cuando estan todos) -- se deshabilita
-  // aca por la misma razon que el sorteo de partidos ya deshabilita
-  // "Sortear" cuando sabe de antemano que el pedido va a fallar.
-  const algunoPuntuado = rows.some((row) => row.status === 'scored');
+  // Ver performances/classification-status.js para el porqué de cada uno.
+  const abierta = estaAbierta(rows);
+  const todosPuntuados = estanTodosPuntuados(rows);
+  const algunoPuntuado = hayAlgunoPuntuado(rows);
 
   const abrirClasificacion = async () => {
     const ok = await confirm('Abrir la clasificación de esta categoría?', { confirmLabel: 'Abrir' });

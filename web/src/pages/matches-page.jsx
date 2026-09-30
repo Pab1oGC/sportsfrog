@@ -20,7 +20,15 @@ import { endpoints, default as axios } from 'src/lib/axios';
 import { downloadBlob } from 'src/lib/download-blob';
 import { nombreFase } from 'src/lib/phase-labels';
 import { fechaHora } from 'src/lib/format-date';
-import { PENDIENTE } from 'src/lib/match-status';
+import { compararPartidos } from 'src/pages/matches/match-order';
+import { mapaDeGrupoPorEquipo } from 'src/pages/matches/team-groups';
+import {
+  quedaRondaPorSortear as calcularQuedaRondaPorSortear,
+  rondasDisponibles as calcularRondasDisponibles,
+  motivoDeSorteoInhabilitado,
+} from 'src/pages/matches/bracket-status';
+import { resolverReglamentoEfectivo } from 'src/pages/matches/effective-ruleset';
+import { calcularUtcOffsetMinutes } from 'src/pages/matches/schedule-time';
 import { PageHeader } from 'src/components/page-header';
 import { CascadeFilters } from 'src/components/cascade-filters';
 import { useConfirm } from 'src/components/confirm-dialog';
@@ -110,61 +118,17 @@ export default function MatchesPage() {
   const [jornadaSaving, setJornadaSaving] = useState(false);
   const [jornadaError, setJornadaError] = useState('');
 
-  // El grupo no es un dato del partido, es un dato del equipo — asi que se
-  // arma aca, por equipo local, para que la grilla no mezcle sin avisar los
-  // partidos de grupos distintos bajo la misma "ronda" (cada grupo tiene su
-  // propia ronda 1, ronda 2...).
-  const grupoPorEquipo = {};
-  (teams || []).forEach((t) => { grupoPorEquipo[t.id] = t.groupLabel; });
+  // El grupo no es un dato del partido, es un dato del equipo -- ver
+  // matches/team-groups.js para el porqué de armarlo por equipo local.
+  const grupoPorEquipo = mapaDeGrupoPorEquipo(teams);
 
+  // El orden en sí (cuatro niveles: pendiente vs decidido, jornada/fase,
+  // grupo) vive aparte en matches/match-order.js -- es puro y es la lógica
+  // con más ramas de toda esta página, ver el comentario ahí.
   const filtered = (matches || [])
     .filter((m) => !cascade.catId || m.categoryId === cascade.catId)
     .map((m) => ({ ...m, groupLabel: grupoPorEquipo[m.homeTeamId] || null }))
-    .sort((a, b) => {
-      // Lo que ya se jugo (o se cancelo, o se otorgo) no va a cambiar mas:
-      // deja de ser lo primero que alguien necesita ver en esta pantalla, asi
-      // que se hunde al fondo entero, sin importar fase, jornada o grupo. En
-      // curso cuenta como pendiente — es lo mas urgente de todo.
-      const pendA = PENDIENTE[a.status] ? 0 : 1;
-      const pendB = PENDIENTE[b.status] ? 0 : 1;
-      if (pendA !== pendB) return pendA - pendB;
-
-      // Entre los pendientes, la jornada que sigue va primero (1, 2, 3...) y
-      // el mismo sentido pone a la fase de grupos antes que la eliminatoria
-      // (se juega primero). Entre los ya decididos vale lo contrario en los
-      // dos niveles: lo que se jugo mas recientemente queda arriba de ese
-      // bloque y lo mas viejo se sigue hundiendo — la eliminatoria (lo
-      // ultimo en jugarse) por delante de los grupos ya decididos, y dentro
-      // de cada una la ronda mas alta por delante de la anterior (jornada 3
-      // recien terminada por encima de la 2, que a su vez tapa a la 1). Un
-      // mismo signo sirve para los dos sentidos: en pendientes suma, en
-      // decididos resta.
-      const signo = pendA === 0 ? 1 : -1;
-
-      // La fase manda antes que el grupo: un partido de eliminatoria trae el
-      // groupLabel del equipo (que sigue siendo el de la fase de grupos, ese
-      // dato no se borra al promover), y ordenar por grupo primero lo
-      // mezclaba entre los partidos de esa misma zona en vez de dejarlo
-      // despues de que termina toda la fase de grupos. Es null en toda la
-      // fase de grupos y no-null en toda la eliminatoria, igual que ya hace
-      // ReadMatches.Ordered del lado del backend y el calendario publico
-      // (los dos, sin embargo, solo para el orden entre pendientes).
-      const faseA = a.phase ? 1 : 0;
-      const faseB = b.phase ? 1 : 0;
-      if (faseA !== faseB) return signo * (faseA - faseB);
-
-      // Dentro de la fase de grupos, la jornada manda: se lee como un
-      // calendario ("que se juega esta semana", en todos los grupos a la
-      // vez), no zona por zona. El grupo solo desempata partidos de la
-      // misma jornada, para que ahi al menos queden juntos.
-      if (!a.phase) {
-        const r = signo * ((a.roundNumber || 0) - (b.roundNumber || 0));
-        if (r !== 0) return r;
-        return (a.groupLabel || '').localeCompare(b.groupLabel || '');
-      }
-
-      return signo * ((a.roundNumber || 0) - (b.roundNumber || 0));
-    });
+    .sort(compararPartidos);
   const comp = competiciones?.find((c) => c.id === cascade.compId);
   const formato = comp?.format;
   const catActual = (jornadaCategorias || []).find((c) => c.id === cascade.catId);
@@ -173,35 +137,12 @@ export default function MatchesPage() {
   // el torneo que se esta jugando.
   const { data: sportInfo } = useApi(comp?.sportCode ? endpoints.sport(comp.sportCode) : null);
 
-  // Cuantos periodos tiene un partido y como se llaman lo decide el
-  // reglamento, no el deporte: `sportInfo.defaultPeriods` es solo el valor con
-  // el que arranca un reglamento nuevo, asi que un torneo de un solo tiempo
-  // seguia ofreciendo dos. El reglamento efectivo es el propio de la
-  // categoria si lo tiene y el de la competencia si no -- la misma resolucion
-  // que hace el servidor al validar (EventPolicy, MatchRulesLookup).
+  // El reglamento y la forma de deporte efectivos para selMatch -- ver
+  // matches/effective-ruleset.js para la resolución categoría-o-competencia.
   const { data: reglamentos } = useApi(endpoints.rulesets);
-  const categoriaDelPartido = (jornadaCategorias || []).find((c) => c.id === selMatch?.categoryId);
-  const reglamentoDelPartido = (reglamentos || []).find(
-    (r) => r.id === (categoriaDelPartido?.effectiveRulesetId ?? comp?.rulesetId),
-  );
-  const periodosDelPartido = reglamentoDelPartido?.config?.periods;
-  const sportInfoDelPartido = sportInfo && periodosDelPartido?.count
-    ? {
-        ...sportInfo,
-        defaultPeriods: periodosDelPartido.count,
-        periodLabel: periodosDelPartido.label || sportInfo.periodLabel,
-        // Para acotar el minuto de un evento al periodo elegido (ver
-        // ventanaDeMinuto): lo que dura un periodo y cuanto adicional admite
-        // este reglamento.
-        periodMinutes: periodosDelPartido.minutes ?? null,
-        periodMaxExtraMinutes: periodosDelPartido.maxExtraMinutes ?? null,
-      }
-    : sportInfo;
-  const sorteable = comp && (comp.status === 'draft' || comp.status === 'scheduled');
+  const { sportInfoDelPartido } = resolverReglamentoEfectivo({ jornadaCategorias, selMatch, reglamentos, comp, sportInfo });
   const yaJugados = filtered.filter((m) => m.status === 'finished' || m.status === 'walkover').length;
-  const motivoSinSorteo = !comp ? null : !sorteable
-    ? 'La competencia ya esta en curso.'
-    : yaJugados > 0 ? `Ya hay ${yaJugados} partidos jugados.` : null;
+  const motivoSinSorteo = motivoDeSorteoInhabilitado(comp, yaJugados);
 
   const doAdvance = async () => {
     if (!cascade.catId) return;
@@ -273,19 +214,13 @@ export default function MatchesPage() {
   const generarJornada = async () => {
     setJornadaSaving(true); setJornadaError('');
     try {
-      // La hora de inicio es de reloj de pared, sin zona: el servidor la
-      // guarda como un instante, asi que necesita saber a que reloj
-      // pertenece. Sin esto la leia como UTC y el partido aparecia horas
-      // antes en la propia pantalla donde se escribio. Se calcula para el dia
-      // elegido (hoy si no se eligio ninguno) para respetar horario de verano.
+      // El día elegido (hoy si no se eligió ninguno) -- ver
+      // matches/schedule-time.js para el porqué del cálculo de zona horaria.
       const dia = jornadaForm.from || new Date().toLocaleDateString('sv-SE');
-      const utcOffsetMinutes = jornadaForm.startTime
-        ? -new Date(`${dia}T${jornadaForm.startTime}`).getTimezoneOffset()
-        : null;
       const r = await apiPost(endpoints.competitionSchedule(cascade.compId), {
         from: jornadaForm.from || null,
         startTime: jornadaForm.startTime || null,
-        utcOffsetMinutes: Number.isFinite(utcOffsetMinutes) ? utcOffsetMinutes : null,
+        utcOffsetMinutes: calcularUtcOffsetMinutes(dia, jornadaForm.startTime),
       });
       mutate();
       setJornadaOpen(false);
@@ -314,24 +249,9 @@ export default function MatchesPage() {
     }
   };
 
-  // Hay llave en esta categoria, pero todavia sin final: una promovida antes
-  // de que se sortearan todas las rondas de una vez (ver el boton "Siguiente
-  // ronda" mas abajo). Con la final ya creada no hay ronda que sortear.
-  const partidosDeLlave = cascade.catId
-    ? (matches || []).filter((m) => m.categoryId === cascade.catId && m.phase && !m.isRepechage)
-    : [];
-  const quedaRondaPorSortear = partidosDeLlave.length > 0 && !partidosDeLlave.some((m) => m.phase === 'final');
-
-  // Las rondas de fase de eliminatoria reusan numeros desde 1 (ver
-  // AdvanceBracket) y no tienen relacion con las jornadas de la fase de
-  // grupos, asi que solo se ofrecen rondas sin fase — igual criterio que ya
-  // usa la columna "Jornada" de la grilla mas abajo.
-  const rondasDisponibles = cascade.catId
-    ? [...new Set((matches || [])
-        .filter((m) => m.categoryId === cascade.catId && !m.phase && m.roundNumber != null)
-        .map((m) => m.roundNumber))]
-        .sort((a, b) => a - b)
-    : [];
+  // Ver matches/bracket-status.js para el porqué de cada uno.
+  const quedaRondaPorSortear = calcularQuedaRondaPorSortear(matches, cascade.catId);
+  const rondasDisponibles = calcularRondasDisponibles(matches, cascade.catId);
 
   const descargarJornada = async () => {
     if (!cascade.catId || jornadaRound === '') return;
