@@ -51,14 +51,6 @@ export function BracketConnectors(props) {
         // lineas quedan en blanco para siempre hasta el proximo motivo real
         // de recomputo. console.error en vez de tragarselo: silencioso de
         // cara a quien mira la llave, pero visible para quien mira la consola.
-        // DEBUG TEMPORAL -- sacar una vez que se entienda por que a veces da
-        // cero lineas. Sin poder ver la consola del navegador desde aca, este
-        // es el unico dato real posible: cuantos grupos hay, si el ref de
-        // cada tarjeta existe, y si el emparejamiento por nombre encuentra
-        // algo. console.groupCollapsed para no ensuciar la consola de quien
-        // no esta mirando esto.
-        var debug = { grupos: grupos.length, porGrupo: [] };
-
         try {
           var containerRect = container.getBoundingClientRect();
           var nuevas = [];
@@ -66,20 +58,10 @@ export function BracketConnectors(props) {
           for (var i = 0; i < grupos.length - 1; i++) {
             var actual = grupos[i];
             var siguiente = grupos[i + 1];
-            var entradaDebug = {
-              de: actual && actual.titulo, a: siguiente && siguiente.titulo,
-              actualTieneMatches: !!(actual && actual.matches), siguienteTieneMatches: !!(siguiente && siguiente.matches),
-              hijos: [],
-            };
-            debug.porGrupo.push(entradaDebug);
             if (!actual || !siguiente || !actual.matches || !siguiente.matches) continue;
 
             siguiente.matches.forEach(function(hijo) {
               var hijoEl = refsMap.current.get(hijo.id);
-              var entradaHijo = {
-                hijo: hijo.homeTeamName + ' vs ' + hijo.awayTeamName, hijoId: hijo.id, hijoElEncontrado: !!hijoEl,
-              };
-              entradaDebug.hijos.push(entradaHijo);
               if (!hijoEl) return;
               var hijoRect = hijoEl.getBoundingClientRect();
               var hijoY = hijoRect.top + hijoRect.height / 2 - containerRect.top;
@@ -89,11 +71,9 @@ export function BracketConnectors(props) {
                 return m.homeTeamName === hijo.homeTeamName || m.awayTeamName === hijo.homeTeamName ||
                        m.homeTeamName === hijo.awayTeamName || m.awayTeamName === hijo.awayTeamName;
               });
-              entradaHijo.padresEncontradosPorNombre = padres.map(function(p) { return p.homeTeamName + ' vs ' + p.awayTeamName; });
 
               padres.forEach(function(padre) {
                 var padreEl = refsMap.current.get(padre.id);
-                entradaHijo.padreElEncontrado = !!padreEl;
                 if (!padreEl) return;
                 var padreRect = padreEl.getBoundingClientRect();
                 var padreY = padreRect.top + padreRect.height / 2 - containerRect.top;
@@ -105,14 +85,9 @@ export function BracketConnectors(props) {
             });
           }
 
-          debug.lineasCalculadas = nuevas.length;
-          console.groupCollapsed('[BracketConnectors] recompute -> ' + nuevas.length + ' línea(s)');
-          console.log(JSON.parse(JSON.stringify(debug)));
-          console.groupEnd();
-
           setPaths(nuevas);
         } catch (err) {
-          console.error('BracketConnectors: no se pudieron calcular las líneas de la llave.', err, debug);
+          console.error('BracketConnectors: no se pudieron calcular las líneas de la llave.', err);
         }
       }
 
@@ -154,15 +129,11 @@ export function BracketConnectors(props) {
     if (container) {
       iniciar(container);
     } else {
-      // DEBUG TEMPORAL -- el unico camino de este efecto que no deja rastro
-      // en la consola (ni el grupo de arriba, ni el catch) es este: salir
-      // porque `containerRef.current` todavia es null en el instante en que
-      // este efecto corre. Si esto es lo que pasa en el caso roto, tiene que
-      // aparecer este warn cuando antes no aparecia nada. En vez de
-      // resignarse (lo que hacia antes: `return` sin mas), reintenta en el
-      // siguiente frame -- y si aparece, arranca todo el calculo recien ahi,
-      // no solo lo deja constar en un log.
-      console.warn('[BracketConnectors] containerRef.current es null al montar -- reintentando.');
+      // `containerRef.current` puede seguir siendo null en el instante en
+      // que este efecto corre (por ejemplo, si el montaje de "Llave" viene
+      // de un swap de esqueleto de carga en vez de un montaje derecho). En
+      // vez de resignarse, reintenta en el siguiente frame -- y si aparece,
+      // arranca todo el calculo recien ahi.
       var intentos = 0;
       var reintentoId;
       var cancelado = false;
@@ -170,14 +141,11 @@ export function BracketConnectors(props) {
         intentos += 1;
         var actual = containerRef.current;
         if (actual) {
-          console.warn('[BracketConnectors] containerRef.current apareció después de ' + intentos + ' intento(s).');
           if (!cancelado) iniciar(actual);
           return;
         }
         if (intentos < 10) {
           reintentoId = requestAnimationFrame(intentarDeNuevo);
-        } else {
-          console.error('[BracketConnectors] containerRef.current nunca apareció después de ' + intentos + ' intentos.');
         }
       };
       reintentoId = requestAnimationFrame(intentarDeNuevo);
@@ -199,6 +167,7 @@ export function BracketConnectors(props) {
     <Box
       component="svg"
       aria-hidden="true"
+      data-testid="bracket-connectors"
       sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', color: (t) => alpha(t.palette.primary.main, 0.6) }}
     >
       {paths.map(function(d, i) {
