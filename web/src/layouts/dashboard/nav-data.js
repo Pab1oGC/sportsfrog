@@ -13,6 +13,7 @@ export function getNavData(isPlatformAdmin = false) {
       { title: "Tabla posiciones", path: "/dashboard/standings", icon: "mdi:format-list-numbered" },
       { title: "Lideres", path: "/dashboard/leaders", icon: "mdi:star-outline" },
       { title: "Reportes", path: "/dashboard/reports", icon: "mdi:chart-box-outline" },
+      { title: "Listas", path: "/dashboard/lists", icon: "mdi:format-list-bulleted" },
     ]},
     { subheader: "Gestion", items: [
       { title: "Clubes", path: "/dashboard/clubs", icon: "mdi:office-building-outline" },

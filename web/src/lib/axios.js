@@ -230,6 +230,12 @@ export const endpoints = {
   standings: (catId) => `${api}/categories/${catId}/standings`,
   leaders: (catId) => `${api}/categories/${catId}/leaders`,
 
+  // Lists (catalogo de listas exportables)
+  listCatalog: `${api}/lists`,
+  listPreview: (slug) => `${api}/lists/${slug}`,
+  listXlsx: (slug) => `${api}/lists/${slug}.xlsx`,
+  listPdf: (slug) => `${api}/lists/${slug}.pdf`,
+
   // Cargar el puntaje de una actuacion puntual -- performanceId, no catId,
   // por eso vive aparte de las categoryPerformances* de arriba, igual que
   // matchResult vive aparte de categoryMatches.

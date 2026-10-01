@@ -21,6 +21,7 @@ using SportFrog.Api.Features.MatchEvents;
 using SportFrog.Api.Features.Matches;
 using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Features.Reports;
+using SportFrog.Api.Features.Lists;
 using SportFrog.Api.Features.Standings;
 using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Features.Teams;
@@ -212,6 +213,23 @@ builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDraw, SportFr
 builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDraw, SportFrog.Api.Features.Draw.GroupsCalendarDraw>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDraw, SportFrog.Api.Features.Draw.KnockoutCalendarDraw>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Draw.ICalendarDrawRegistry, SportFrog.Api.Features.Draw.CalendarDrawRegistry>();
+
+// Singleton like the draws above: today's four providers hold no state and
+// read the database only through the instance LoadAsync is handed, never
+// through their own constructor. A future provider that needs a scoped
+// service (ObjectStore, AthletePhoto) cannot be registered this way — the
+// container refuses a scoped dependency inside a singleton at startup, which
+// is the point at which that provider's registration becomes AddScoped
+// instead, not something to guess at before any provider needs it.
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.StandingsList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.LeadersList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.CardsList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.RosterList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.RosterByPositionList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.AthletesList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.MatchesList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.ClassificationList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListRegistry, SportFrog.Api.Features.Lists.ListRegistry>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
@@ -433,6 +451,7 @@ api.MapReadStandings();
 api.MapReadLeaders();
 api.MapReadTeamReport();
 api.MapReadAthleteReport();
+api.MapReadLists();
 
 api.MapDrawGroups();
 api.MapDrawCalendar();
