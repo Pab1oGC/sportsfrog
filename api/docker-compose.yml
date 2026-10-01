@@ -6,22 +6,14 @@ services:
     container_name: sportfrog-postgres
     restart: unless-stopped
     environment:
-      # Container superuser. Only used to create the database and the three
-      # roles; the application never connects with it.
       POSTGRES_USER: ${POSTGRES_SUPERUSER}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      # Consumed by the initialization script.
       SPORTFROG_OWNER_USER: ${SPORTFROG_OWNER_USER}
       SPORTFROG_OWNER_PASSWORD: ${SPORTFROG_OWNER_PASSWORD}
       SPORTFROG_APP_PASSWORD: ${SPORTFROG_APP_PASSWORD}
       SPORTFROG_PUBLIC_PASSWORD: ${SPORTFROG_PUBLIC_PASSWORD}
     ports:
-      # Bound to loopback only: nobody outside this machine needs to reach
-      # Postgres directly, only the containers on this Compose network (which
-      # never go through this published port at all — they resolve "postgres"
-      # over the internal Docker DNS). A developer's own psql/DBeaver against
-      # localhost still works exactly as before.
       - "127.0.0.1:${POSTGRES_PORT}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -32,6 +24,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - net_db
 
   minio:
     image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
@@ -42,8 +36,6 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      # Same reasoning as Postgres above: loopback only. The api container
-      # never talks to MinIO through these — it resolves "minio" internally.
       - "127.0.0.1:${MINIO_PORT}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
     volumes:
@@ -54,16 +46,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - net_services
 
-  # Applies migrations and exits. Runs once, between Postgres and the API, so
-  # whoever doesn't have the SDK doesn't need 'dotnet ef'.
-  #
-  # Connects as the schema owner. The API itself never applies migrations.
-  #
-  # Shared by both profiles below: a real deployment needs exactly the same
-  # thing a quick local look does here, just against a database that means it.
   migrate:
-    profiles: ["full", "production"]
+    profiles: ["full"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -72,100 +59,34 @@ services:
     restart: "no"
     environment:
       SPORTFROG_MIGRATIONS_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${SPORTFROG_OWNER_USER};Password=${SPORTFROG_OWNER_PASSWORD}"
-      # Read only by the SeedPlatformOwner migration, to create the one
-      # account allowed to register new organizations (POST /organizations
-      # is no longer anonymous). No default: a fresh database with nobody
-      # able to pass that check could never create the first one either.
       PLATFORM_ADMIN_EMAIL: "${PLATFORM_ADMIN_EMAIL}"
       PLATFORM_ADMIN_PASSWORD: "${PLATFORM_ADMIN_PASSWORD}"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - net_db
 
-  # The API doesn't start as part of the normal development flow: whoever is
-  # writing it runs it from their IDE against the data containers, with a
-  # debugger and hot reload.
-  #
-  # This one service now answers to two profiles, for two different reasons:
-  #
-  #   docker compose up -d                          postgres and minio only
-  #   docker compose --profile full up -d           + the API, for a quick
-  #                                                    local look without the
-  #                                                    SDK — ASPNETCORE_ENVIRONMENT
-  #                                                    stays Development unless
-  #                                                    .env says otherwise
-  #   docker compose --profile production up -d     + the API and the web
-  #                                                    container — the real
-  #                                                    deployment
-  #
-  # Doesn't apply migrations at startup: that's done separately, with a
-  # different user. See the README.
   api:
-    profiles: ["full", "production"]
+    profiles: ["full"]
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
     container_name: sportfrog-api
     restart: unless-stopped
-    # A second line of defence, not the fix itself: WorkbookGuard bounds a
-    # roster upload's decompressed size before anything tries to parse it,
-    # which is what actually stops the memory growth. This just makes sure
-    # that whatever this doesn't anticipate — here or in a part of the
-    # process this review never reached — takes down its own container
-    # instead of the host it shares with Postgres and MinIO.
     mem_limit: 1g
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
-      # Inside the Compose network the database isn't localhost but the
-      # service name. These variables take precedence over appsettings.
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
       ConnectionStrings__Public: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
-      # Required: the options are validated on start, so the API refuses to
-      # boot without it rather than failing at the first sign-in.
       Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
-      # Also required and validated on start (DocumentOptions), and set here
-      # rather than left to appsettings.Development.json for the same reason
-      # ASPNETCORE_ENVIRONMENT is parametrized above: --profile production
-      # runs as Production, which never reads that file. What a credential's
-      # QR code opens to — override in .env to the public origin once you
-      # have one, same as STORAGE_ENDPOINT above.
       Documents__VerificationBaseUrl: ${VERIFICATION_BASE_URL:-http://localhost:5173/verificar}
-      # Object storage. The API creates the bucket on first start if it is
-      # missing, so a fresh volume needs nothing done to it by hand.
-      #
-      # Endpoint is always the address only this Compose network can
-      # resolve — it's what this process actually calls (the bootstrap
-      # check included), not just what a link is signed against, so it can
-      # never be the public address: the api container can't reach itself
-      # through a tunnel that doesn't exist yet at the moment it boots.
-      #
-      # PublicUrl is the address a browser uses instead. Empty by default,
-      # which is correct for --profile full: nobody outside the host is
-      # meant to reach it, so every link stays exactly what it's signed
-      # against. --profile production has to set it in .env to whatever the
-      # public actually uses — a cloudflared tunnel's hostname, or a real
-      # domain — because that's the address every signed link gets rewritten
-      # to before it's handed out (see ObjectStore.Rehost). Left empty
-      # behind a tunnel, every photo, logo and credential comes back as a
-      # broken link the moment anyone outside this machine opens the page.
-      # See web/nginx.conf, which is the other half of why that works: it
-      # reverse-proxies /sportfrog/ back to MinIO under that same public
-      # address.
       Storage__Endpoint: "http://minio:9000"
       Storage__PublicUrl: ${STORAGE_ENDPOINT:-}
       Storage__Bucket: "sportfrog"
       Storage__AccessKey: ${MINIO_ROOT_USER}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
-      # Optional: EmailSenderFactory falls back to NullEmailSender (logs
-      # instead of sending) whenever Smtp__Host arrives empty, which is what
-      # happened here before this block existed — .env had real values, but
-      # nothing forwarded them into this container, so the app never saw
-      # them. Host/Username/Password/FromAddress/FromName default to empty
-      # so an installation that never fills these in keeps logging instead
-      # of failing to boot; Port and UseStartTls default to SmtpOptions' own
-      # values rather than blank, since an empty string can't bind to the
-      # int/bool the options class declares.
       Smtp__Host: ${Smtp__Host:-}
       Smtp__Port: ${Smtp__Port:-587}
       Smtp__Username: ${Smtp__Username:-}
@@ -174,67 +95,38 @@ services:
       Smtp__FromAddress: ${Smtp__FromAddress:-}
       Smtp__FromName: ${Smtp__FromName:-SportFrog}
     ports:
-      # Loopback only. In --profile production the public path to this
-      # service is through "web" and then Caddy (see below); nothing outside
-      # this machine is meant to reach Kestrel directly. That matters beyond
-      # tidiness: OrganizationContextMiddleware's rate limiting and the
-      # forwarded-headers handling both trust the immediate connecting peer,
-      # which is only safe when that peer is Caddy, not the open internet.
       - "127.0.0.1:${API_PORT}:8080"
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
-      # Doesn't start until the schema has been applied.
       migrate:
         condition: service_completed_successfully
+    networks:
+      - net_db
+      - net_services
 
-  # Everything dockerized end to end: builds the SPA and serves it behind
-  # nginx, which also reverse-proxies /api and /sportfrog to the API and to
-  # object storage (see web/nginx.conf). A visitor — or a cloudflared tunnel
-  # pointed at this one container — only ever talks to nginx; it never needs
-  # to know the API or MinIO exist.
   web:
-    profiles: ["production"]
+    profiles: ["full"]
     build:
       context: ../web
       dockerfile: Dockerfile
     container_name: sportfrog-web
     restart: unless-stopped
     ports:
-      # Loopback only, same reasoning as "api" above. The real public entry
-      # point in --profile production is Caddy, which reverse-proxies to
-      # "web" over the internal Compose network, not through this port.
       - "127.0.0.1:${WEB_PORT}:80"
     depends_on:
       - api
-
-  # HTTPS de cara al publico. Escucha 80/443, pide y renueva el certificado
-  # solo contra DOMAIN (ver Caddyfile), y reenvia todo al contenedor "web"
-  # por la red interna de Compose -- nadie de afuera le habla directo a
-  # "web" ni a "api". DOMAIN tiene que apuntar por DNS a este servidor antes
-  # de levantar esto, o el challenge de Let's Encrypt falla.
-  caddy:
-    profiles: ["production"]
-    image: caddy:2-alpine
-    container_name: sportfrog-caddy
-    restart: unless-stopped
-    environment:
-      DOMAIN: ${DOMAIN}
-      CADDY_EMAIL: ${CADDY_EMAIL:-}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - web
+    networks:
+      - net_services
 
 volumes:
   postgres-data:
   minio-data:
-  caddy-data:
-  caddy-config:
+
+networks:
+  net_services:
+    external: true
+  net_db:
+    external: true
