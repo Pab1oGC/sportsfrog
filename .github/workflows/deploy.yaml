@@ -120,3 +120,16 @@ jobs:
             podman-compose -f podman-compose.yml --profile full up -d --force-recreate
 
             podman logout ghcr.io
+
+  migrate:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.SERVER_HOST }}
+          username: pasantes
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            podman exec sportfrog-postgres dotnet tool install --global dotnet-ef --version 10.0.4 2>/dev/null
+            podman exec sportfrog-postgres dotnet ef database update --project /app/src/SportFrog.Api || echo "Sin migraciones pendientes o ya aplicadas"
