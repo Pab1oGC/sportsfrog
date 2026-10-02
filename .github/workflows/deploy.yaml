@@ -116,7 +116,7 @@ jobs:
                 build: null
             EOF
 
-            podman-compose pull
-            podman-compose --profile full up -d --force-recreate
+            podman-compose -f podman-compose.yml pull
+            podman-compose -f podman-compose.yml --profile full up -d --force-recreate
 
             podman logout ghcr.io

@@ -1,0 +1,132 @@
+name: sportfrog
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sportfrog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      SPORTFROG_OWNER_USER: ${SPORTFROG_OWNER_USER}
+      SPORTFROG_OWNER_PASSWORD: ${SPORTFROG_OWNER_PASSWORD}
+      SPORTFROG_APP_PASSWORD: ${SPORTFROG_APP_PASSWORD}
+      SPORTFROG_PUBLIC_PASSWORD: ${SPORTFROG_PUBLIC_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - net_db
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: sportfrog-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:${MINIO_PORT}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - net_services
+
+  migrate:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrations
+    container_name: sportfrog-migrate
+    restart: "no"
+    environment:
+      SPORTFROG_MIGRATIONS_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${SPORTFROG_OWNER_USER};Password=${SPORTFROG_OWNER_PASSWORD}"
+      PLATFORM_ADMIN_EMAIL: "${PLATFORM_ADMIN_EMAIL}"
+      PLATFORM_ADMIN_PASSWORD: "${PLATFORM_ADMIN_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - net_db
+
+  api:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: sportfrog-api
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
+      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
+      Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
+      Documents__VerificationBaseUrl: ${VERIFICATION_BASE_URL:-http://localhost:5173/verificar}
+      Storage__Endpoint: "http://minio:9000"
+      Storage__PublicUrl: ${STORAGE_ENDPOINT:-}
+      Storage__Bucket: "sportfrog"
+      Storage__AccessKey: ${MINIO_ROOT_USER}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
+      Smtp__Host: ${Smtp__Host:-}
+      Smtp__Port: ${Smtp__Port:-587}
+      Smtp__Username: ${Smtp__Username:-}
+      Smtp__Password: ${Smtp__Password:-}
+      Smtp__UseStartTls: ${Smtp__UseStartTls:-true}
+      Smtp__FromAddress: ${Smtp__FromAddress:-}
+      Smtp__FromName: ${Smtp__FromName:-SportFrog}
+    ports:
+      - "127.0.0.1:${API_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - net_db
+      - net_services
+
+  web:
+    profiles: ["full"]
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: sportfrog-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT}:80"
+    depends_on:
+      - api
+    networks:
+      - net_services
+
+volumes:
+  postgres-data:
+  minio-data:
+
+networks:
+  net_services:
+    external: true
+  net_db:
+    external: true
