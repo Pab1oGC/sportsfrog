@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -13,7 +13,8 @@ import { downloadBlob } from 'src/lib/download-blob';
 import { withQueryParams } from 'src/lib/query-string';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { PageHeader } from 'src/components/page-header';
-import { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
+import { CascadeFilters } from 'src/components/cascade-filters';
+import { SelectionField, SelectionTeam } from 'src/components/selectors';
 import { scopeFromCascade, isScopeComplete, neededCascadeLevels } from 'src/pages/lists/list-scope';
 import { gridColumns, gridRows } from 'src/pages/lists/list-table';
 
@@ -33,19 +34,31 @@ const GENDER_OPTIONS = [
  * No reemplaza Líderes, Tabla de posiciones ni Reportes: esas pantallas ya
  * eran la lectura correcta de esos datos. Esta es el lugar al que venir
  * cuando lo que se necesita es llevarse esos datos — a Excel o a PDF.
+ *
+ * Competicion y categoria se eligen primero, no la lista: el catálogo mismo
+ * se pide con la competicion elegida (`competitionId`), y el servidor
+ * devuelve solo las listas que tienen algo que decir para el deporte de esa
+ * competicion — una categoría juzgada (poomsae) no ofrece "Tabla de
+ * posiciones", y un vóley no ofrece "Máximos anotadores" ni "Tarjetas" (no
+ * tienen una métrica que sume al marcador ni una de tarjetas), ver
+ * IListProvider.AppliesToAsync. Sin competicion elegida el catálogo vuelve
+ * sin filtrar, así que "Deportistas" (la única lista que no pertenece a
+ * ninguna competicion) sigue eligiéndose sin pasar por ahí.
  */
 export default function ListsPage() {
-  const { data: catalog, isLoading: loadingCatalog } = useApi(endpoints.listCatalog);
+  const cascade = useCascade();
+  const { data: catalog, isLoading: loadingCatalog } = useApi(
+    withQueryParams(endpoints.listCatalog, { competitionId: cascade.compId }),
+  );
   const [slug, setSlug] = useState('');
   const [position, setPosition] = useState('');
   const [search, setSearch] = useState('');
   const [gender, setGender] = useState('');
   const [downloading, setDownloading] = useState('');
-  const cascade = useCascade();
 
   const selected = (catalog || []).find((entry) => entry.slug === slug) || null;
   const levels = neededCascadeLevels(selected?.parameters);
-  // Ninguno de estos tres sale del cascada (Competicion → Categoria →
+  // Ninguno de estos cuatro sale del cascada (Competicion → Categoria →
   // Equipo): son campos propios de esta página, así que scopeFromCascade los
   // recibe pegados al mismo objeto en vez de hacerle conocer un segundo
   // origen por cada uno.
@@ -53,6 +66,16 @@ export default function ListsPage() {
     ? scopeFromCascade(selected.parameters, { ...cascade, position, search, gender })
     : {};
   const ready = selected ? isScopeComplete(selected.parameters, scope) : false;
+
+  // Cambiar de competicion puede sacar la lista elegida del catálogo filtrado
+  // (una "Tabla de posiciones" elegida para una competicion de equipos deja
+  // de aparecer al pasar a una juzgada) -- sin esto, `slug` seguiría
+  // apuntando a una lista que ya no está entre las opciones.
+  useEffect(() => {
+    if (slug && catalog && !catalog.some((entry) => entry.slug === slug)) {
+      setSlug('');
+    }
+  }, [slug, catalog]);
 
   const { data: table, isLoading: loadingPreview } = useApi(
     ready ? withQueryParams(endpoints.listPreview(slug), scope) : null,
@@ -77,6 +100,8 @@ export default function ListsPage() {
     <Box>
       <PageHeader title="Listas" />
 
+      <CascadeFilters cascade={cascade} />
+
       <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 900, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 220 }}>
           <SelectionField
@@ -88,21 +113,6 @@ export default function ListsPage() {
             required
           />
         </Box>
-        {levels.competition && (
-          <Box sx={{ flex: 1, minWidth: 200 }}>
-            <SelectionCompetition value={cascade.compId} onChange={(e) => cascade.setCompId(e.target.value)} required />
-          </Box>
-        )}
-        {levels.category && (
-          <Box sx={{ flex: 1, minWidth: 200 }}>
-            <SelectionCategory
-              competitionId={cascade.compId}
-              value={cascade.catId}
-              onChange={(e) => cascade.setCatId(e.target.value)}
-              required
-            />
-          </Box>
-        )}
         {levels.team && (
           <Box sx={{ flex: 1, minWidth: 200 }}>
             <SelectionTeam

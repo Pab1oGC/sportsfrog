@@ -34,6 +34,12 @@ internal sealed class ClassificationList : IListProvider
     public IReadOnlyList<ListParameter> Parameters { get; } =
         [new ListParameter("categoryId", ListParameterKind.Category, Required: true)];
 
+    // The one list that exists for a judged category precisely because
+    // StandingsList does not apply to it — see this class's own remarks.
+    public Task<bool> AppliesToAsync(
+        string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
+        Task.FromResult(scoreMode == ScoreMode.Judged);
+
     public async Task<ListTable?> LoadAsync(
         ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken)
     {

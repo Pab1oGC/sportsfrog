@@ -7,7 +7,7 @@ const puestoRequerido = [{ name: "position", kind: "position", required: true }]
 const busquedaOpcional = [{ name: "search", kind: "search", required: false }];
 const generoOpcional = [{ name: "gender", kind: "gender", required: false }];
 
-const SIN_NIVELES = { competition: false, category: false, team: false, position: false, search: false, gender: false };
+const SIN_NIVELES = { team: false, position: false, search: false, gender: false };
 
 function cascade({ compId = "", catId = "", teamId = "", position = "", search = "", gender = "" } = {}) {
   return { compId, catId, teamId, position, search, gender };
@@ -75,12 +75,12 @@ describe("isScopeComplete", () => {
 });
 
 describe("neededCascadeLevels", () => {
-  it("un parámetro de categoría necesita competición y categoría, pero no equipo ni puesto", () => {
-    expect(neededCascadeLevels(categoriaRequerida)).toEqual({ ...SIN_NIVELES, competition: true, category: true });
+  it("un parámetro de categoría no necesita ningún nivel propio: competición y categoría ya se eligen antes que la lista", () => {
+    expect(neededCascadeLevels(categoriaRequerida)).toEqual(SIN_NIVELES);
   });
 
-  it("un parámetro de equipo necesita los tres niveles del cascada, pero no puesto", () => {
-    expect(neededCascadeLevels(equipoRequerido)).toEqual({ ...SIN_NIVELES, competition: true, category: true, team: true });
+  it("un parámetro de equipo necesita el nivel de equipo", () => {
+    expect(neededCascadeLevels(equipoRequerido)).toEqual({ ...SIN_NIVELES, team: true });
   });
 
   it("un parámetro de puesto no necesita ningún nivel del cascada por sí solo", () => {

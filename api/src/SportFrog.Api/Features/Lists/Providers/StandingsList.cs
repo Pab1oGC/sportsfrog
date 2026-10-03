@@ -19,6 +19,13 @@ internal sealed class StandingsList : IListProvider
     public IReadOnlyList<ListParameter> Parameters { get; } =
         [new ListParameter("categoryId", ListParameterKind.Category, Required: true)];
 
+    // A judged category runs no bracket and no table — ClassificationList is
+    // the right export for it instead, same distinction ChampionResolver
+    // already draws by score mode before it looks at either.
+    public Task<bool> AppliesToAsync(
+        string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
+        Task.FromResult(scoreMode != ScoreMode.Judged);
+
     public async Task<ListTable?> LoadAsync(
         ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken)
     {

@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using SportFrog.Api.Features.Lists;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Domain.Rules;
 
 namespace SportFrog.Api.Tests.Features.Lists;
 
@@ -20,6 +21,10 @@ public sealed class ListRegistryTests
         public string Label => Slug;
 
         public IReadOnlyList<ListParameter> Parameters => [];
+
+        public Task<bool> AppliesToAsync(
+            string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
 
         public Task<ListTable?> LoadAsync(
             ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken) =>

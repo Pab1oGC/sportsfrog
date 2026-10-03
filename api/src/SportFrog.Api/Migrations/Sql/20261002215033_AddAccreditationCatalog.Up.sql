@@ -1,0 +1,26 @@
+-- =============================================================================
+-- AddAccreditationCatalog
+--
+-- TODO: describe the change.
+--
+-- If this migration creates a business table with org_id, don't forget
+-- isolation, grants and the updated_at trigger:
+--
+--   CREATE TABLE example ( ... org_id uuid NOT NULL REFERENCES organizations(id) ... );
+--
+--   ALTER TABLE example ENABLE ROW LEVEL SECURITY;
+--   ALTER TABLE example FORCE ROW LEVEL SECURITY;
+--   CREATE POLICY tenant_isolation ON example
+--       USING (org_id = current_org_id())
+--       WITH CHECK (org_id = current_org_id());
+--
+--   GRANT SELECT, INSERT, UPDATE, DELETE ON example TO sportfrog_app;
+--   -- and GRANT SELECT ... TO sportfrog_public only if the public view needs it
+--
+--   CREATE TRIGGER trg_example_touch BEFORE UPDATE ON example
+--       FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+--
+-- A new column doesn't need any of the above.
+-- =============================================================================
+
+

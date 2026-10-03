@@ -42,6 +42,12 @@ internal sealed class AthletesList : IListProvider
             new ListParameter("gender", ListParameterKind.Gender, Required: false),
         ];
 
+    // Scoped to the whole organization, not to any one competition's sport —
+    // see the class remarks.
+    public Task<bool> AppliesToAsync(
+        string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
+        Task.FromResult(true);
+
     public async Task<ListTable?> LoadAsync(
         ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken)
     {

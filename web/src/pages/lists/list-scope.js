@@ -39,19 +39,19 @@ export function isScopeComplete(parameters, scope) {
   return (parameters || []).every((param) => !param.required || Boolean(scope?.[param.name]));
 }
 
-// Qué controles de filtro hace falta mostrar para la lista elegida: los
-// niveles del cascada (Competicion → Categoria → Equipo) más los campos
-// propios de esta página (puesto, búsqueda, género). Categoria y equipo no
-// tienen sentido sin competicion elegida primero -- el propio useCascade ya
-// resuelve esa dependencia -- así que pedir un equipo implica mostrar los
-// tres niveles, no solo el último. Los demás no dependen de nada: se
-// muestran exactamente cuando la lista elegida los declara.
+// Qué controles de filtro hace falta mostrar para la lista elegida, aparte
+// de Competicion y Categoria -- esas dos ya se eligen antes que la lista
+// misma (ver ListsPage), tanto para filtrar el catálogo por el deporte de la
+// competicion elegida como para tenerlas resueltas de antemano, así que no
+// hace falta volver a decidir si mostrarlas. Equipo sí sigue siendo propio
+// de la lista elegida: solo "plantel" lo pide, y para entonces la categoria
+// ya está elegida -- useCascade ya resuelve esa dependencia. Los demás no
+// dependen de nada: se muestran exactamente cuando la lista elegida los
+// declara.
 export function neededCascadeLevels(parameters) {
   const kinds = new Set((parameters || []).map((param) => param.kind));
 
   return {
-    competition: kinds.has('competition') || kinds.has('category') || kinds.has('team'),
-    category: kinds.has('category') || kinds.has('team'),
     team: kinds.has('team'),
     position: kinds.has('position'),
     search: kinds.has('search'),

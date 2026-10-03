@@ -28,6 +28,13 @@ internal sealed class RosterByPositionList : IListProvider
             new ListParameter("position", ListParameterKind.Position, Required: true),
         ];
 
+    // ChampionResolver already answers "who finished Nth" for every score
+    // mode — a bracket, a table, or a judged classification — so this has
+    // somewhere to look regardless of which one a category uses.
+    public Task<bool> AppliesToAsync(
+        string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
+        Task.FromResult(true);
+
     public async Task<ListTable?> LoadAsync(
         ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken)
     {
@@ -45,9 +52,14 @@ internal sealed class RosterByPositionList : IListProvider
 
         var title = $"Plantel del {PositionLabel(position)} — {resolution.CategoryName}";
 
+        // Neither of these two rows-less cases has resolved a team to read
+        // IsIndividual from, and neither carries a single row for a wrong
+        // "Dorsal"/"Posición" column to actually mislead — so the full
+        // column set is the simpler, equally honest choice here rather than
+        // a second query just to label an empty table correctly.
         if (resolution.Resolution == ChampionResolution.Undecided)
         {
-            return new ListTable(title, resolution.Reason, TeamRosterRows.Columns, []);
+            return new ListTable(title, resolution.Reason, TeamRosterRows.Columns(isIndividual: false), []);
         }
 
         if (await TeamRosterRows.ForTeamAsync(database, resolution.TeamId!.Value, cancellationToken) is not { } squad)
@@ -57,10 +69,12 @@ internal sealed class RosterByPositionList : IListProvider
             // category, so this reads the same as any other "nothing to
             // show yet".
             return new ListTable(
-                title, "El equipo que tenía ese puesto ya no está disponible.", TeamRosterRows.Columns, []);
+                title, "El equipo que tenía ese puesto ya no está disponible.",
+                TeamRosterRows.Columns(isIndividual: false), []);
         }
 
-        return new ListTable(title, null, TeamRosterRows.Columns, [new ListSection(null, squad.Rows)]);
+        return new ListTable(
+            title, null, TeamRosterRows.Columns(squad.IsIndividual), [new ListSection(null, squad.Rows)]);
     }
 
     private static string PositionLabel(int position) => position switch

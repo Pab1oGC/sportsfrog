@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using SportFrog.Api.Infrastructure.Storage;
 
 namespace SportFrog.Api.Features.Lists;
 
@@ -7,7 +8,10 @@ namespace SportFrog.Api.Features.Lists;
 /// One worksheet per <see cref="ListSection"/> — a metric's own board, a
 /// group's own table — so a list that is naturally several boards is several
 /// sheets, the same way <see cref="ListPdf"/> turns each into its own
-/// labeled block instead of running them together under one heading.
+/// labeled block instead of running them together under one heading. Each
+/// sheet carries the same mark and accent colour <see cref="ListPdf"/>
+/// draws in its own header, for the same reason: the exported file should
+/// read as the same competition's document, not a second, uncoloured one.
 /// </remarks>
 internal static class ListXlsx
 {
@@ -18,19 +22,35 @@ internal static class ListXlsx
     private const int HeaderRow = 4;
     private const int FirstDataRow = 5;
 
-    public static byte[] Render(ListTable table)
+    /// <summary>
+    /// The same blue <c>ListPdf.Accent</c> — and <c>FixturePdf</c>'s and
+    /// <c>CompetitionBulletinPdf</c>'s own — falls back to once a
+    /// competition never set an accent colour of its own. Kept as the same
+    /// hex rather than a separately-chosen one so a competition with no
+    /// branding still looks like the same system in Excel as it does in PDF.
+    /// </summary>
+    private const string DefaultAccentColor = "#1976D2";
+
+    /// <param name="branding">
+    /// The competition's own mark and colour — <see cref="ListBranding"/>
+    /// resolves it from whichever category or team the list was scoped to.
+    /// Null, the same as <see cref="CompetitionBranding.None"/>, for a list
+    /// with no single competition to speak for, or one that never dressed
+    /// up its own documents either.
+    /// </param>
+    public static byte[] Render(ListTable table, CompetitionBranding? branding = null)
     {
         using var workbook = new XLWorkbook();
 
         if (table.Sections.Count == 0)
         {
-            Compose(workbook, table, new ListSection(null, []));
+            Compose(workbook, table, new ListSection(null, []), branding);
         }
         else
         {
             foreach (var section in table.Sections)
             {
-                Compose(workbook, table, section);
+                Compose(workbook, table, section, branding);
             }
         }
 
@@ -39,18 +59,33 @@ internal static class ListXlsx
         return file.ToArray();
     }
 
-    private static void Compose(XLWorkbook workbook, ListTable table, ListSection section)
+    private static void Compose(XLWorkbook workbook, ListTable table, ListSection section, CompetitionBranding? branding)
     {
         var sheet = workbook.AddWorksheet(SheetName(workbook, section.Label ?? table.Title));
 
-        sheet.Cell(TitleRow, 1).Value = table.Title;
-        sheet.Cell(TitleRow, 1).Style.Font.Bold = true;
-        sheet.Cell(TitleRow, 1).Style.Font.FontSize = 14;
+        // Title and subtitle move one column over to leave the mark its own
+        // column — only when there is one to draw; a competition with no
+        // logo set keeps the title where it always sat.
+        var hasLogo = branding?.LogoBytes is not null;
+        var titleColumn = hasLogo ? 2 : 1;
+
+        sheet.Cell(TitleRow, titleColumn).Value = table.Title;
+        sheet.Cell(TitleRow, titleColumn).Style.Font.Bold = true;
+        sheet.Cell(TitleRow, titleColumn).Style.Font.FontSize = 14;
 
         if (table.Subtitle is { } subtitle)
         {
-            sheet.Cell(SubtitleRow, 1).Value = subtitle;
-            sheet.Cell(SubtitleRow, 1).Style.Font.FontColor = XLColor.FromHtml("#595959");
+            sheet.Cell(SubtitleRow, titleColumn).Value = subtitle;
+            sheet.Cell(SubtitleRow, titleColumn).Style.Font.FontColor = AccentColor(branding?.AccentColor);
+        }
+
+        if (hasLogo)
+        {
+            using var logoStream = new MemoryStream(branding!.LogoBytes!);
+            // MoveTo before WithSize: ClosedXML's default placement (MoveAndSize)
+            // ties the picture's size to its anchor cell and rejects an explicit
+            // Width/Height, so the placement has to become Move first.
+            sheet.AddPicture(logoStream).MoveTo(sheet.Cell(TitleRow, 1), 2, 2).WithSize(32, 32);
         }
 
         if (section.Rows.Count == 0)
@@ -142,6 +177,14 @@ internal static class ListXlsx
                 break;
         }
     }
+
+    /// <summary>
+    /// The competition's own colour, or the same blue every other document
+    /// in this system falls back to once a competition never set one.
+    /// </summary>
+    // internal, not private: testable directly without rendering a workbook.
+    internal static XLColor AccentColor(string? hex) =>
+        XLColor.FromHtml(string.IsNullOrWhiteSpace(hex) ? DefaultAccentColor : hex);
 
     /// <summary>
     /// A sheet name Excel accepts: none of <c>: \ / ? * [ ]</c>, no more than

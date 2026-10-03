@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using ClosedXML.Excel;
 using SportFrog.Api.Features.Lists;
+using SportFrog.Api.Infrastructure.Storage;
 
 namespace SportFrog.Api.Tests.Features.Lists;
 
@@ -15,6 +16,15 @@ public sealed class ListXlsxTests
     [
         new ListColumn("Nombre", ListValueKind.Text),
         new ListColumn("Goles", ListValueKind.Number),
+    ];
+
+    // A genuine 1x1 transparent PNG — small enough to inline, real enough
+    // that ClosedXML's own decoder still accepts it as a picture.
+    private static readonly byte[] OnePixelPng =
+    [
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21,
+        196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73,
+        69, 78, 68, 174, 66, 96, 130,
     ];
 
     private static XLWorkbook Reopen(byte[] bytes) => new(new MemoryStream(bytes));
@@ -142,5 +152,46 @@ public sealed class ListXlsxTests
         using var workbook = Reopen(ListXlsx.Render(table));
 
         workbook.Worksheets.First().Name.Should().NotContain("/");
+    }
+
+    [Fact]
+    public void AccentColor_NoColourSet_FallsBackToTheSameBlueEveryOtherDocumentUses()
+    {
+        ListXlsx.AccentColor(null).Should().Be(XLColor.FromHtml("#1976D2"));
+        ListXlsx.AccentColor("").Should().Be(XLColor.FromHtml("#1976D2"));
+        ListXlsx.AccentColor("   ").Should().Be(XLColor.FromHtml("#1976D2"));
+    }
+
+    [Fact]
+    public void AccentColor_ACompetitionsOwnColour_IsUsedAsIs()
+    {
+        ListXlsx.AccentColor("#ff0000").Should().Be(XLColor.FromHtml("#ff0000"));
+    }
+
+    [Fact]
+    public void Render_WithALogo_ShiftsTheTitleOverToMakeRoomForIt()
+    {
+        var table = new ListTable(
+            "Goleadores", "Sub-17", NameAndGoals, [new ListSection("Goles", [["Diaz", 4]])]);
+        var branding = new CompetitionBranding(OnePixelPng, "#ff0000");
+
+        using var workbook = Reopen(ListXlsx.Render(table, branding));
+        var sheet = workbook.Worksheets.First();
+
+        sheet.Cell(1, 2).GetString().Should().Be("Goleadores");
+        sheet.Cell(2, 2).GetString().Should().Be("Sub-17");
+        sheet.Pictures.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Render_BrandingWithNoLogoOrColour_RendersTheSameAsNoBrandingAtAll()
+    {
+        var table = new ListTable("Goleadores", "Sub-17", NameAndGoals, [new ListSection("Goles", [["Diaz", 4]])]);
+
+        using var workbook = Reopen(ListXlsx.Render(table, CompetitionBranding.None));
+        var sheet = workbook.Worksheets.First();
+
+        sheet.Cell(1, 1).GetString().Should().Be("Goleadores");
+        sheet.Pictures.Should().BeEmpty();
     }
 }

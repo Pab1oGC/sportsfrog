@@ -97,6 +97,35 @@ internal interface IListProvider
     IReadOnlyList<ListParameter> Parameters { get; }
 
     /// <summary>
+    /// Whether this list has anything to say for <paramref name="sportCode"/>.
+    /// A catalog scoped to one competition filters by this, the same
+    /// question <see cref="SportFrog.Api.Features.Lists.Providers.ClassificationList"/>
+    /// and <see cref="SportFrog.Api.Features.Lists.Providers.StandingsList"/>
+    /// already answer for themselves before they ever load a row — this just
+    /// lets a caller ask it without loading anything.
+    ///
+    /// True for a list that does not depend on a sport at all: an
+    /// organization-wide roster, a team's own squad, a champion resolved the
+    /// same way (bracket, table, or classification) regardless of format.
+    /// False for a list built on a shape a given <paramref name="scoreMode"/>
+    /// genuinely does not have — a judged category runs no bracket and no
+    /// table for <see cref="SportFrog.Api.Features.Lists.Providers.StandingsList"/>
+    /// to read. Database-backed, not a pure function of
+    /// <paramref name="scoreMode"/>, for the two providers whose shape
+    /// depends on the sport's own metric catalog rather than its score mode
+    /// alone: <see cref="SportFrog.Api.Features.Lists.Providers.LeadersList"/>
+    /// has nothing to rank for a sport whose metrics never affect the score
+    /// (volleyball's points are tallied by set, not summed), and
+    /// <see cref="SportFrog.Api.Features.Lists.Providers.CardsList"/> has
+    /// nothing to book for a sport with no card metric at all (basketball,
+    /// volleyball) — both would otherwise show up in the catalog as an
+    /// always-empty, visibly football-shaped list for a sport that has
+    /// neither goals nor cards.
+    /// </summary>
+    Task<bool> AppliesToAsync(
+        string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The list's rows for this <paramref name="scope"/>, or null when
     /// nothing in it resolves to data — an unknown category, a team with no
     /// roster — so the caller can answer with "not found" rather than

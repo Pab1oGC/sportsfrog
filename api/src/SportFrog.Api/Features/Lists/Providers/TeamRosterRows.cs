@@ -21,24 +21,49 @@ namespace SportFrog.Api.Features.Lists.Providers;
 /// </remarks>
 internal static class TeamRosterRows
 {
-    public static readonly IReadOnlyList<ListColumn> Columns =
-    [
-        new ListColumn("Dorsal", ListValueKind.Text),
-        new ListColumn("Apellido y nombre", ListValueKind.Text),
-        new ListColumn("Documento", ListValueKind.Text),
-        new ListColumn("Nacimiento", ListValueKind.Date),
-        new ListColumn("Posición", ListValueKind.Text),
-        new ListColumn("Retirado", ListValueKind.Boolean),
-    ];
+    /// <summary>
+    /// A squad's columns — "Dorsal" and "Posición" only for a team sport.
+    /// An individual sport's entrant never gets either: <c>EnrollIndividual</c>
+    /// is the only way onto a team shaped like one, and it never collects a
+    /// jersey number or an on-field position for an athlete, a pair, or a
+    /// poomsae trio — showing the column would just be a "-" on every row,
+    /// the exact kind of football-shaped noise this export should not carry
+    /// into a taekwondo one.
+    /// </summary>
+    // internal, not private: testable directly without a database, the same
+    // convention StandingsList.Columns above already uses for a column set
+    // that depends on a fact about the team rather than being fixed.
+    internal static IReadOnlyList<ListColumn> Columns(bool isIndividual)
+    {
+        List<ListColumn> columns = [];
 
-    /// <summary>The team's name and its squad's rows, or null when no team has this id.</summary>
-    public static async Task<(string TeamName, IReadOnlyList<IReadOnlyList<object?>> Rows)?> ForTeamAsync(
+        if (!isIndividual)
+        {
+            columns.Add(new ListColumn("Dorsal", ListValueKind.Text));
+        }
+
+        columns.Add(new ListColumn("Apellido y nombre", ListValueKind.Text));
+        columns.Add(new ListColumn("Documento", ListValueKind.Text));
+        columns.Add(new ListColumn("Nacimiento", ListValueKind.Date));
+
+        if (!isIndividual)
+        {
+            columns.Add(new ListColumn("Posición", ListValueKind.Text));
+        }
+
+        columns.Add(new ListColumn("Retirado", ListValueKind.Boolean));
+
+        return columns;
+    }
+
+    /// <summary>The team's name, whether it is an individual entrant, and its squad's rows — or null when no team has this id.</summary>
+    public static async Task<(string TeamName, bool IsIndividual, IReadOnlyList<IReadOnlyList<object?>> Rows)?> ForTeamAsync(
         SportFrogDbContext database, Guid teamId, CancellationToken cancellationToken)
     {
         var team = await database.Teams
             .AsNoTracking()
             .Where(candidate => candidate.Id == teamId)
-            .Select(candidate => new { candidate.Name })
+            .Select(candidate => new { candidate.Name, candidate.IsIndividual })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (team is null)
@@ -67,17 +92,30 @@ internal static class TeamRosterRows
 
         IReadOnlyList<IReadOnlyList<object?>> rows =
         [
-            .. entries.Select(entry => (IReadOnlyList<object?>)
-            [
-                entry.JerseyNumber?.ToString() ?? "-",
-                $"{entry.LastName}, {entry.FirstName}",
-                entry.DocumentId,
-                entry.BirthDate,
-                entry.Position ?? "-",
-                entry.Withdrawn,
-            ]),
+            .. entries.Select(entry =>
+            {
+                List<object?> cells = [];
+
+                if (!team.IsIndividual)
+                {
+                    cells.Add(entry.JerseyNumber?.ToString() ?? "-");
+                }
+
+                cells.Add($"{entry.LastName}, {entry.FirstName}");
+                cells.Add(entry.DocumentId);
+                cells.Add(entry.BirthDate);
+
+                if (!team.IsIndividual)
+                {
+                    cells.Add(entry.Position ?? "-");
+                }
+
+                cells.Add(entry.Withdrawn);
+
+                return (IReadOnlyList<object?>)cells;
+            }),
         ];
 
-        return (team.Name, rows);
+        return (team.Name, team.IsIndividual, rows);
     }
 }

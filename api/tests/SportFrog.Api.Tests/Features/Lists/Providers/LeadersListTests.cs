@@ -187,7 +187,7 @@ public sealed class LeadersListTests(SportFrogDatabaseFixture fixture)
             session.Context,
             CancellationToken.None);
 
-        table!.Title.Should().Be("Goleadores — Primera");
+        table!.Title.Should().Be("Máximos anotadores — Primera");
         table.Sections.Should().ContainSingle(section => section.Label == "Gol");
         table.Sections.Should().NotContain(section => section.Label == "Tarjeta amarilla");
     }

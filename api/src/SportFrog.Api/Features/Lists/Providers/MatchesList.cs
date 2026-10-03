@@ -43,6 +43,12 @@ internal sealed class MatchesList : IListProvider
     public IReadOnlyList<ListParameter> Parameters { get; } =
         [new ListParameter("categoryId", ListParameterKind.Category, Required: true)];
 
+    // A judged category runs no matches at all — its calendar is a
+    // Performances one, scheduled and read through that feature instead.
+    public Task<bool> AppliesToAsync(
+        string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
+        Task.FromResult(scoreMode != ScoreMode.Judged);
+
     public async Task<ListTable?> LoadAsync(
         ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken)
     {
