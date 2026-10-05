@@ -69,7 +69,13 @@ public static class ReadMatches
         bool IsRepechage = false,
 
         /// <summary>Which of the final's two halves this repechage match settles the bronze for. See <c>Repechage</c>.</summary>
-        short? RepechageBranch = null);
+        short? RepechageBranch = null,
+
+        /// <summary>A short-lived link to the home team's club crest, when it has one.</summary>
+        string? HomeClubLogoUrl = null,
+
+        /// <summary>A short-lived link to the away team's club crest, when it has one.</summary>
+        string? AwayClubLogoUrl = null);
 
     public static IEndpointRouteBuilder MapReadMatches(this IEndpointRouteBuilder routes)
     {
@@ -113,6 +119,7 @@ public static class ReadMatches
     private static async Task<IResult> ListForCompetitionAsync(
         Guid competitionId,
         SportFrogDbContext database,
+        ObjectStore store,
         CancellationToken cancellationToken,
         string? status = null,
         Guid? categoryId = null,
@@ -136,12 +143,13 @@ public static class ReadMatches
                 .Where(match => state == null || match.Status == state))
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(await WithLiveScoresAsync(database, matches, cancellationToken));
+        return Results.Ok(await WithPresentationAsync(database, store, matches, cancellationToken));
     }
 
     private static async Task<IResult> ListForCategoryAsync(
         Guid categoryId,
         SportFrogDbContext database,
+        ObjectStore store,
         CancellationToken cancellationToken,
         string? status = null,
         short? round = null)
@@ -163,7 +171,7 @@ public static class ReadMatches
                 .Where(match => state == null || match.Status == state))
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(await WithLiveScoresAsync(database, matches, cancellationToken));
+        return Results.Ok(await WithPresentationAsync(database, store, matches, cancellationToken));
     }
 
     private static async Task<IResult> HandleCompetitionPdfAsync(
@@ -380,6 +388,58 @@ public static class ReadMatches
 
             return match with { LiveHomeTotal = totals.Home, LiveAwayTotal = totals.Away };
         })];
+    }
+
+    /// <summary>
+    /// Adds the assets that make a fixture recognizable at a glance. The
+    /// match projection deliberately keeps storage keys out of its wire
+    /// contract; only this last step turns an owned club key into a signed
+    /// read link suitable for the private calendar and its social flyers.
+    /// </summary>
+    private static async Task<List<Summary>> WithPresentationAsync(
+        SportFrogDbContext database,
+        ObjectStore store,
+        List<Summary> matches,
+        CancellationToken cancellationToken)
+    {
+        var scored = await WithLiveScoresAsync(database, matches, cancellationToken);
+        if (scored.Count == 0)
+        {
+            return scored;
+        }
+
+        var matchIds = scored.Select(summary => summary.Id).ToList();
+        var artwork = await database.Matches
+            .AsNoTracking()
+            .Where(match => matchIds.Contains(match.Id))
+            .Select(match => new
+            {
+                match.Id,
+                OrganizationId = match.Competition!.OrgId,
+                HomeLogoKey = match.HomeTeam!.Club!.LogoUrl,
+                AwayLogoKey = match.AwayTeam!.Club!.LogoUrl,
+            })
+            .ToDictionaryAsync(match => match.Id, cancellationToken);
+
+        var decorated = new List<Summary>(scored.Count);
+        foreach (var match in scored)
+        {
+            if (!artwork.TryGetValue(match.Id, out var assets))
+            {
+                decorated.Add(match);
+                continue;
+            }
+
+            decorated.Add(match with
+            {
+                HomeClubLogoUrl = string.IsNullOrEmpty(assets.HomeLogoKey)
+                    ? null : await store.ReadLinkAsync(assets.OrganizationId, assets.HomeLogoKey, cancellationToken),
+                AwayClubLogoUrl = string.IsNullOrEmpty(assets.AwayLogoKey)
+                    ? null : await store.ReadLinkAsync(assets.OrganizationId, assets.AwayLogoKey, cancellationToken),
+            });
+        }
+
+        return decorated;
     }
 
     /// <summary>

@@ -44,6 +44,7 @@ import { WalkoverDialog } from 'src/pages/matches/walkover-dialog';
 import { PenaltiesDialog } from 'src/pages/matches/penalties-dialog';
 import { EventsDialog } from 'src/pages/matches/events-dialog';
 import { BulkRescheduleDialog } from 'src/pages/matches/bulk-reschedule-dialog';
+import { SocialFlyerDialog } from 'src/pages/matches/social-flyer-dialog';
 import { buildLiveActions } from 'src/pages/matches/live-actions';
 import { buildFixtureActions } from 'src/pages/matches/fixture-actions';
 
@@ -105,6 +106,7 @@ export default function MatchesPage() {
   const [drawResult, setDrawResult] = useState(null);
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [flyersOpen, setFlyersOpen] = useState(false);
   const [jornadaRound, setJornadaRound] = useState('');
 
   // Una jornada por click -- una ronda de una categoria -- nunca la
@@ -422,11 +424,19 @@ export default function MatchesPage() {
           </Button>
         )}
         {cascade.compId && <Button variant="outlined" startIcon={<Iconify icon="mdi:file-pdf-box" />} onClick={descargarFixture}>Descargar PDF completo</Button>}
+        {cascade.compId && <Button variant="outlined" color="secondary" startIcon={<Iconify icon="mdi:instagram" />} onClick={() => setFlyersOpen(true)}>Crear flyers</Button>}
         <Button variant="contained" startIcon={<Iconify icon="eva:plus-fill" />} onClick={() => { setError(''); setSchedOpen(true); }} disabled={!cascade.catId}>Programar</Button>
       </PageHeader>
       {error && !evOpen && !resOpen && !woOpen && !poOpen && !drawOpen && !promoteOpen && !editOpen && !bulkOpen && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <CascadeFilters cascade={cascade} />
       <DataGrid rows={filtered} columns={columns} loading={isLoading} autoHeight rowHeight={56} disableRowSelectionOnClick getRowId={(r) => r.id} />
+
+      <SocialFlyerDialog
+        open={flyersOpen}
+        onClose={() => setFlyersOpen(false)}
+        matches={filtered}
+        competition={comp}
+      />
 
       <DrawDialog
         open={drawOpen} onClose={() => setDrawOpen(false)} result={drawResult} setResult={setDrawResult}
