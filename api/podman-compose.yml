@@ -2,7 +2,7 @@ name: sportfrog
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine
     container_name: sportfrog-postgres
     restart: unless-stopped
     environment:
@@ -28,7 +28,7 @@ services:
       - net_db
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/aistor/minio:RELEASE.2026-09-19T17-05-25Z
     container_name: sportfrog-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

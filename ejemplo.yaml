@@ -1,0 +1,51 @@
+name: Build and Deploy Frontend with Podman
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}/frogsales-frontend:latest
+      SERVER_USER: ${{ vars.SERVER_USER }}
+      SERVER_HOST: ${{ vars.SERVER_HOST }}
+      SERVER_DEPLOY_PATH: /home/deployuser/deploy
+      VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Build container image
+        run: |
+          podman build -t $IMAGE_NAME --build-arg VITE_SERVER_URL=${{ env.VITE_SERVER_URL }} .
+
+      - name: Podman Login
+        uses: redhat-actions/podman-login@v1.7
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Push image to GHCR
+        run: |
+          podman push $IMAGE_NAME
+
+      - name: Deploy on remote server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd ${{ env.SERVER_DEPLOY_PATH }}
+            podman login ghcr.io -u ${{ github.actor }} --password ${{ secrets.GHCR_TOKEN }}
+            podman-compose pull
+            podman-compose up -d --force-recreate
