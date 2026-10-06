@@ -21,9 +21,10 @@ public sealed class DocumentBatch
 
     public DocumentKind Kind { get; set; }
 
-    public Guid TemplateId { get; set; }
+    /// <summary>The design this batch prints from. Null for a credential, which has no design to point to.</summary>
+    public Guid? TemplateId { get; set; }
 
-    public int TemplateVersion { get; set; }
+    public int? TemplateVersion { get; set; }
 
     public Guid CompetitionId { get; set; }
 
@@ -47,8 +48,19 @@ public sealed class DocumentBatch
 
     public int Skipped { get; set; }
 
-    /// <summary>The imposed sheet, which is what goes to a printer.</summary>
+    /// <summary>
+    /// What goes to a printer: a certificate's imposed sheet — several to a
+    /// page, cut apart — or a credential's batch PDF, every credential of the
+    /// batch as its own page of the same file.
+    /// </summary>
     public string? SheetKey { get; set; }
+
+    /// <summary>
+    /// The accreditation catalogue and legal notice as they stood when this
+    /// credential batch was requested. Null for a certificate, which prints
+    /// from <see cref="TemplateVersion"/> instead.
+    /// </summary>
+    public CredentialSnapshot? CredentialSnapshot { get; set; }
 
     public IReadOnlyList<DocumentProblem> Problems { get; set; } = [];
 

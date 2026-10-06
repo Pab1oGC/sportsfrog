@@ -57,11 +57,25 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<DocumentTemplate> DocumentTemplates => Set<DocumentTemplate>();
 
+    public DbSet<CredentialDesign> CredentialDesigns => Set<CredentialDesign>();
+
     public DbSet<DocumentTemplateVersion> DocumentTemplateVersions => Set<DocumentTemplateVersion>();
 
     public DbSet<IssuedDocument> IssuedDocuments => Set<IssuedDocument>();
 
     public DbSet<DocumentBatch> DocumentBatches => Set<DocumentBatch>();
+
+    public DbSet<AccreditationItem> AccreditationItems => Set<AccreditationItem>();
+
+    public DbSet<AccreditationCategory> AccreditationCategories => Set<AccreditationCategory>();
+
+    public DbSet<AccreditationCategoryItem> AccreditationCategoryItems =>
+        Set<AccreditationCategoryItem>();
+
+    public DbSet<AthleteAccreditation> AthleteAccreditations => Set<AthleteAccreditation>();
+
+    public DbSet<AthleteAccreditationItem> AthleteAccreditationItems =>
+        Set<AthleteAccreditationItem>();
 
     public DbSet<PhotoImport> PhotoImports => Set<PhotoImport>();
 

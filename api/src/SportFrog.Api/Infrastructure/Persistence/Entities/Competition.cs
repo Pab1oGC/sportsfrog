@@ -31,6 +31,12 @@ public sealed class Competition
     /// <summary>The rules the competition is played and ranked by, unless a category overrides them.</summary>
     public Guid RulesetId { get; set; }
 
+    /// <summary>
+    /// The credential design this competition prints from. Null means the
+    /// organization's default. Cleared, not cascaded, when the design is deleted.
+    /// </summary>
+    public Guid? CredentialDesignId { get; set; }
+
     public required string Name { get; set; }
 
     /// <summary>Second segment of the public address, after the organization's.</summary>

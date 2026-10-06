@@ -37,9 +37,6 @@ internal sealed record DocumentAssets(
 /// </remarks>
 internal static class DocumentRenderer
 {
-    /// <summary>Points per millimetre, which is how PDF measures things.</summary>
-    private const float PointsPerMillimetre = 72f / 25.4f;
-
     /// <summary>
     /// Rough width of a glyph as a fraction of the font size.
     /// </summary>
@@ -191,7 +188,7 @@ internal static class DocumentRenderer
         // The box the words live in. A designer draws one; where they did not,
         // it runs to the right edge, which is what a left-aligned field wants.
         var boxWidth = (float)(field.W ?? (1 - field.X)) * width;
-        var points = (float)((field.Size ?? 0.06) * height * PointsPerMillimetre);
+        var points = (float)((field.Size ?? 0.06) * height * PrintUnits.PointsPerMillimetre);
         var fit = field.Fit ?? TemplateDesign.DefaultFit;
 
         if (fit == "shrink")
@@ -255,8 +252,8 @@ internal static class DocumentRenderer
     /// </remarks>
     private static float Shrink(string words, float points, float boxWidthMm, float minimumMm)
     {
-        var boxWidthPoints = boxWidthMm * PointsPerMillimetre;
-        var floor = Math.Max(minimumMm * PointsPerMillimetre, 1f);
+        var boxWidthPoints = boxWidthMm * PrintUnits.PointsPerMillimetre;
+        var floor = Math.Max(minimumMm * PrintUnits.PointsPerMillimetre, 1f);
 
         while (points > floor && words.Length * points * AverageGlyphWidth > boxWidthPoints)
         {

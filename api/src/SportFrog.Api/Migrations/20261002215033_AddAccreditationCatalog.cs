@@ -5,7 +5,8 @@ using SportFrog.Api.Infrastructure.Persistence;
 namespace SportFrog.Api.Migrations;
 
 /// <summary>
-/// TODO: describe in one line what this migration changes and why.
+/// The catalogue a decreed credential prints from: zones, services, venues,
+/// the discipline, and the accreditation categories that package them.
 /// </summary>
 [DbContext(typeof(SportFrogDbContext))]
 [Migration("20261002215033_AddAccreditationCatalog")]

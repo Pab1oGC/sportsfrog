@@ -32,7 +32,8 @@ public static class ReadCompetitions
         bool IsPublic,
         CompetitionSettings Settings,
         int CategoryCount,
-        PublicPreview? PublicPreview);
+        PublicPreview? PublicPreview,
+        Guid? CredentialDesignId = null);
 
     /// <summary>
     /// Temporary links for whatever pictures the competition's public
@@ -183,7 +184,8 @@ public static class ReadCompetitions
             competition.IsPublic,
             competition.Settings,
             database.Categories.Count(category => category.CompetitionId == competition.Id),
-            null));
+            null,
+            competition.CredentialDesignId));
 
     /// <summary>Signs whatever pictures the competition's public settings reference.</summary>
     private static async Task<Summary> PresentAsync(

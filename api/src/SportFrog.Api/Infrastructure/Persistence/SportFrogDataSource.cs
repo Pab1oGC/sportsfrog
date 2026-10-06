@@ -31,6 +31,7 @@ public static class SportFrogDataSource
         builder.MapEnum<DocumentState>("document_state");
         builder.MapEnum<DocumentBatchState>("document_batch_state");
         builder.MapEnum<PerformanceStatus>("performance_status");
+        builder.MapEnum<AccreditationItemKind>("accreditation_item_kind");
 
         return builder.Build();
     }
@@ -50,5 +51,6 @@ public static class SportFrogDataSource
         builder.MapEnum<DocumentState>("document_state");
         builder.MapEnum<DocumentBatchState>("document_batch_state");
         builder.MapEnum<PerformanceStatus>("performance_status");
+        builder.MapEnum<AccreditationItemKind>("accreditation_item_kind");
     }
 }

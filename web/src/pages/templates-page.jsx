@@ -21,12 +21,9 @@ import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { useConfirm } from 'src/components/confirm-dialog';
 
-var KINDS = ['credential', 'certificate'];
-var KIND_LABELS = { credential: 'Credencial', certificate: 'Certificado' };
+var KIND_LABELS = { certificate: 'Certificado' };
 
 var PAGE_SIZES = [
-  { code: 'credential', label: 'Credencial horizontal (85.6 × 54 mm)', ratio: 85.6 / 54 },
-  { code: 'credential_portrait', label: 'Credencial vertical (54 × 85.6 mm)', ratio: 54 / 85.6 },
   { code: 'a4', label: 'A4 vertical (210 × 297 mm)', ratio: 210 / 297 },
   { code: 'a4_landscape', label: 'A4 horizontal (297 × 210 mm)', ratio: 297 / 210 },
   { code: 'a5', label: 'A5 horizontal (210 × 148 mm)', ratio: 210 / 148 },
@@ -34,7 +31,7 @@ var PAGE_SIZES = [
 ];
 
 function emptyForm() {
-  return { name: '', kind: 'credential', pageSize: 'credential', isDefault: false, layout: null };
+  return { name: '', kind: 'certificate', pageSize: 'a4', isDefault: false, layout: null };
 }
 
 export default function TemplatesPage() {
@@ -51,8 +48,8 @@ export default function TemplatesPage() {
       setEditId(row.id);
       setForm({
         name: row.name || '',
-        kind: row.kind || 'credential',
-        pageSize: row.pageSize || 'credential',
+        kind: row.kind || 'certificate',
+        pageSize: row.pageSize || 'a4',
         isDefault: row.isDefault || false,
         layout: null,
       });
@@ -167,7 +164,7 @@ export default function TemplatesPage() {
         })}
         {!isLoading && (!data || data.length === 0) && (
           <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 4 }}>
-            <Typography color="text.secondary">No hay plantillas creadas. Crea una para generar credenciales y certificados.</Typography>
+            <Typography color="text.secondary">No hay plantillas creadas. Crea una para generar certificados.</Typography>
           </Box>
         )}
       </Box>
@@ -176,9 +173,6 @@ export default function TemplatesPage() {
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
           {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
           <TextField label="Nombre" value={form.name} onChange={function(e) { setForm(Object.assign({}, form, { name: e.target.value })); }} fullWidth required />
-          <TextField select label="Tipo" value={form.kind} onChange={function(e) { setForm(Object.assign({}, form, { kind: e.target.value })); }} fullWidth>
-            {KINDS.map(function(k) { return <MenuItem key={k} value={k}>{KIND_LABELS[k]}</MenuItem>; })}
-          </TextField>
           <TextField select label="Tamaño de papel" value={form.pageSize} onChange={function(e) { setForm(Object.assign({}, form, { pageSize: e.target.value })); }} fullWidth>
             {PAGE_SIZES.map(function(s) { return <MenuItem key={s.code} value={s.code}>{s.label}</MenuItem>; })}
           </TextField>

@@ -249,10 +249,30 @@ export const endpoints = {
   documentsDesign: `${api}/documents/design`,
   templateVersion: (id, version) => `${api}/documents/templates/${id}/versions/${version}`,
   templateBackground: `${api}/documents/templates/backgrounds`,
+  credentialDesigns: `${api}/documents/credential-designs`,
+  credentialDesign: (id) => `${api}/documents/credential-designs/${id}`,
   documentBatches: `${api}/documents/batches`,
   documentBatch: (id) => `${api}/documents/batches/${id}`,
   issuedDocuments: `${api}/documents/issued`,
   revokeDocument: (id) => `${api}/documents/issued/${id}/revoke`,
+
+  // Accreditation catalog (credenciales decretadas) -- items (disciplina,
+  // recinto, servicio, zona) y categorías, ambos por competencia.
+  accreditationItems: (compId) => `${api}/competitions/${compId}/accreditation/items`,
+  accreditationItem: (compId, id) => `${api}/competitions/${compId}/accreditation/items/${id}`,
+  accreditationCategories: (compId) => `${api}/competitions/${compId}/accreditation/categories`,
+  accreditationCategory: (compId, id) => `${api}/competitions/${compId}/accreditation/categories/${id}`,
+  accreditationCategoryItems: (compId, id) => `${api}/competitions/${compId}/accreditation/categories/${id}/items`,
+
+  // Quién tiene qué categoría, y sus excepciones -- también por competencia.
+  athleteAccreditations: (compId) => `${api}/competitions/${compId}/accreditation/athletes`,
+  athleteAccreditation: (compId, athleteId) => `${api}/competitions/${compId}/accreditation/athletes/${athleteId}`,
+  athleteAccreditationOverrides: (compId, athleteId) =>
+    `${api}/competitions/${compId}/accreditation/athletes/${athleteId}/overrides`,
+  assignAccreditationCategoryBulk: (compId, categoryId) =>
+    `${api}/competitions/${compId}/accreditation/categories/${categoryId}/athletes`,
+  credentialPreview: (compId, athleteId) =>
+    `${api}/competitions/${compId}/accreditation/athletes/${athleteId}/preview.png`,
 
   // Public
   publicCompetitions: `${api}/public/competitions`,

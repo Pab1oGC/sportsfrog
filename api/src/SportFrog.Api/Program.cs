@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using SportFrog.Api.Features.Accreditation;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Athletes.Photos;
 using SportFrog.Api.Features.Auth;
@@ -240,6 +241,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Clubs.UnaffiliatedClub>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Accreditation.AccreditationResolver>();
 
 // Only ever asked to follow a shortened Google Maps link so the location
 // picker can read the coordinates it hides — never an arbitrary admin-typed
@@ -282,6 +284,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportRev
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.DelegationRosterImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
+builder.Services.AddScoped<SportFrog.Api.Features.Documents.CredentialNumbering>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.IssueDocumentsJob>();
 
 // Printed on physical cards, so a wrong address is unrecoverable. Validated
@@ -419,15 +422,25 @@ api.MapRescheduleClassificationOrder();
 api.MapImportAthletePhotos();
 api.MapReadPhotoImports();
 
+api.MapAccreditationItems();
+api.MapAccreditationCategories();
+api.MapAthleteAccreditations();
+api.MapAthleteAccreditationOverrides();
+
 api.MapReadTemplateDesign();
 api.MapUploadTemplateBackground();
 api.MapCreateTemplate();
 api.MapReadTemplates();
 api.MapUpdateTemplate();
 api.MapDeleteTemplate();
+api.MapCreateCredentialDesign();
+api.MapReadCredentialDesigns();
+api.MapUpdateCredentialDesign();
+api.MapDeleteCredentialDesign();
 api.MapRequestDocumentBatch();
 api.MapReadDocuments();
 api.MapRevokeDocument();
+api.MapPreviewCredential();
 
 api.MapVenues();
 api.MapVenueSpaces();

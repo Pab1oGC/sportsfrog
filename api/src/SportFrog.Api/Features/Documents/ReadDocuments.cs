@@ -35,8 +35,8 @@ public static class ReadDocuments
     public sealed record BatchDetail(
         Guid Id,
         DocumentKind Kind,
-        Guid TemplateId,
-        int TemplateVersion,
+        Guid? TemplateId,
+        int? TemplateVersion,
         DocumentBatchState Status,
         int Total,
         int Issued,
@@ -55,6 +55,10 @@ public static class ReadDocuments
         Guid Id,
         DocumentKind Kind,
         string SerialNumber,
+
+        /// <summary>The credential's own printed identifier. Null on a certificate.</summary>
+        string? VisibleId,
+
         string? Subject,
         string? TeamName,
         string? CertificateType,
@@ -170,6 +174,7 @@ public static class ReadDocuments
                 document.Id,
                 document.Kind,
                 document.SerialNumber,
+                document.VisibleId,
                 Subject = document.Athlete!.LastName + " " + document.Athlete.FirstName,
                 TeamName = document.Team!.Name,
                 document.CertificateType,
@@ -190,6 +195,7 @@ public static class ReadDocuments
                 document.Id,
                 document.Kind,
                 document.SerialNumber,
+                document.VisibleId,
                 document.Subject,
                 document.TeamName,
                 document.CertificateType,

@@ -4,10 +4,12 @@ namespace SportFrog.Domain.Competitions;
 /// Settings of a competition that do not deserve a column each.
 /// </summary>
 /// <remarks>
-/// The schema documents two sections and both are here. <see cref="Public"/>
-/// decides what a visitor is shown; <see cref="Schedule"/> says when and
-/// where the competition can be played, which is what turns a draw into a
-/// calendar.
+/// One section per concern, each optional: a competition that never touches
+/// one gets whatever that section's own defaults mean by absence.
+/// <see cref="Public"/> decides what a visitor is shown; <see cref="Schedule"/>
+/// says when and where the competition can be played, which is what turns a
+/// draw into a calendar; <see cref="Bulletin"/> and <see cref="Credential"/>
+/// are each the organizer's own prose for one printed document.
 /// </remarks>
 public sealed record CompetitionSettings
 {
@@ -255,7 +257,6 @@ public sealed record BulletinSettings
     /// <summary>Who to write to or call with a question, and how.</summary>
     public string? ContactInfo { get; init; }
 }
-
 /// <summary>One name in the strip of sponsors a public page may show.</summary>
 public sealed record SponsorLink
 {

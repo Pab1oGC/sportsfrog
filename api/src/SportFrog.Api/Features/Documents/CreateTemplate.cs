@@ -34,9 +34,12 @@ public static class CreateTemplate
                 .NotEmpty().WithMessage("El nombre es obligatorio.")
                 .MaximumLength(80);
 
+            // Certificates only. A credential's structure is fixed by decree and
+            // its values live in a credential design, so a template of that kind
+            // would be a design nothing reads.
             RuleFor(request => request.Kind)
-                .Must(kind => WireEnum.TryParse<DocumentKind>(kind, out _))
-                .WithMessage($"Tipo desconocido. Disponibles: {WireEnum.Options<DocumentKind>()}.");
+                .Must(kind => WireEnum.TryParse<DocumentKind>(kind, out var parsed) && parsed == DocumentKind.Certificate)
+                .WithMessage("Las plantillas son solo de certificados. Las credenciales se configuran en Diseños de credencial.");
 
             RuleFor(request => request.PageSize)
                 .Must(TemplateDesign.HasPageSize)

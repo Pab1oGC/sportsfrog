@@ -65,6 +65,16 @@ describe("buildCompetitionUpdatePayload -- GUARDA DE REGRESIÓN", () => {
     expect(payload.endsOn).toBe(row.endsOn);
   });
 
+  it("reenvía el diseño de credencial de la competencia -- el PUT lo reescribe entero", () => {
+    const payload = buildCompetitionUpdatePayload(rowBase({ credentialDesignId: "d-7" }), EMPTY_PORTAL_FORM);
+    expect(payload.credentialDesignId).toBe("d-7");
+  });
+
+  it("sin diseño elegido manda null, no lo omite", () => {
+    const payload = buildCompetitionUpdatePayload(rowBase(), EMPTY_PORTAL_FORM);
+    expect(payload.credentialDesignId).toBeNull();
+  });
+
   it("settings.public sale de buildPortalPayload(form), no de una copia manual", () => {
     const payload = buildCompetitionUpdatePayload(rowBase(), { ...EMPTY_PORTAL_FORM, description: "Torneo anual" });
     expect(payload.settings.public.description).toBe("Torneo anual");

@@ -44,6 +44,7 @@ internal sealed class CompetitionConfiguration : IEntityTypeConfiguration<Compet
         builder.Property(x => x.OrgId).HasColumnName("org_id");
         builder.Property(x => x.SportCode).HasColumnName("sport_code").IsRequired();
         builder.Property(x => x.RulesetId).HasColumnName("ruleset_id");
+        builder.Property(x => x.CredentialDesignId).HasColumnName("credential_design_id");
         builder.Property(x => x.Name).HasColumnName("name").IsRequired();
         builder.Property(x => x.Season).HasColumnName("season").IsRequired();
         builder.Property(x => x.Format).HasColumnName("format").IsRequired();

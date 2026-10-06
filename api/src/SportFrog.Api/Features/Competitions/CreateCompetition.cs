@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Accreditation;
+using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -55,6 +57,12 @@ public static class CreateCompetition
             });
         }
 
+        if (await CredentialDesignChoice.RefuseUnknownAsync(
+                contract.CredentialDesignId, database, cancellationToken) is { } unknownDesign)
+        {
+            return unknownDesign;
+        }
+
         var slug = Slug.Normalize(contract.Slug);
 
         if (await database.Competitions.AnyAsync(
@@ -109,9 +117,21 @@ public static class CreateCompetition
             EndsOn = contract.EndsOn,
             IsPublic = false,
             Settings = settings ?? new CompetitionSettings(),
+            CredentialDesignId = contract.CredentialDesignId,
         };
 
         database.Competitions.Add(competition);
+
+        // Written in the same save as the competition itself, so a competition
+        // is never left behind without the catalogue it was created with.
+        if (StartingCatalog.HasFor(competition.SportCode))
+        {
+            var catalog = StartingCatalog.Build(competition, DateTimeOffset.UtcNow);
+
+            database.AccreditationItems.AddRange(catalog.Items);
+            database.AccreditationCategories.AddRange(catalog.Categories);
+            database.AccreditationCategoryItems.AddRange(catalog.Links);
+        }
 
         try
         {

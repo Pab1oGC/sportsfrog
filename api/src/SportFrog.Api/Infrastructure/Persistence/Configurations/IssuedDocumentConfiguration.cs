@@ -24,6 +24,7 @@ internal sealed class IssuedDocumentConfiguration : IEntityTypeConfiguration<Iss
         builder.Property(x => x.AthleteId).HasColumnName("athlete_id");
         builder.Property(x => x.TeamId).HasColumnName("team_id");
         builder.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired();
+        builder.Property(x => x.VisibleId).HasColumnName("visible_id");
         builder.Property(x => x.CertificateType).HasColumnName("certificate_type");
         builder.Property(x => x.ValidFrom).HasColumnName("valid_from");
         builder.Property(x => x.ValidTo).HasColumnName("valid_to");
@@ -104,6 +105,14 @@ internal sealed class DocumentBatchConfiguration : IEntityTypeConfiguration<Docu
                 stored => JsonSerializer.Deserialize<List<DocumentProblem>>(stored, StorageFormat)!,
                 ProblemsComparer);
 
+        builder.Property(x => x.CredentialSnapshot)
+            .HasColumnName("credential_snapshot")
+            .HasColumnType("jsonb")
+            .HasConversion(
+                snapshot => SerializeSnapshot(snapshot),
+                stored => DeserializeSnapshot(stored),
+                CredentialSnapshotComparer);
+
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasDefaultValueSql("now()")
@@ -132,4 +141,20 @@ internal sealed class DocumentBatchConfiguration : IEntityTypeConfiguration<Docu
         problems => JsonSerializer.Serialize(problems, StorageFormat).GetHashCode(),
         problems => JsonSerializer.Deserialize<List<DocumentProblem>>(
             JsonSerializer.Serialize(problems, StorageFormat), StorageFormat)!);
+
+    /// <summary>
+    /// Null-safe the way <see cref="ProblemsComparer"/> does not need to be:
+    /// a certificate batch's snapshot is always absent, so every conversion
+    /// below has to carry null through rather than assume a value is there.
+    /// </summary>
+    private static readonly ValueComparer<CredentialSnapshot?> CredentialSnapshotComparer = new(
+        (left, right) => SerializeSnapshot(left) == SerializeSnapshot(right),
+        snapshot => (SerializeSnapshot(snapshot) ?? string.Empty).GetHashCode(),
+        snapshot => DeserializeSnapshot(SerializeSnapshot(snapshot)));
+
+    private static string? SerializeSnapshot(CredentialSnapshot? snapshot) =>
+        snapshot is null ? null : JsonSerializer.Serialize(snapshot, StorageFormat);
+
+    private static CredentialSnapshot? DeserializeSnapshot(string? stored) =>
+        stored is null ? null : JsonSerializer.Deserialize<CredentialSnapshot>(stored, StorageFormat);
 }

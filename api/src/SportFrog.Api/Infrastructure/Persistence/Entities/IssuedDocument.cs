@@ -20,10 +20,11 @@ public sealed class IssuedDocument
 
     public Guid OrgId { get; set; }
 
-    public Guid TemplateId { get; set; }
+    /// <summary>The design it was printed from. Null for a credential, which has no design to point to.</summary>
+    public Guid? TemplateId { get; set; }
 
-    /// <summary>Which stored layout it was printed from.</summary>
-    public int TemplateVersion { get; set; }
+    /// <summary>Which stored layout it was printed from. Null for a credential.</summary>
+    public int? TemplateVersion { get; set; }
 
     public DocumentKind Kind { get; set; }
 
@@ -43,6 +44,19 @@ public sealed class IssuedDocument
     /// <c>Features.Documents.Serial</c> for why it is not a counter.
     /// </remarks>
     public required string SerialNumber { get; set; }
+
+    /// <summary>
+    /// A delegation code and a sequential number, e.g. "IND-0042" — what a
+    /// steward reads off a credential and matches against a printed list.
+    /// Null on a certificate, which carries no such identifier.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="SerialNumber"/> on purpose: that one is
+    /// random so that scanning one card reveals nothing about the next; this
+    /// one is sequential and meant to be read aloud. See
+    /// <c>VisibleCredentialId</c>'s own remarks.
+    /// </remarks>
+    public string? VisibleId { get; set; }
 
     /// <summary>Why a certificate was given. Null on a credential.</summary>
     public string? CertificateType { get; set; }

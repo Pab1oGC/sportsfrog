@@ -85,7 +85,7 @@ const ACCORDION_SUMMARY_SX = {
 // settings.public los comparte con el estudio en portal-payload.js para que
 // los dos no se pisen.
 const emptyForm = () => ({
-  name: '', slug: '', season: '', format: 'league', rulesetId: '', captureLevel: 'basic',
+  name: '', slug: '', season: '', format: 'league', rulesetId: '', captureLevel: 'basic', credentialDesignId: '',
   bufferMinutes: '', scheduleSpaceIds: [],
   bulletinIntroduction: '', bulletinSanctions: '', bulletinGeneralProvisions: '', bulletinContactInfo: '',
   ...EMPTY_PORTAL_FORM,
@@ -96,6 +96,7 @@ export default function CompetitionsPage() {
   const navigate = useNavigate();
   const { data: rulesets } = useApi(endpoints.rulesets);
   const { data: sports } = useApi(endpoints.sports);
+  const { data: designs } = useApi(endpoints.credentialDesigns);
   const nombreDeporte = (code) => sports?.find((s) => s.code === code)?.name || code;
 
   const [slugTouched, setSlugTouched] = useState(false);
@@ -129,7 +130,7 @@ export default function CompetitionsPage() {
       const bulletin = (row.settings && row.settings.bulletin) || {};
       return {
         name: row.name, slug: row.slug, season: row.season, format: row.format,
-        rulesetId: row.rulesetId || '', captureLevel: row.captureLevel,
+        rulesetId: row.rulesetId || '', captureLevel: row.captureLevel, credentialDesignId: row.credentialDesignId || '',
         bufferMinutes: sched.bufferMinutes ?? '',
         scheduleSpaceIds: sched.spaceIds || [],
         bulletinIntroduction: bulletin.introduction || '',
@@ -144,7 +145,7 @@ export default function CompetitionsPage() {
     },
     mapToSend: (f) => ({
       name: f.name, slug: normalizarSlug(f.slug), season: f.season,
-      format: f.format, rulesetId: f.rulesetId, captureLevel: f.captureLevel,
+      format: f.format, rulesetId: f.rulesetId, captureLevel: f.captureLevel, credentialDesignId: f.credentialDesignId || null,
       settings: {
         // Vacio de margen y de canchas es "no configurado todavia": se manda
         // null en vez de un objeto a medio llenar, para no perder el aviso
@@ -325,6 +326,17 @@ export default function CompetitionsPage() {
         </TextField>
         <TextField select label="Captura" value={form.captureLevel} onChange={(e) => setForm({ ...form, captureLevel: e.target.value })} fullWidth>
           {CAPS.map((c) => <MenuItem key={c} value={c}>{c === 'basic' ? 'Basico' : 'Detallado'}</MenuItem>)}
+        </TextField>
+        <TextField
+          select
+          label="Diseño de credencial"
+          value={form.credentialDesignId}
+          onChange={(e) => setForm({ ...form, credentialDesignId: e.target.value })}
+          fullWidth
+          helperText="Vacío usa el diseño predeterminado de la organización."
+        >
+          <MenuItem value="">Predeterminado de la organización</MenuItem>
+          {(designs || []).map((d) => <MenuItem key={d.id} value={d.id}>{d.name}{d.isDefault ? ' (predeterminado)' : ''}</MenuItem>)}
         </TextField>
 
         <Accordion disableGutters variant="outlined" sx={ACCORDION_SX}>
