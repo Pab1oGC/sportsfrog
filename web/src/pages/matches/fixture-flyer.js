@@ -1,372 +1,247 @@
 import { nombreFase } from 'src/lib/phase-labels';
 
-/*
- * Las piezas se dibujan en un canvas en el navegador: no dependen de una
- * plantilla remota ni suben los escudos a un servicio de terceros. Eso deja
- * el archivo listo para publicar y mantiene los enlaces temporales de los
- * logos dentro de la sesión que ya autorizó el organizador.
- */
-
 export const FLYER_FORMATS = [
   { value: 'story', label: 'Historia', detail: '1080 × 1920', width: 1080, height: 1920 },
-  { value: 'portrait', label: 'Feed vertical', detail: '1080 × 1350', width: 1080, height: 1350 },
-  { value: 'square', label: 'Post cuadrado', detail: '1080 × 1080', width: 1080, height: 1080 },
+  { value: 'portrait', label: 'Feed 4:5', detail: '1080 × 1350', width: 1080, height: 1350 },
+  { value: 'square', label: 'Cuadrado', detail: '1080 × 1080', width: 1080, height: 1080 },
 ];
 
-const BRAND = '#F50057';
-const INK = '#101722';
-const PAPER = '#F7F4EF';
+const DISPLAY = 'Inter, Arial, sans-serif';
+const SANS = 'Inter, Arial, sans-serif';
+const WHITE = '#F8F7EE';
+const LAYOUTS = {
+  story: { top: 108, title: 330, board: 570, boardHeight: 500, details: 1320, footer: 1720 },
+  portrait: { top: 65, title: 230, board: 388, boardHeight: 390, details: 970, footer: 1250 },
+  square: { top: 28, title: 185, board: 286, boardHeight: 310, details: 760, footer: 1000 },
+};
 
 export function flyerFormat(value) {
   return FLYER_FORMATS.find((format) => format.value === value) || FLYER_FORMATS[0];
 }
-
 export function teamName(match, side) {
   return match[`${side}TeamName`] || match[`${side}Placeholder`] || 'Por definir';
 }
-
 export function fixtureTitle(match) {
   return `${teamName(match, 'home')} vs ${teamName(match, 'away')}`;
 }
-
 export function flyerFileName(match, format = 'story', type = 'fixture') {
   const safe = fixtureTitle(match).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   return `${type}-${safe || 'partido'}-${format}.png`;
 }
 
-function initials(name) {
-  return (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase();
+function hex(value, fallback) {
+  return /^#[0-9a-f]{6}$/i.test(value?.trim() || '') ? value.trim() : fallback;
 }
-
-function safeHex(value, fallback) {
-  return /^#[0-9a-f]{6}$/i.test(value || '') ? value : fallback;
+function mix(color, target, amount) {
+  return '#' + [1, 3, 5].map((offset) => Math.round(
+    parseInt(color.slice(offset, offset + 2), 16) * (1 - amount)
+    + parseInt(target.slice(offset, offset + 2), 16) * amount,
+  ).toString(16).padStart(2, '0')).join('');
 }
-
-function rgba(hex, alpha) {
-  const normalized = safeHex(hex, '#000000').slice(1);
-  const red = parseInt(normalized.slice(0, 2), 16);
-  const green = parseInt(normalized.slice(2, 4), 16);
-  const blue = parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+function luminance(color) {
+  const c = [1, 3, 5].map((offset) => {
+    const v = parseInt(color.slice(offset, offset + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
 }
-
-function branding(competition) {
-  const theme = competition?.settings?.public?.theme || {};
-  return {
-    primary: safeHex(theme.primary || competition?.settings?.public?.accentColor, BRAND),
-    secondary: safeHex(theme.secondary, '#F6C453'),
-    logoUrl: competition?.publicPreview?.logoUrl || null,
-  };
+export function flyerColors(competition) {
+  const pub = competition?.settings?.public || {};
+  const primary = hex(pub.theme?.primary, hex(pub.accentColor, '#08786F'));
+  const secondary = hex(pub.theme?.secondary, mix(primary, '#FFFFFF', 0.78));
+  const background = mix(primary, '#000000', 0.42);
+  let accent = secondary;
+  // Preserve the brand hue, adjusting heading brightness for legibility.
+  while ((luminance(accent) + 0.05) / (luminance(background) + 0.05) < 4.5) {
+    accent = mix(accent, '#FFFFFF', 0.2);
+  }
+  return { primary, secondary, background, accent,
+    score: luminance(secondary) > 0.179 ? '#101722' : '#FFFFFF' };
 }
-
-function dateLabel(value) {
-  if (!value) return 'FECHA POR CONFIRMAR';
-  const date = new Date(value);
-  return new Intl.DateTimeFormat('es-BO', { weekday: 'long', day: 'numeric', month: 'long' })
-    .format(date).replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function timeLabel(value) {
-  if (!value) return 'HORARIO POR CONFIRMAR';
-  return `${new Intl.DateTimeFormat('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))} HRS`;
-}
-
-function matchLabel(match) {
-  const phase = match.phase ? nombreFase(match.phase) : null;
-  return [match.categoryName, phase || (match.roundNumber ? `Jornada ${match.roundNumber}` : null)]
-    .filter(Boolean).join(' · ').toUpperCase();
-}
-
 function loadImage(url) {
   if (!url) return Promise.resolve(null);
   return new Promise((resolve) => {
     const image = new Image();
+    const timer = setTimeout(() => resolve(null), 8000);
     image.crossOrigin = 'anonymous';
-    image.decoding = 'async';
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
+    image.onload = () => { clearTimeout(timer); resolve(image); };
+    image.onerror = () => { clearTimeout(timer); resolve(null); };
     image.src = url;
   });
 }
-
-function fit(image, x, y, width, height) {
-  const scale = Math.min(width / image.width, height / image.height);
-  const nextWidth = image.width * scale;
-  const nextHeight = image.height * scale;
-  return [x + (width - nextWidth) / 2, y + (height - nextHeight) / 2, nextWidth, nextHeight];
-}
-
-function rounded(ctx, x, y, width, height, radius) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, height, radius);
-}
-
-function drawImageContain(ctx, image, x, y, width, height) {
+function contain(ctx, image, x, y, width, height) {
   if (!image) return;
-  ctx.drawImage(image, ...fit(image, x, y, width, height));
+  const scale = Math.min(width / image.width, height / image.height);
+  const w = image.width * scale;
+  const h = image.height * scale;
+  ctx.drawImage(image, x + (width - w) / 2, y + (height - h) / 2, w, h);
 }
 
-function drawText(ctx, text, { x, y, width, font, color, align = 'left', lineHeight, maxLines = 2 }) {
+// All copy is measured, including long team names and bracket placeholders.
+function label(ctx, value, x, y, size, { color = WHITE, width = 940, family = SANS, tracking = 0, align = 'center' } = {}) {
   ctx.save();
-  ctx.font = font;
+  ctx.font = `800 ${size}px ${family}`;
   ctx.fillStyle = color;
   ctx.textAlign = align;
-  ctx.textBaseline = 'top';
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  const lines = [];
-  let line = '';
-  words.forEach((word) => {
-    const next = line ? `${line} ${word}` : word;
-    if (line && ctx.measureText(next).width > width) {
-      lines.push(line);
-      line = word;
-    } else line = next;
-  });
-  if (line) lines.push(line);
-  const visible = lines.slice(0, maxLines);
-  const left = align === 'center' ? x : align === 'right' ? x - width : x;
-  visible.forEach((part, index) => ctx.fillText(part, left, y + (lineHeight * index)));
+  ctx.textBaseline = 'middle';
+  ctx.letterSpacing = `${tracking}px`;
+  ctx.fillText(String(value), x, y, width);
   ctx.restore();
-  return visible.length * lineHeight;
 }
-
-function crest(ctx, image, name, x, y, size, { primary, secondary }) {
-  const pad = Math.round(size * 0.15);
-  ctx.save();
-  ctx.shadowColor = 'rgba(4, 13, 24, 0.20)';
-  ctx.shadowBlur = 34;
-  ctx.shadowOffsetY = 16;
-  ctx.fillStyle = '#FFFFFF';
-  rounded(ctx, x, y, size, size, Math.round(size * 0.28));
-  ctx.fill();
-  ctx.restore();
-
-  ctx.save();
-  rounded(ctx, x, y, size, size, Math.round(size * 0.28));
-  ctx.clip();
-  if (image) {
-    drawImageContain(ctx, image, x + pad, y + pad, size - pad * 2, size - pad * 2);
-  } else {
-    const fallback = ctx.createLinearGradient(x, y, x + size, y + size);
-    fallback.addColorStop(0, primary);
-    fallback.addColorStop(1, secondary);
-    ctx.fillStyle = fallback;
-    ctx.fillRect(x, y, size, size);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `800 ${Math.round(size * 0.30)}px Inter, Arial, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(initials(name), x + size / 2, y + size / 2 + 4);
-  }
-  ctx.restore();
-
-  ctx.strokeStyle = rgba(primary, 0.2);
-  ctx.lineWidth = 3;
-  rounded(ctx, x + 1.5, y + 1.5, size - 3, size - 3, Math.round(size * 0.28));
-  ctx.stroke();
+function rule(ctx, x, y, width, color = '#FFFFFF40') {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, width, 1);
 }
-
-function drawBackdrop(ctx, format, theme) {
+function background(ctx, format, image, colors) {
   const { width, height } = format;
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, width, height);
-
-  const ink = ctx.createLinearGradient(0, 0, width, height * 0.72);
-  ink.addColorStop(0, '#0C1524');
-  ink.addColorStop(0.72, '#182A40');
-  ink.addColorStop(1, '#20364B');
-  ctx.fillStyle = ink;
-  ctx.fillRect(0, 0, width, Math.round(height * 0.68));
-
-  // Formas discretas, con aire editorial. No son una textura aleatoria: se
-  // ven igual en cada exportación y por lo tanto forman parte de la marca.
+  if (image) {
+    const scale = Math.max(width / image.width, height / image.height);
+    const w = image.width * scale;
+    const h = image.height * scale;
+    ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
+  }
+  const shade = ctx.createLinearGradient(0, 0, 0, height);
+  shade.addColorStop(0, colors.background + (image ? 'CC' : 'FF'));
+  shade.addColorStop(1, mix(colors.background, '#000000', 0.4) + (image ? 'E6' : 'FF'));
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, width, height);
+  if (!image) {
+    ctx.strokeStyle = '#FFFFFF09';
+    ctx.lineWidth = 3;
+    for (let x = -80; x < width + 120; x += 115) {
+      ctx.beginPath();
+      ctx.moveTo(x, height * 0.30);
+      ctx.lineTo(x + 58, height * 0.18);
+      ctx.lineTo(x + 112, height * 0.30);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#FFFFFF0A';
+    for (let y = height * 0.34; y < height * 0.70; y += 26) {
+      for (let x = (y % 50); x < width; x += 31) ctx.fillRect(x, y, 3, 3);
+    }
+    rule(ctx, 0, height * 0.72, width, '#FFFFFF15');
+  }
+}
+function badge(ctx, image, name, x, y, size, colors) {
+  if (image) return contain(ctx, image, x, y, size, size);
+  // A restrained shield, rather than a generic app avatar, for clubs without a logo.
   ctx.save();
-  ctx.translate(width * 0.76, -height * 0.07);
-  ctx.rotate(-0.34);
-  ctx.fillStyle = rgba(theme.primary, 0.76);
-  ctx.fillRect(0, 0, width * 0.22, height * 0.92);
-  ctx.fillStyle = rgba(theme.secondary, 0.16);
-  ctx.fillRect(width * 0.28, 0, width * 0.07, height * 0.92);
+  ctx.translate(x, y);
+  ctx.fillStyle = colors.background;
+  ctx.beginPath();
+  ctx.moveTo(size * 0.12, size * 0.12);
+  ctx.lineTo(size * 0.88, size * 0.12);
+  ctx.lineTo(size * 0.84, size * 0.66);
+  ctx.quadraticCurveTo(size * 0.76, size * 0.86, size * 0.5, size * 0.98);
+  ctx.quadraticCurveTo(size * 0.24, size * 0.86, size * 0.16, size * 0.66);
+  ctx.closePath();
+  ctx.fill();
+  rule(ctx, size * 0.28, size * 0.27, size * 0.44, colors.accent);
+  const letters = name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase();
+  label(ctx, letters, size / 2, size * 0.55, size * 0.40, { family: DISPLAY, width: size * 0.62 });
   ctx.restore();
+}
+function draw(ctx, format, match, competition, type, images) {
+  const colors = flyerColors(competition);
+  const l = LAYOUTS[format.value];
+  const square = format.value === 'square';
+  const result = type === 'result';
+  const postponed = match.status === 'postponed';
+  background(ctx, format, images.banner, colors);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 2;
-  for (let offset = -height; offset < width; offset += 92) {
+  if (images.logo) {
+    contain(ctx, images.logo, 490, l.top - 30, 100, 100);
+  } else {
+    // Small tournament insignia: three stars and a simple cup outline.
+    label(ctx, '★  ★  ★', 540, l.top - 8, 20, { color: colors.accent });
+    ctx.strokeStyle = WHITE;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(offset, 0);
-    ctx.lineTo(offset + height, height);
+    ctx.moveTo(518, l.top + 15);
+    ctx.lineTo(522, l.top + 40);
+    ctx.quadraticCurveTo(540, l.top + 62, 558, l.top + 40);
+    ctx.lineTo(562, l.top + 15);
+    ctx.closePath();
+    ctx.moveTo(540, l.top + 54); ctx.lineTo(540, l.top + 68);
+    ctx.moveTo(526, l.top + 68); ctx.lineTo(554, l.top + 68);
     ctx.stroke();
   }
-}
+  label(ctx, (competition?.name || 'Competencia deportiva').toUpperCase(), 540, l.top + 103, square ? 24 : 28, { width: 860, tracking: 2 });
 
-function drawHeader(ctx, competitionName, competitionLogo, theme) {
-  const gutter = 76;
-  const logoSize = 76;
-  if (competitionLogo) {
-    ctx.fillStyle = '#FFFFFF';
-    rounded(ctx, gutter, 64, logoSize, logoSize, 18);
-    ctx.fill();
-    drawImageContain(ctx, competitionLogo, gutter + 10, 74, logoSize - 20, logoSize - 20);
-  } else {
-    ctx.fillStyle = theme.primary;
-    rounded(ctx, gutter, 64, logoSize, logoSize, 18);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '900 25px Inter, Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SF', gutter + logoSize / 2, 64 + logoSize / 2 + 1);
-  }
+  const heading = result ? 'RESULTADO FINAL' : postponed ? 'PARTIDO APLAZADO' : 'DÍA DE PARTIDO';
+  label(ctx, heading, 540, l.title, square ? 40 : 57, { family: DISPLAY, color: colors.accent, width: 950 });
+  const phase = match.phase ? nombreFase(match.phase) : match.roundNumber ? `JORNADA ${match.roundNumber}` : '';
+  const metadata = [match.categoryName, phase].filter(Boolean).join('  /  ').toUpperCase();
+  label(ctx, result ? (match.status === 'walkover' ? 'RESOLUCIÓN POR WALKOVER' : 'TIEMPO COMPLETO') : metadata || 'PRÓXIMO ENCUENTRO', 540, l.title + (square ? 43 : 58), square ? 19 : 23, { tracking: 3 });
 
-  ctx.fillStyle = rgba('#FFFFFF', 0.72);
-  ctx.font = '700 22px Inter, Arial, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText('FIXTURE OFICIAL', gutter + logoSize + 20, 70);
-  drawText(ctx, competitionName || 'Competencia deportiva', {
-    x: gutter + logoSize + 20, y: 101, width: 650, font: '800 29px Inter, Arial, sans-serif',
-    color: '#FFFFFF', lineHeight: 34, maxLines: 1,
-  });
-  ctx.fillStyle = theme.secondary;
-  ctx.fillRect(gutter, 172, 118, 6);
-}
-
-function drawMatchup(ctx, format, match, logos, theme, compact, type) {
-  const { width } = format;
-  const cardX = 54;
-  const cardWidth = width - cardX * 2;
-  const cardTop = compact ? 282 : 366;
-  const cardHeight = compact ? 378 : 494;
-  const crestSize = compact ? 154 : 206;
-  const crestY = cardTop + (compact ? 86 : 118);
-  const homeX = compact ? 122 : 116;
-  const awayX = width - homeX - crestSize;
-  const center = width / 2;
-
+  const boardW = square ? 300 : format.value === 'portrait' ? 350 : 430;
+  const boardX = (1080 - boardW) / 2;
+  const middle = l.board + l.boardHeight / 2;
+  const bandH = square ? 194 : 248;
+  ctx.fillStyle = WHITE;
+  ctx.fillRect(60, middle - bandH / 2, 960, bandH);
+  const crestSize = square ? 142 : 174;
+  badge(ctx, images.home, teamName(match, 'home'), 182 - crestSize / 2, middle - crestSize / 2, crestSize, colors);
+  badge(ctx, images.away, teamName(match, 'away'), 898 - crestSize / 2, middle - crestSize / 2, crestSize, colors);
   ctx.save();
-  ctx.shadowColor = 'rgba(3, 9, 17, 0.20)';
-  ctx.shadowBlur = 44;
-  ctx.shadowOffsetY = 18;
-  ctx.fillStyle = '#FFFFFF';
-  rounded(ctx, cardX, cardTop, cardWidth, cardHeight, 34);
-  ctx.fill();
+  ctx.shadowColor = '#001E3055';
+  ctx.shadowBlur = 38;
+  ctx.shadowOffsetY = 16;
+  ctx.fillStyle = colors.secondary;
+  ctx.fillRect(boardX, l.board, boardW, l.boardHeight);
+  ctx.restore();
+  // Draw the score using actual glyph bounds, so it fills the block vertically.
+  let score = result ? `${match.homeTotal ?? '—'}-${match.awayTotal ?? '—'}` : 'VS';
+  if (result && match.status === 'walkover') score = 'W.O.';
+  ctx.save();
+  ctx.font = `800 ${l.boardHeight}px ${DISPLAY}`;
+  const metrics = ctx.measureText(score);
+  const glyphH = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+  const scale = Math.min((boardW - 54) / metrics.width, (l.boardHeight - 78) / glyphH);
+  ctx.translate(540, middle);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = colors.score;
+  ctx.textAlign = 'center';
+  ctx.fillText(score, 0, (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
   ctx.restore();
 
-  const isResult = type === 'result';
-  const badge = isResult ? 'RESULTADO FINAL' : match.status === 'postponed' ? 'PARTIDO APLAZADO' : 'PRÓXIMO PARTIDO';
-  ctx.fillStyle = isResult || match.status === 'postponed' ? '#9B2C2C' : theme.primary;
-  rounded(ctx, cardX + 28, cardTop + 26, 202, 43, 21);
-  ctx.fill();
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '800 19px Inter, Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(badge, cardX + 129, cardTop + 48);
-
-  drawText(ctx, matchLabel(match), {
-    x: center, y: cardTop + 92, width: 740, font: '700 22px Inter, Arial, sans-serif',
-    color: '#667085', align: 'center', lineHeight: 27, maxLines: 1,
-  });
-  crest(ctx, logos.home, teamName(match, 'home'), homeX, crestY, crestSize, theme);
-  crest(ctx, logos.away, teamName(match, 'away'), awayX, crestY, crestSize, theme);
-
-  ctx.fillStyle = INK;
-  ctx.font = `900 ${isResult ? (compact ? 58 : 72) : (compact ? 48 : 60)}px Inter, Arial, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(isResult ? `${match.homeTotal ?? 0} – ${match.awayTotal ?? 0}` : 'VS', center, crestY + crestSize / 2 + 1);
-  if (isResult && match.penaltyHomeScore != null) {
-    ctx.fillStyle = '#667085';
-    ctx.font = `700 ${compact ? 16 : 19}px Inter, Arial, sans-serif`;
-    ctx.fillText(`Penales ${match.penaltyHomeScore} – ${match.penaltyAwayScore}`, center, crestY + crestSize / 2 + (compact ? 42 : 50));
+  const namesY = l.board + l.boardHeight + 50;
+  label(ctx, teamName(match, 'home').toUpperCase(), 300, namesY, square ? 22 : 28, { family: DISPLAY, width: 425 });
+  label(ctx, teamName(match, 'away').toUpperCase(), 780, namesY, square ? 32 : 39, { family: DISPLAY, width: 425 });
+  if (result && match.penaltyHomeScore != null && match.penaltyAwayScore != null) {
+    label(ctx, `PENALES  ${match.penaltyHomeScore} – ${match.penaltyAwayScore}`, 540, namesY + 43, 22, { color: colors.accent });
   }
 
-  const nameY = crestY + crestSize + (compact ? 28 : 35);
-  drawText(ctx, teamName(match, 'home').toUpperCase(), {
-    x: homeX + crestSize / 2, y: nameY, width: compact ? 270 : 310,
-    font: `800 ${compact ? 24 : 29}px Inter, Arial, sans-serif`, color: INK, align: 'center', lineHeight: compact ? 30 : 35,
-  });
-  drawText(ctx, teamName(match, 'away').toUpperCase(), {
-    x: awayX + crestSize / 2, y: nameY, width: compact ? 270 : 310,
-    font: `800 ${compact ? 24 : 29}px Inter, Arial, sans-serif`, color: INK, align: 'center', lineHeight: compact ? 30 : 35,
-  });
-  return cardTop + cardHeight;
+  rule(ctx, 480, l.details - 37, 120, colors.accent);
+  const date = match.scheduledAt ? new Date(match.scheduledAt) : null;
+  const validDate = date && !Number.isNaN(date.getTime());
+  const dateText = validDate ? new Intl.DateTimeFormat('es-BO', { day: 'numeric', month: 'long' }).format(date).toUpperCase() : 'FECHA POR CONFIRMAR';
+  const time = validDate ? new Intl.DateTimeFormat('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date) : 'HORA POR CONFIRMAR';
+  label(ctx, postponed ? 'NUEVA FECHA POR CONFIRMAR' : result ? metadata || 'RESULTADO OFICIAL' : `${dateText}  ·  ${time}`, 540, l.details, square ? 26 : 32, { family: DISPLAY, width: 930, tracking: 1 });
+  const venue = [match.venueName, match.spaceName].filter(Boolean).join(' · ');
+  label(ctx, postponed ? 'Consultá la próxima programación' : venue || (result ? dateText : 'Sede por confirmar'), 540, l.details + 45, square ? 19 : 24, { width: 890, color: '#DBE9E4' });
+  rule(ctx, 60, l.footer - 30, 960);
+  label(ctx, 'SPORTFROG', 60, l.footer, 21, { align: 'left', tracking: 2 });
+  label(ctx, result ? 'EL JUEGO EN NÚMEROS.' : 'TODO EMPIEZA EN LA CANCHA.', 1020, l.footer, 16, { align: 'right', tracking: 1, color: '#CCDAD5' });
 }
 
-function drawDetails(ctx, format, match, top, theme, compact, type) {
-  const { width } = format;
-  const side = 78;
-  const contentTop = top + (compact ? 46 : 64);
-  const isResult = type === 'result';
-  const postponed = match.status === 'postponed';
-  const venue = postponed
-    ? 'Esperá la nueva programación oficial'
-    : [match.venueName, match.spaceName].filter(Boolean).join(' · ') || 'Sede por confirmar';
-  ctx.fillStyle = theme.primary;
-  ctx.font = '800 20px Inter, Arial, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText(isResult ? 'PARTIDO FINALIZADO' : 'CUÁNDO Y DÓNDE', side, contentTop);
-  drawText(ctx, postponed ? 'NUEVA FECHA POR CONFIRMAR' : dateLabel(match.scheduledAt), {
-    x: side, y: contentTop + 38, width: width - side * 2, font: `900 ${compact ? 38 : 46}px Inter, Arial, sans-serif`,
-    color: INK, lineHeight: compact ? 44 : 53, maxLines: 1,
-  });
-  ctx.fillStyle = '#56606D';
-  ctx.font = `700 ${compact ? 28 : 32}px Inter, Arial, sans-serif`;
-  ctx.fillText(postponed ? 'REPROGRAMACIÓN PENDIENTE' : isResult ? 'RESULTADO OFICIAL' : timeLabel(match.scheduledAt), side, contentTop + (compact ? 92 : 104));
-  ctx.strokeStyle = rgba(INK, 0.14);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(side, contentTop + (compact ? 145 : 161));
-  ctx.lineTo(width - side, contentTop + (compact ? 145 : 161));
-  ctx.stroke();
-  drawText(ctx, venue, {
-    x: side, y: contentTop + (compact ? 174 : 194), width: width - side * 2,
-    font: `700 ${compact ? 27 : 31}px Inter, Arial, sans-serif`, color: INK, lineHeight: compact ? 34 : 38, maxLines: 2,
-  });
-}
-
-function drawFooter(ctx, format, theme, type) {
-  const { width, height } = format;
-  const footerY = height - 120;
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, footerY, width, 120);
-  ctx.fillStyle = theme.primary;
-  ctx.fillRect(0, footerY, 14, 120);
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '700 22px Inter, Arial, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(type === 'result' ? 'RESULTADOS EN' : 'SEGUÍ EL TORNEO EN', 72, footerY + 60);
-  ctx.fillStyle = theme.secondary;
-  ctx.font = '900 28px Inter, Arial, sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText('SPORTFROG', width - 72, footerY + 60);
-}
-
-/** Creates a publication-ready fixture graphic. */
 export async function createFixtureFlyer(match, competition, formatValue = 'story', type = 'fixture') {
   const format = flyerFormat(formatValue);
+  const preview = competition?.publicPreview || {};
+  const [home, away, logo, banner] = await Promise.all([
+    loadImage(match.homeClubLogoUrl), loadImage(match.awayClubLogoUrl),
+    loadImage(preview.logoUrl),
+    loadImage(preview.bannerUrl),
+  ]);
   const canvas = document.createElement('canvas');
   canvas.width = format.width;
   canvas.height = format.height;
-  const ctx = canvas.getContext('2d');
-  const theme = branding(competition);
-  const [home, away, competitionLogo] = await Promise.all([
-    loadImage(match.homeClubLogoUrl),
-    loadImage(match.awayClubLogoUrl),
-    loadImage(theme.logoUrl),
-  ]);
-  const compact = format.value !== 'story';
-  drawBackdrop(ctx, format, theme);
-  drawHeader(ctx, competition?.name, competitionLogo, theme);
-  const matchupBottom = drawMatchup(ctx, format, match, { home, away }, theme, compact, type);
-  drawDetails(ctx, format, match, matchupBottom, theme, compact, type);
-  drawFooter(ctx, format, theme, type);
+  draw(canvas.getContext('2d'), format, match, competition, type, { home, away, logo, banner });
   return canvas;
 }
-
 export function downloadCanvas(canvas, name) {
   const link = document.createElement('a');
   link.download = name;
