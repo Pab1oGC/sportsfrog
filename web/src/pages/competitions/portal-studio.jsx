@@ -37,6 +37,7 @@ import { readPortalForm } from 'src/pages/competitions/portal-payload';
 import { seccionesVisibles, ordenTrasMover } from 'src/pages/competitions/portal-studio-sections';
 import { previewImg, fakeComp, formToPreviewPortal, defaultSectionLabel } from 'src/pages/competitions/portal-studio-preview';
 import { buildCompetitionUpdatePayload } from 'src/pages/competitions/portal-studio-save';
+import { LogoThemeAssistant } from 'src/pages/competitions/logo-theme-assistant';
 import { puntoFocalDesdeClic } from 'src/pages/competitions/focal-point';
 import { PortalHero } from 'src/pages/public/portal-hero';
 import { ContentFigureBackground } from 'src/pages/public/content-figure';
@@ -404,12 +405,13 @@ export default function PortalStudioPage() {
                 onChange={(x, y) => patchTheme({ focusX: x, focusY: y })}
               />
             )}
-            <ImagePicker label="Logo"
-              url={previewImg(form.logoKey, form.currentLogoUrl)}
-              onPick={async (file) => patch({ logoKey: await leerComoDataUrl(file) })}
+            <LogoThemeAssistant
+              logoUrl={previewImg(form.logoKey, form.currentLogoUrl)}
+              onLogoChange={(logoKey) => patch({ logoKey, currentLogoUrl: null })}
               onClear={() => patch({ logoKey: null, currentLogoUrl: null })}
-              ratio="1 / 1"
-              help="La marca de la competencia, al lado del nombre." />
+              onApplyTheme={patchTheme}
+              compact
+            />
             {/* Solo el logo -- ningún otro color o imagen del portal tiene
                 esta opción. Prendido por defecto (el mismo look de siempre);
                 se apaga para una marca que ya se ve bien sola, sin un

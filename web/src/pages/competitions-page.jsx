@@ -22,6 +22,7 @@ import { useApi, apiPut } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { downloadBlob } from 'src/lib/download-blob';
 import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
+import { LogoThemeAssistant } from 'src/pages/competitions/logo-theme-assistant';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { PageHeader } from 'src/components/page-header';
@@ -421,10 +422,9 @@ export default function CompetitionsPage() {
 
             <Divider />
 
-            {/* Colores, tipografia, portada, redes y auspiciantes se editan en
-                el estudio de portal, con vista previa en vivo. Solo tiene
-                sentido sobre una competencia ya creada -- de ahi que en el
-                alta se muestre el aviso y no el boton. */}
+            {/* En el alta sí conviene resolver la primera decisión de marca:
+                logo + una base visual coherente. El estudio queda para el
+                ajuste fino y para las piezas que necesitan vista previa. */}
             {editId ? (
               <Box>
                 <Button
@@ -439,9 +439,12 @@ export default function CompetitionsPage() {
                 </Typography>
               </Box>
             ) : (
-              <Typography variant="caption" color="text.secondary">
-                Guarda la competencia y despues personaliza su portal (colores, portada, redes) desde el estudio.
-              </Typography>
+              <LogoThemeAssistant
+                logoUrl={form.logoKey || ''}
+                onLogoChange={(logoKey) => setForm((current) => ({ ...current, logoKey, currentLogoUrl: null }))}
+                onClear={() => setForm((current) => ({ ...current, logoKey: null, currentLogoUrl: null }))}
+                onApplyTheme={(theme) => setForm((current) => ({ ...current, theme: { ...current.theme, ...theme } }))}
+              />
             )}
           </AccordionDetails>
         </Accordion>
