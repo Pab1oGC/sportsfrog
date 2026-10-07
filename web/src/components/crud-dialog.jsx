@@ -15,7 +15,13 @@ import CircularProgress from '@mui/material/CircularProgress';
  * useCrudDialog para "eliminado"/"eliminada", asi que un llamador que ya lo
  * calcula para el borrado no tiene que inventar un segundo valor aca.
  */
-export function CrudDialog({ open, editId, entityName, entityGender = 'm', error, saving, onClose, onSave, children, maxWidth = 'sm' }) {
+/**
+ * `disabled` bloquea Guardar sin que parezca que se esta guardando: no muestra
+ * el spinner, y deja Cancelar habilitado. Es para cuando el formulario todavia
+ * no puede guardarse por algo que la persona tiene que resolver -- por ejemplo
+ * una foto que fallo una regla critica en Deportistas.
+ */
+export function CrudDialog({ open, editId, entityName, entityGender = 'm', error, saving, disabled = false, onClose, onSave, children, maxWidth = 'sm' }) {
   // El "×" del Alert de abajo tiene que descartar solo el mensaje de error,
   // no el diálogo entero -- antes reusaba el mismo onClose del diálogo y de
   // paso perdía el formulario cargado. errorDescartado guarda el último
@@ -53,7 +59,7 @@ export function CrudDialog({ open, editId, entityName, entityGender = 'm', error
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Cancelar</Button>
-        <Button variant="contained" onClick={onSave} disabled={saving}>
+        <Button variant="contained" onClick={onSave} disabled={saving || disabled}>
           {saving ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
           Guardar
         </Button>

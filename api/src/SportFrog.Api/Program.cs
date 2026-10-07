@@ -169,6 +169,7 @@ builder.Services.AddScoped<OrganizationContext>();
 // megabyte no query ever filters on, and a column carries it into every
 // backup, every replica and every listing that reads the row.
 builder.Services.AddSportFrogStorage(builder.Configuration);
+builder.Services.AddSportFrogPhotoValidation(builder.Configuration);
 
 // Outgoing mail — a club told its fixture moved, today the only thing that
 // sends any. Optional on purpose: see SmtpOptions's remarks.
@@ -277,6 +278,7 @@ builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRulesRe
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRulesLookup>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Athletes.PhotoAssessor>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 builder.Services.AddScoped<SportFrog.Api.Features.Clubs.ClubPhoto>();
 builder.Services.AddScoped<SportFrog.Api.Infrastructure.Storage.PortalPicture>();
@@ -420,6 +422,7 @@ api.MapSchedulePerformance();
 api.MapRescheduleClassificationOrder();
 
 api.MapImportAthletePhotos();
+api.MapPreviewAthletePhoto();
 api.MapReadPhotoImports();
 
 api.MapAccreditationItems();

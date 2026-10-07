@@ -118,7 +118,7 @@ public static class CreateAthlete
         // before the row that points at it exists.
         var athleteId = Guid.NewGuid();
 
-        string? photoKey = null;
+        StoredAthletePhoto? photo = null;
 
         if (request.PhotoUrl is { Length: > 0 } upload)
         {
@@ -127,9 +127,9 @@ public static class CreateAthlete
             // in the bucket. Before the insert, so a row never points at
             // something that was never written — the reverse leaves a broken
             // reference, which is worse than a few unreferenced kilobytes.
-            photoKey = await photos.StoreAsync(athleteId, upload, cancellationToken);
+            photo = await photos.StoreAsync(athleteId, upload, cancellationToken);
 
-            if (photoKey is null)
+            if (photo is null)
             {
                 return AthletePhoto.NotAnImage();
             }
@@ -146,9 +146,11 @@ public static class CreateAthlete
             Gender = Sex.Normalize(request.Gender),
             GuardianName = request.GuardianName?.Trim(),
             GuardianPhone = request.GuardianPhone?.Trim(),
-            PhotoKey = photoKey,
+            PhotoKey = photo?.Key,
             WeightKg = request.WeightKg,
         };
+
+        (photo?.Assessment ?? PhotoAssessment.Unevaluated).ApplyTo(athlete);
 
         database.Athletes.Add(athlete);
         await database.SaveChangesAsync(cancellationToken);

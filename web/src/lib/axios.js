@@ -152,6 +152,7 @@ export const endpoints = {
   athletes: `${api}/athletes`,
   athlete: (id) => `${api}/athletes/${id}`,
   athletePhotos: `${api}/athletes/photos/imports`,
+  athletePhotoPreview: `${api}/athletes/photos/preview`,
 
   // Competitions
   competitions: `${api}/competitions`,

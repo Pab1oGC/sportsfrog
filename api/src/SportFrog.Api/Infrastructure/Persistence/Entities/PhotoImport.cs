@@ -36,6 +36,9 @@ public enum PhotoOutcome
     /// <summary>Two files name the same person, and this is the later one.</summary>
     Duplicate,
 
+    /// <summary>The photograph failed validation and was not kept. The athlete keeps the photograph they had.</summary>
+    Rejected,
+
     /// <summary>Not a file this accepts — the wrong extension, or empty.</summary>
     Ignored,
 }

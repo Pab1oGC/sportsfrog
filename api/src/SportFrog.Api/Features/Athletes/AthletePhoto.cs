@@ -1,3 +1,4 @@
+using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
@@ -19,11 +20,16 @@ namespace SportFrog.Api.Features.Athletes;
 /// organization's prefix, handed out only through a link that expires, and
 /// never reaches the public view (RNF-16).
 /// </remarks>
-public sealed class AthletePhoto(ObjectStore store, OrganizationContext organization, ILogger<AthletePhoto> logger)
+public sealed class AthletePhoto(
+    ObjectStore store,
+    OrganizationContext organization,
+    PhotoAssessor assessor,
+    ILogger<AthletePhoto> logger)
 {
     /// <summary>
-    /// Normalizes and stores an uploaded photograph, answering the key it was
-    /// stored under — or null if the payload was not an image after all.
+    /// Normalizes and stores an uploaded photograph, and validates it. Answers
+    /// the key it was stored under with the verdict — or null if the payload
+    /// was not an image after all.
     /// </summary>
     /// <remarks>
     /// The distinction matters: the validator has already checked that the
@@ -31,7 +37,7 @@ public sealed class AthletePhoto(ObjectStore store, OrganizationContext organiza
     /// claims made by whoever sent it. Nothing has decoded a single byte
     /// until here.
     /// </remarks>
-    public async Task<string?> StoreAsync(
+    public async Task<StoredAthletePhoto?> StoreAsync(
         Guid athleteId,
         string dataUrl,
         CancellationToken cancellationToken) =>
@@ -49,7 +55,7 @@ public sealed class AthletePhoto(ObjectStore store, OrganizationContext organiza
     /// was taken is removed, and a second way in that skipped it would
     /// publish four hundred children's locations rather than one.
     /// </remarks>
-    public async Task<string?> StoreAsync(
+    public async Task<StoredAthletePhoto?> StoreAsync(
         Guid athleteId,
         byte[] uploaded,
         CancellationToken cancellationToken)
@@ -59,13 +65,25 @@ public sealed class AthletePhoto(ObjectStore store, OrganizationContext organiza
             return null;
         }
 
+        // Judged before anything is written, on the normalized bytes: those are
+        // the picture that gets printed. A rejected photograph is never kept:
+        // nothing reaches the bucket and the caller gets no key. A photograph
+        // the validator could not judge is kept as not evaluated.
+        var assessment = await assessor.AssessAsync(photo.Content, cancellationToken);
+
+        if (assessment.State == PhotoValidationState.Rejected)
+        {
+            return new StoredAthletePhoto(Key: null, PhotoAssessment.Unevaluated);
+        }
+
         var organizationId = organization.RequireOrganizationId();
         var key = StorageKeys.AthletePhoto(organizationId, athleteId, photo.Extension);
 
         await store.PutAsync(key, photo.Content, photo.ContentType, cancellationToken);
 
-        return key;
+        return new StoredAthletePhoto(key, assessment);
     }
+
 
     /// <summary>
     /// A link the browser can load, for a stored photograph.

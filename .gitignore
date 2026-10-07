@@ -27,3 +27,9 @@ graphify-out/
 web/coverage/
 web/playwright-report/
 web/test-results/
+
+# Validador de fotos (validador/): artefactos de Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/

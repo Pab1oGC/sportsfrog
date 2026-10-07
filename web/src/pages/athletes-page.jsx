@@ -1,5 +1,5 @@
 import Box from '@mui/material/Box';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -27,6 +27,64 @@ import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from 'src/lib/inline-photo'
 import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 import { withQueryParams } from 'src/lib/query-string';
 import { edad } from 'src/lib/age';
+import { evaluarFoto, detalleDeFoto } from 'src/lib/photo-validation';
+import { PhotoValidationChip } from 'src/components/photo-validation-chip';
+
+/**
+ * Lo que se muestra mientras se decide la foto elegida en el formulario.
+ * Vive fuera de la pagina para que React no lo trate como un componente nuevo
+ * en cada tecla (ver EstadoChip).
+ *
+ * Dos niveles, los mismos que decide el validador: un fallo critico bloquea el
+ * guardado y hay que elegir otra foto o quitarla; un defecto no critico solo
+ * avisa, y la foto se guarda bajo la responsabilidad de quien la sube.
+ */
+function AvisoFotoElegida({ eleccion }) {
+  if (eleccion.cargando) {
+    return <Typography variant="caption" color="text.secondary">Validando la foto...</Typography>;
+  }
+
+  if (eleccion.error) {
+    return (
+      <Alert severity="info">
+        {eleccion.error} Igual podés guardar: la foto quedará sin evaluar.
+      </Alert>
+    );
+  }
+
+  const { veredicto } = eleccion;
+  const { motivos, advertencias } = detalleDeFoto(veredicto);
+
+  if (veredicto.state === 'rejected') {
+    return (
+      <Alert severity="error">
+        <Box component="span" sx={{ display: 'block' }}>Esta foto no se puede usar:</Box>
+        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+          {motivos.map((texto, i) => <li key={`motivo-${i}`}>{texto}</li>)}
+        </Box>
+        <Box component="span" sx={{ display: 'block' }}>
+          Elegí otra foto, o quitala, para poder guardar.
+        </Box>
+      </Alert>
+    );
+  }
+
+  if (advertencias.length > 0) {
+    return (
+      <Alert severity="warning" action={<PhotoValidationChip validation={veredicto} />}>
+        <Box component="span" sx={{ display: 'block' }}>Esta foto se puede usar, pero:</Box>
+        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+          {advertencias.map((texto, i) => <li key={`advertencia-${i}`}>{texto}</li>)}
+        </Box>
+        <Box component="span" sx={{ display: 'block' }}>
+          Si la guardás, queda bajo tu responsabilidad.
+        </Box>
+      </Alert>
+    );
+  }
+
+  return <PhotoValidationChip validation={veredicto} />;
+}
 
 // La misma regla que el servidor (CreateAthlete / UpdateAthlete): nadie nace
 // hoy ni despues, ni antes de 1900. Como fecha "AAAA-MM-DD", que se compara
@@ -114,7 +172,7 @@ export default function AthletesPage() {
   }, [search, genderFilter, ageQuery, weightQuery]);
 
   const {
-    rows: data, rowCount, isLoading, mutate, open, editId, form, setForm, error, setError, openCreate, openEdit, close, save, remove,
+    rows: data, rowCount, isLoading, mutate, open, editId, form, setForm, error, setError, openCreate, openEdit, close, save, remove, saving,
   } = useCrudDialog({
     resourceUrl: athletesUrl,
     pageParams: { skip: paginationModel.page * paginationModel.pageSize, take: paginationModel.pageSize },
@@ -161,8 +219,37 @@ export default function AthletesPage() {
   // foto nueva -- ver el comentario de mapToSend arriba.
   const [photoPreview, setPhotoPreview] = useState(null);
 
-  const openCreateForm = () => { setPhotoPreview(null); openCreate(); };
-  const openEditForm = (row) => { setPhotoPreview(row.photoUrl || null); openEdit(row); };
+  // Veredicto de la foto elegida en el formulario, antes de guardarla. Forma:
+  // { cargando: true } mientras se evalua, { veredicto } al terminar, o
+  // { error } si la API no respondio. Null si no se eligio ninguna.
+  const [fotoElegida, setFotoElegida] = useState(null);
+  // Veredicto ya guardado del deportista que se edita, para mostrarlo
+  // mientras no se elija una foto nueva.
+  const [fotoGuardada, setFotoGuardada] = useState(null);
+  // Cada eleccion lleva su numero: si la persona elige otra foto antes de que
+  // responda la anterior, esa respuesta vieja se descarta.
+  const eleccionRef = useRef(0);
+
+  const openCreateForm = () => {
+    setPhotoPreview(null); setFotoElegida(null); setFotoGuardada(null); openCreate();
+  };
+  const openEditForm = (row) => {
+    setPhotoPreview(row.photoUrl || null); setFotoElegida(null);
+    setFotoGuardada(row.photoValidation ?? null); openEdit(row);
+  };
+
+  // La foto rechazada se deja a la vista: no se vuelve sola a la anterior,
+  // porque guardar queda bloqueado hasta que la persona elija otra o la quite.
+  const evaluarEleccion = async (archivo) => {
+    const eleccion = ++eleccionRef.current;
+    setFotoElegida({ cargando: true });
+    try {
+      const veredicto = await evaluarFoto(archivo);
+      if (eleccion === eleccionRef.current) setFotoElegida({ veredicto });
+    } catch (err) {
+      if (eleccion === eleccionRef.current) setFotoElegida({ error: err.message });
+    }
+  };
 
   const onPickAthletePhoto = async (e) => {
     const file = e.target.files[0];
@@ -172,14 +259,19 @@ export default function AthletesPage() {
       const dataUrl = await readInlinePhoto(file);
       setForm({ ...form, photoUrl: dataUrl });
       setPhotoPreview(dataUrl);
+      setFotoGuardada(null);
+      evaluarEleccion(file);
     } catch (err) {
       toast.error(err.message);
     }
   };
 
   const removeAthletePhoto = () => {
+    eleccionRef.current++; // descarta cualquier evaluacion que siga en vuelo
     setForm({ ...form, photoUrl: '' });
     setPhotoPreview(null);
+    setFotoElegida(null);
+    setFotoGuardada(null);
   };
 
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -237,7 +329,14 @@ export default function AthletesPage() {
   // rechazaria igual, solo que despues de un viaje de ida y vuelta.
   const nacimientoInvalido = Boolean(form.birthDate)
     && (form.birthDate > ayer() || form.birthDate < NACIMIENTO_MAS_ANTIGUO);
+  // Dos situaciones impiden guardar. Mientras se valida, porque el veredicto
+  // todavia no existe. Y con una foto rechazada, porque fallo algo critico:
+  // hay que elegir otra o quitarla, no guardar y seguir.
+  const evaluandoFoto = fotoElegida?.cargando === true;
+  const fotoRechazada = fotoElegida?.veredicto?.state === 'rejected';
+  const fotoBloquea = evaluandoFoto || fotoRechazada;
   const guardar = () => {
+    if (fotoBloquea) return;
     if (nacimientoInvalido) { setError(MENSAJE_NACIMIENTO); return; }
     save();
   };
@@ -253,6 +352,9 @@ export default function AthletesPage() {
     { field: 'gender', headerName: 'Genero', width: 100, renderCell: ({ value }) => value === 'M' ? 'Masculino' : value === 'F' ? 'Femenino' : '--' },
     { field: 'weightKg', headerName: 'Peso (kg)', width: 90, renderCell: ({ value }) => value ?? '--' },
     { field: 'guardianName', headerName: 'Apoderado', width: 150, renderCell: ({ value }) => value || '--' },
+    { field: 'photoValidation', headerName: 'Foto', width: 120, sortable: false, renderCell: ({ value }) => (
+      <PhotoValidationChip validation={value} />
+    )},
     { field: 'isActive', headerName: 'Estado', width: 110, sortable: false, renderCell: ({ value, row }) => (
       <EstadoChip activo={value} onClick={(e) => toggleAthleteActive(row, e)} />
     )},
@@ -349,7 +451,7 @@ export default function AthletesPage() {
         pageSizeOptions={[25, 50, 100]}
       />
 
-      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={guardar}>
+      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} saving={saving} disabled={fotoBloquea} onClose={close} onSave={guardar}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar src={photoPreview || undefined} sx={{ width: 64, height: 64 }}>
             <Iconify icon="eva:person-fill" width={32} />
@@ -363,6 +465,8 @@ export default function AthletesPage() {
             <Typography variant="caption" color="text.secondary">{INLINE_PHOTO_REQUIREMENT}</Typography>
           </Box>
         </Box>
+        {fotoElegida && <AvisoFotoElegida eleccion={fotoElegida} />}
+        {!fotoElegida && fotoGuardada && photoPreview && <PhotoValidationChip validation={fotoGuardada} />}
         <TextField label="Nombres" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
         <TextField label="Apellidos" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
         <TextField label="Documento" value={form.documentId} onChange={(e) => setForm({ ...form, documentId: e.target.value })} fullWidth />
