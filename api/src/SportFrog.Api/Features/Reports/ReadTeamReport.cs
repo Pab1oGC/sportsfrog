@@ -2,6 +2,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Domain.Performances;
 
 namespace SportFrog.Api.Features.Reports;
@@ -44,11 +45,20 @@ public static class ReadTeamReport
     {
         routes.MapGet("/teams/{teamId:guid}/report", HandleJsonAsync)
             .RequireRole(MembershipRole.Viewer)
+            // Either axis reaches it: that event's own administrator and
+            // that club's own delegate both have a legitimate reason to
+            // read a team's report.
+            .RequireScope(
+                new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Team, "teamId"),
+                new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .WithName(nameof(ReadTeamReport))
             .WithSummary("Reads a team's report: its record, fixtures and own leaders.");
 
         routes.MapGet("/teams/{teamId:guid}/report.pdf", HandlePdfAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(
+                new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Team, "teamId"),
+                new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .WithName(nameof(ReadTeamReport) + "Pdf")
             .WithSummary("Renders a team's report as a PDF.");
 

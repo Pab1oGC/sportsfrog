@@ -3,6 +3,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Competitions;
@@ -57,6 +58,12 @@ public static class ReadCompetitions
 
     public static IEndpointRouteBuilder MapReadCompetitions(this IEndpointRouteBuilder routes)
     {
+        // Unscoped on purpose: this lists every competition of the
+        // organization, and RequireScope answers "may the caller reach this
+        // one target", not "which rows should a list return". A scoped
+        // membership sees the full list here today; what it can actually
+        // open is still gated one competition at a time below and by every
+        // endpoint reading that id.
         routes.MapGet("/competitions", ListAsync)
             .RequireRole(MembershipRole.Viewer)
             .WithName(nameof(ReadCompetitions))
@@ -64,6 +71,7 @@ public static class ReadCompetitions
 
         routes.MapGet("/competitions/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "id"))
             .WithName("ReadCompetition")
             .WithSummary("Reads one competition.");
 

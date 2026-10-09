@@ -2,6 +2,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Competitions.Bulletin;
 
@@ -22,11 +23,13 @@ public static class ReadCompetitionBulletin
     {
         routes.MapGet("/competitions/{competitionId:guid}/bulletin.pdf", HandlePdfAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(ReadCompetitionBulletin) + "Pdf")
             .WithSummary("Renders a competition's bulletin as a PDF.");
 
         routes.MapGet("/competitions/{competitionId:guid}/bulletin.docx", HandleWordAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(ReadCompetitionBulletin) + "Word")
             .WithSummary("Renders a competition's bulletin as an editable Word document.");
 

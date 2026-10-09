@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Competitions;
 
@@ -24,6 +25,7 @@ public static class DeleteCompetition
     {
         routes.MapDelete("/competitions/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Admin)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "id"))
             .WithName(nameof(DeleteCompetition))
             .WithSummary("Withdraws a competition that was never played.");
 

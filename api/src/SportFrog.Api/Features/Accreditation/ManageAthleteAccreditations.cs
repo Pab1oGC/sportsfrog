@@ -87,21 +87,25 @@ public static class ManageAthleteAccreditations
 
         routes.MapGet(Base, ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("ReadAthleteAccreditations")
             .WithSummary("Lists the competition's roster with each person's accreditation status.");
 
         routes.MapGet($"{Base}/{{athleteId:guid}}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("ReadAthleteAccreditation")
             .WithSummary("Reads one person's accreditation category and what it resolves to.");
 
         routes.MapPut($"{Base}/{{athleteId:guid}}", UpsertAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("AssignAthleteAccreditation")
             .WithSummary("Assigns or changes a person's accreditation category.");
 
         routes.MapDelete($"{Base}/{{athleteId:guid}}", DeleteAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("DeleteAthleteAccreditation")
             .WithSummary("Removes a person's accreditation, exceptions included.");
 
@@ -109,6 +113,7 @@ public static class ManageAthleteAccreditations
                 "/competitions/{competitionId:guid}/accreditation/categories/{categoryId:guid}/athletes",
                 AssignCategoryBulk)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("AssignAccreditationCategoryBulk")
             .WithSummary("Assigns one accreditation category to several people at once.");
 

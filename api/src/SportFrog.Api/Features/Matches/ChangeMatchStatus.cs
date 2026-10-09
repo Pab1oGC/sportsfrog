@@ -4,6 +4,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Matches;
@@ -37,6 +38,7 @@ public static class ChangeMatchStatus
             // Postponing and calling a match off reshape the calendar, which
             // is the operator's work rather than the recorder's.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName(nameof(ChangeMatchStatus))
             .WithSummary("Starts, postpones, cancels or reschedules a match.");
 

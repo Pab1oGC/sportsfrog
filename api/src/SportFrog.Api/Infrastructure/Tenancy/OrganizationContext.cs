@@ -13,6 +13,14 @@ namespace SportFrog.Api.Infrastructure.Tenancy;
 /// </summary>
 public sealed class OrganizationContext
 {
+    /// <summary>
+    /// Tracks whether <see cref="EstablishScopes"/> ran, separately from
+    /// whether it found anything: a membership with no scope rows is a real,
+    /// final answer — organization-wide — and must not look like "not read
+    /// yet" just because its sets came back empty.
+    /// </summary>
+    private bool _scopesEstablished;
+
     public Guid? OrganizationId { get; private set; }
 
     /// <summary>
@@ -26,6 +34,33 @@ public sealed class OrganizationContext
     public System.Net.IPAddress? IpAddress { get; private set; }
 
     public MembershipRole? Role { get; private set; }
+
+    /// <summary>
+    /// The competitions the caller's role is narrowed to. Empty — the
+    /// ordinary case — means it is not narrowed by competition at all.
+    /// </summary>
+    /// <remarks>
+    /// Set by <see cref="EstablishScopes"/>, separately from
+    /// <see cref="Establish"/>: scopes are read from a table under row-level
+    /// security and so can only be resolved once the transaction's isolation
+    /// context is set, which happens after <see cref="Establish"/> runs (see
+    /// <see cref="MembershipScopeReader"/>'s remarks). Empty until then.
+    /// </remarks>
+    public IReadOnlySet<Guid> ScopedCompetitionIds { get; private set; } = new HashSet<Guid>();
+
+    /// <summary>
+    /// The clubs the caller's role is narrowed to. Empty — the ordinary
+    /// case — means it is not narrowed by club at all.
+    /// </summary>
+    public IReadOnlySet<Guid> ScopedClubIds { get; private set; } = new HashSet<Guid>();
+
+    /// <summary>
+    /// Whether the caller's role reaches everywhere in the organization
+    /// rather than being narrowed to specific competitions or clubs. True
+    /// for every membership today, and for any membership that has never
+    /// had a scope granted.
+    /// </summary>
+    public bool IsOrganizationWide => ScopedCompetitionIds.Count == 0 && ScopedClubIds.Count == 0;
 
     /// <summary>
     /// False on the paths that legitimately run without one — signing in,
@@ -70,5 +105,35 @@ public sealed class OrganizationContext
         Role = role;
         UserId = userId;
         IpAddress = ipAddress;
+    }
+
+    /// <summary>
+    /// Set once, by the entry channel, after the transaction's isolation
+    /// context already lets <see cref="MembershipScopeReader"/> read the
+    /// real answer. Internal for the same reason as <see cref="Establish"/>:
+    /// a feature narrowing or widening its own reach mid-request would be
+    /// deciding its own authority rather than having it decided for it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Called before <see cref="Establish"/>, or more than once for this
+    /// request.
+    /// </exception>
+    internal void EstablishScopes(MembershipScopeSet scopes)
+    {
+        if (!IsEstablished)
+        {
+            throw new InvalidOperationException(
+                "Scopes cannot be established before the organization context itself.");
+        }
+
+        if (_scopesEstablished)
+        {
+            throw new InvalidOperationException(
+                "Scopes are already established for this request.");
+        }
+
+        ScopedCompetitionIds = scopes.CompetitionIds;
+        ScopedClubIds = scopes.ClubIds;
+        _scopesEstablished = true;
     }
 }

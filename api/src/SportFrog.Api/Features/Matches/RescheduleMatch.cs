@@ -61,6 +61,7 @@ public static class RescheduleMatch
     {
         routes.MapPut("/matches/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName(nameof(RescheduleMatch))
             .WithSummary("Moves a fixture.");
 

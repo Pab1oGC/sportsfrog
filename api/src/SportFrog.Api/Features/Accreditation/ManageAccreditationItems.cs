@@ -96,21 +96,25 @@ public static class ManageAccreditationItems
 
         routes.MapGet(Base, ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("ReadAccreditationItems")
             .WithSummary("Lists what a competition's credentials can carry.");
 
         routes.MapPost(Base, CreateAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("CreateAccreditationItem")
             .WithSummary("Adds a discipline, venue, service or access zone to a competition.");
 
         routes.MapPut($"{Base}/{{id:guid}}", UpdateAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("UpdateAccreditationItem")
             .WithSummary("Corrects one entry of a competition's accreditation catalogue.");
 
         routes.MapDelete($"{Base}/{{id:guid}}", DeleteAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("DeleteAccreditationItem")
             .WithSummary("Removes an entry nothing grants.");
 

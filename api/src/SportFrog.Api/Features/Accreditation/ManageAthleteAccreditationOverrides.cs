@@ -45,6 +45,7 @@ public static class ManageAthleteAccreditationOverrides
                 "/competitions/{competitionId:guid}/accreditation/athletes/{athleteId:guid}/overrides",
                 SetAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("SetAthleteAccreditationOverrides")
             .WithSummary("Replaces what one person has beyond, or short of, their category's package.");
 

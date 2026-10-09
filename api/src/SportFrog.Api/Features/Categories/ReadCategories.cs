@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Categories;
 
@@ -31,11 +32,13 @@ public static class ReadCategories
     {
         routes.MapGet("/competitions/{competitionId:guid}/categories", ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(ReadCategories))
             .WithSummary("Lists the categories of a competition.");
 
         routes.MapGet("/competitions/{competitionId:guid}/categories/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("ReadCategory")
             .WithSummary("Reads one category.");
 

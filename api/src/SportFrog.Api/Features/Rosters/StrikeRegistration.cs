@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Rosters;
 
@@ -28,6 +29,7 @@ public static class StrikeRegistration
     {
         routes.MapDelete("/roster/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.RosterEntry, "id"))
             .WithName(nameof(StrikeRegistration))
             .WithSummary("Strikes a registration that was entered by mistake.");
 

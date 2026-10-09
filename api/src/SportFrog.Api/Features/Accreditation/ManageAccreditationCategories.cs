@@ -95,26 +95,31 @@ public static class ManageAccreditationCategories
 
         routes.MapGet(Base, ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("ReadAccreditationCategories")
             .WithSummary("Lists a competition's accreditation categories and what each one grants.");
 
         routes.MapPost(Base, CreateAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("CreateAccreditationCategory")
             .WithSummary("Adds an accreditation category to a competition.");
 
         routes.MapPut($"{Base}/{{id:guid}}", UpdateAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("UpdateAccreditationCategory")
             .WithSummary("Corrects an accreditation category.");
 
         routes.MapPut($"{Base}/{{id:guid}}/items", SetPackageAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("SetAccreditationCategoryItems")
             .WithSummary("Replaces what an accreditation category grants.");
 
         routes.MapDelete($"{Base}/{{id:guid}}", DeleteAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("DeleteAccreditationCategory")
             .WithSummary("Removes a category nobody is accredited under.");
 

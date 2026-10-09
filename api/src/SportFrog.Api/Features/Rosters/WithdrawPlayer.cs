@@ -3,6 +3,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Rosters;
 
@@ -28,6 +29,7 @@ public static class WithdrawPlayer
     {
         routes.MapPut("/roster/{id:guid}/withdrawal", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.RosterEntry, "id"))
             .WithName(nameof(WithdrawPlayer))
             .WithSummary("Withdraws a player from a squad, or reinstates them.");
 

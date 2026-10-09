@@ -43,6 +43,7 @@ public static class RecordPenalties
     {
         routes.MapPut("/matches/{id:guid}/penalties", HandleAsync)
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName(nameof(RecordPenalties))
             .WithSummary("Records the shootout that broke a level knockout match.");
 

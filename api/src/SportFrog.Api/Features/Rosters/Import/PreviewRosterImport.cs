@@ -1,6 +1,7 @@
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Rosters.Import;
 
@@ -48,6 +49,7 @@ public static class PreviewRosterImport
     {
         routes.MapPost("/teams/{teamId:guid}/roster/import/preview", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
 
             // The caller is a bearer token, not a cookie, so there is no
             // session for another site to ride on and nothing for an

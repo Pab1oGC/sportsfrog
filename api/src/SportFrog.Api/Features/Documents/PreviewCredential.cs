@@ -42,6 +42,7 @@ public static class PreviewCredential
                 "/competitions/{competitionId:guid}/accreditation/athletes/{athleteId:guid}/preview.png",
                 HandleAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName("PreviewCredential")
             .WithSummary("Renders what this person's credential would look like right now.");
 

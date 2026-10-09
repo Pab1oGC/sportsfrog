@@ -80,6 +80,7 @@ public static class EnrollIndividual
             // Same actor as entering a club: this is running the
             // competition, not configuring it.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(EnrollIndividual))
             .WithSummary("Enters an individual, pair or team into a category of an individual sport.");
 

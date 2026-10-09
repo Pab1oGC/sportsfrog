@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.MatchEvents;
 
@@ -42,6 +43,7 @@ public static class CorrectEvent
     {
         routes.MapPut("/events/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.PlayerEvent, "id"))
             .WithName(nameof(CorrectEvent))
             .WithSummary("Corrects the minute or quantity of an event.");
 

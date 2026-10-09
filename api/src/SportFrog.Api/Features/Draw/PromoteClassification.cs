@@ -48,6 +48,7 @@ public static class PromoteClassification
         routes.MapPost("/categories/{categoryId:guid}/performances/promote", HandleAsync)
             // Same operator's work as drawing the calendar in the first place.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(PromoteClassification))
             .WithSummary("Draws the knockout stage from a finished classification stage.");
 

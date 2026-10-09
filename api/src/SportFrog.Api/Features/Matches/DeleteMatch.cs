@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Matches;
 
@@ -23,6 +24,7 @@ public static class DeleteMatch
     {
         routes.MapDelete("/matches/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName(nameof(DeleteMatch))
             .WithSummary("Removes a fixture that was drawn by mistake.");
 

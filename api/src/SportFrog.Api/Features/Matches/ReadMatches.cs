@@ -3,6 +3,7 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Matches;
@@ -75,26 +76,31 @@ public static class ReadMatches
     {
         routes.MapGet("/competitions/{competitionId:guid}/matches", ListForCompetitionAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(ReadMatches))
             .WithSummary("Reads the calendar of a competition.");
 
         routes.MapGet("/categories/{categoryId:guid}/matches", ListForCategoryAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName("ReadCategoryMatches")
             .WithSummary("Reads the calendar of a category.");
 
         routes.MapGet("/matches/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName("ReadMatch")
             .WithSummary("Reads one fixture.");
 
         routes.MapGet("/competitions/{competitionId:guid}/fixture.pdf", HandleCompetitionPdfAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(ReadMatches) + "CompetitionPdf")
             .WithSummary("Renders a competition's calendar as a PDF.");
 
         routes.MapGet("/categories/{categoryId:guid}/fixture.pdf", HandleCategoryPdfAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(ReadMatches) + "CategoryPdf")
             .WithSummary("Renders a category's calendar as a PDF.");
 

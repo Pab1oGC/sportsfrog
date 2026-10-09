@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Performances;
 
@@ -36,6 +37,7 @@ public static class ReadPerformances
     {
         routes.MapGet("/categories/{categoryId:guid}/performances", HandleAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(ReadPerformances))
             .WithSummary("Reads a category's classification stage, ranked by judged score.");
 

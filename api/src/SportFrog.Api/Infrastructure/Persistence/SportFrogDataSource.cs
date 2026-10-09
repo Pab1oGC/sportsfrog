@@ -33,6 +33,7 @@ public static class SportFrogDataSource
         builder.MapEnum<PerformanceStatus>("performance_status");
         builder.MapEnum<AccreditationItemKind>("accreditation_item_kind");
         builder.MapEnum<PhotoValidationState>("photo_validation_state");
+        builder.MapEnum<ScopeType>("membership_scope_type");
 
         return builder.Build();
     }
@@ -54,5 +55,6 @@ public static class SportFrogDataSource
         builder.MapEnum<PerformanceStatus>("performance_status");
         builder.MapEnum<AccreditationItemKind>("accreditation_item_kind");
         builder.MapEnum<PhotoValidationState>("photo_validation_state");
+        builder.MapEnum<ScopeType>("membership_scope_type");
     }
 }

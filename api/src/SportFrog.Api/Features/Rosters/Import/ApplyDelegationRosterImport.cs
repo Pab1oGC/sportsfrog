@@ -52,6 +52,7 @@ public static class ApplyDelegationRosterImport
                 "/competitions/{competitionId:guid}/clubs/{clubId:guid}/individuals/import",
                 HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Club, "clubId"))
             .DisableAntiforgery()
             .WithName(nameof(ApplyDelegationRosterImport))
             .WithSummary("Registers the delegation's athletes a filled-in spreadsheet describes.");

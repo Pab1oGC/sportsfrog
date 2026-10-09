@@ -33,6 +33,7 @@ public static class OpenClassificationStage
             // Same actor as drawing a calendar: this is running the
             // competition, not configuring it.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(OpenClassificationStage))
             .WithSummary("Opens a category's classification stage, one slot per team still competing.");
 

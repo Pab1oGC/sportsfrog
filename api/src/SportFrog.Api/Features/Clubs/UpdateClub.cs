@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 using SportFrog.Domain.ValueObjects;
 
@@ -50,6 +51,7 @@ public static class UpdateClub
     {
         routes.MapPut("/clubs/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Club, "id"))
             .WithName(nameof(UpdateClub))
             .WithSummary("Edits a club.");
 

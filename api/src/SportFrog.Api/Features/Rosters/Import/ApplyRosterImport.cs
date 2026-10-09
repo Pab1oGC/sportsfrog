@@ -55,6 +55,7 @@ public static class ApplyRosterImport
     {
         routes.MapPost("/teams/{teamId:guid}/roster/import", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .DisableAntiforgery()
             .WithName(nameof(ApplyRosterImport))
             .WithSummary("Registers the squad a filled-in spreadsheet describes.");

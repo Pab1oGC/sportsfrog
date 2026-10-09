@@ -30,6 +30,7 @@ public static class BuildRosterTemplate
     {
         routes.MapGet("/teams/{teamId:guid}/roster/import/template", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .WithName(nameof(BuildRosterTemplate))
             .WithSummary("Builds the squad spreadsheet for a team, carrying its category's rules.");
 

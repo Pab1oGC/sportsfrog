@@ -36,6 +36,7 @@ public sealed class OrganizationContextMiddleware(
         HttpContext context,
         SportFrogDbContext database,
         OrganizationContext organizationContext,
+        MembershipScopeReader scopeReader,
         Serilog.IDiagnosticContext diagnosticContext)
     {
         var endpoint = context.GetEndpoint();
@@ -132,7 +133,8 @@ public sealed class OrganizationContextMiddleware(
             ["Role"] = role.Value,
         });
 
-        await RunInOrganizationTransactionAsync(context, database, organizationId);
+        await RunInOrganizationTransactionAsync(
+            context, database, organizationContext, scopeReader, organizationId, userId);
     }
 
     /// <summary>
@@ -148,7 +150,10 @@ public sealed class OrganizationContextMiddleware(
     private async Task RunInOrganizationTransactionAsync(
         HttpContext context,
         SportFrogDbContext database,
-        Guid organizationId)
+        OrganizationContext organizationContext,
+        MembershipScopeReader scopeReader,
+        Guid organizationId,
+        Guid userId)
     {
         await using var transaction = await database.Database.BeginTransactionAsync(
             context.RequestAborted);
@@ -159,6 +164,13 @@ public sealed class OrganizationContextMiddleware(
             "SELECT set_config('app.current_org', {0}, true)",
             [organizationId.ToString()],
             context.RequestAborted);
+
+        // Only now, with the isolation context set for this transaction, can
+        // membership_scopes and organization_memberships be read correctly —
+        // see MembershipScopeReader's own remarks on why this cannot move
+        // earlier, next to Establish().
+        var scopes = await scopeReader.ReadAsync(userId, context.RequestAborted);
+        organizationContext.EstablishScopes(scopes);
 
         try
         {

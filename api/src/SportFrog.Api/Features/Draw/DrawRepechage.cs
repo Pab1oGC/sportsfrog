@@ -41,6 +41,7 @@ public static class DrawRepechage
     {
         routes.MapPost("/categories/{categoryId:guid}/draw/repechage", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(DrawRepechage))
             .WithSummary("Draws kyorugi's repechage once the final's two competitors are known.");
 

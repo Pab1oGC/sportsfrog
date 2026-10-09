@@ -164,6 +164,8 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<OrganizationContext>();
+builder.Services.AddScoped<MembershipScopeReader>();
+builder.Services.AddScoped<ScopeResolver>();
 
 // Files live in object storage rather than in a column: a photograph is a
 // megabyte no query ever filters on, and a column carries it into every

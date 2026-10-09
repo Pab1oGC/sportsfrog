@@ -120,6 +120,7 @@ public static class ScheduleCalendar
     {
         routes.MapPost("/competitions/{competitionId:guid}/schedule", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(ScheduleCalendar))
             .WithSummary("Places the next jornada's undated fixtures on the calendar.");
 

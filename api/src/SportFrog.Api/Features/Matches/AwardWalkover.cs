@@ -44,6 +44,7 @@ public static class AwardWalkover
         routes.MapPut("/matches/{id:guid}/walkover", HandleAsync)
             // Awarding a match nobody played is a ruling, not a recording.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName(nameof(AwardWalkover))
             .WithSummary("Awards a match to the team that appeared.");
 

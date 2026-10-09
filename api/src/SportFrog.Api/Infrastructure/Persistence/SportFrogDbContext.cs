@@ -20,6 +20,13 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<OrganizationMembership> Memberships => Set<OrganizationMembership>();
 
+    /// <summary>
+    /// Narrows some memberships' roles to specific competitions or clubs.
+    /// Most memberships have no rows here and are unaffected — see
+    /// <see cref="MembershipScope"/>.
+    /// </summary>
+    public DbSet<MembershipScope> MembershipScopes => Set<MembershipScope>();
+
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<Club> Clubs => Set<Club>();
@@ -96,6 +103,7 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
         modelBuilder.HasPostgresEnum<DocumentState>("public", "document_state");
         modelBuilder.HasPostgresEnum<DocumentBatchState>("public", "document_batch_state");
         modelBuilder.HasPostgresEnum<PerformanceStatus>("public", "performance_status");
+        modelBuilder.HasPostgresEnum<ScopeType>("public", "membership_scope_type");
 
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }

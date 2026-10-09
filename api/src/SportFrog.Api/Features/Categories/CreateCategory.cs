@@ -26,6 +26,7 @@ public static class CreateCategory
     {
         routes.MapPost("/competitions/{competitionId:guid}/categories", HandleAsync)
             .RequireRole(MembershipRole.Admin)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(CreateCategory))
             .WithSummary("Adds a category to a competition.");
 

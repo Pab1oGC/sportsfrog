@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Persistence;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Lists.Providers;
@@ -48,14 +49,47 @@ internal sealed class AthletesList : IListProvider
         string sportCode, ScoreMode scoreMode, SportFrogDbContext database, CancellationToken cancellationToken) =>
         Task.FromResult(true);
 
-    public async Task<ListTable?> LoadAsync(
-        ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken)
+    public Task<ListTable?> LoadAsync(
+        ListScope scope, SportFrogDbContext database, CancellationToken cancellationToken) =>
+        LoadAsync(scope, scopedCompetitionIds: null, database, cancellationToken);
+
+    /// <summary>
+    /// The same list, narrowed to athletes enrolled in one of
+    /// <paramref name="scopedCompetitionIds"/> when given.
+    /// </summary>
+    /// <remarks>
+    /// This provider has no <see cref="ListParameterKind.Category"/> or
+    /// <see cref="ListParameterKind.Team"/> parameter of its own — the one
+    /// case <see cref="ListScopeGate"/> cannot gate on a single target — so
+    /// <c>ReadLists</c> calls this overload directly for a scoped membership
+    /// instead, passing <see cref="OrganizationContext.ScopedCompetitionIds"/>
+    /// rather than refusing the whole list. Null means organization-wide, the
+    /// same as calling the interface method; an empty set (a membership
+    /// scoped to clubs only, never to any competition) correctly narrows to
+    /// nobody, not to everybody.
+    /// </remarks>
+    internal async Task<ListTable?> LoadAsync(
+        ListScope scope,
+        IReadOnlySet<Guid>? scopedCompetitionIds,
+        SportFrogDbContext database,
+        CancellationToken cancellationToken)
     {
         var search = QueryFilter.OrAbsent(scope.GetString("search"));
         var gender = QueryFilter.OrAbsent(scope.GetString("gender"));
 
+        IReadOnlySet<Guid>? eligibleAthleteIds = scopedCompetitionIds is null
+            ? null
+            : (await (
+                from entry in database.RosterEntries
+                join team in database.Teams on entry.TeamId equals team.Id
+                join category in database.Categories on team.CategoryId equals category.Id
+                where scopedCompetitionIds.Contains(category.CompetitionId)
+                select entry.AthleteId
+            ).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+
         var athletes = await database.Athletes
             .AsNoTracking()
+            .Where(athlete => eligibleAthleteIds == null || eligibleAthleteIds.Contains(athlete.Id))
             .Where(athlete => search == null
                 || EF.Functions.ILike(athlete.DocumentId, $"%{search}%")
                 || EF.Functions.ILike(athlete.LastName, $"%{search}%")
