@@ -5,7 +5,7 @@ el fixture, cargar resultados, emitir credenciales y publicar resultados.
 
 Es multiorganización. Cada liga o federación vive en la misma base de datos que
 las demás y no puede ver ni una fila de las otras — eso no lo garantizan los
-filtros de las consultas, lo garantiza PostgreSQL, y es la decisión de la que
+filtros de las consultas, lo garantiza PostgreSQL, y es la decisión de la ques
 cuelga casi todo lo demás.
 
 ```
