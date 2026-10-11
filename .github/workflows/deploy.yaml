@@ -3,20 +3,28 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - develop
       - main
+  workflow_dispatch:
+    inputs:
+      build_all:
+        description: 'Reconstruir todas las imágenes (usar en el primer despliegue)'
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  API_IMAGE: ghcr.io/frogtech-solutions/sport-frog/sportfrog-api
-  WEB_IMAGE: ghcr.io/frogtech-solutions/sport-frog/sportfrog-web
+  REGISTRY_PREFIX: ghcr.io/frogtech-solutions/sport-frog
   SERVER_DEPLOY_PATH: /home/deployuser/sportfrog
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      api: ${{ steps.filter.outputs.api }}
-      web: ${{ steps.filter.outputs.web }}
+      api: ${{ steps.filter.outputs.api == 'true' || inputs.build_all == true }}
+      web: ${{ steps.filter.outputs.web == 'true' || inputs.build_all == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,107 +37,142 @@ jobs:
             web:
               - 'web/**'
 
-  build-api:
+  build:
     needs: changes
-    if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: sportfrog-api
+            context: ./api
+            target: runtime
+            group: api
+          # Misma etapa "migrations" del Dockerfile: aplica el esquema y termina
+          - name: sportfrog-migrations
+            context: ./api
+            target: migrations
+            group: api
+          - name: sportfrog-web
+            context: ./web
+            target: runtime
+            group: web
     steps:
+      - name: Check if this image changed
+        id: check
+        run: |
+          case "${{ matrix.group }}" in
+            api) echo "run=${{ needs.changes.outputs.api }}" >> "$GITHUB_OUTPUT" ;;
+            web) echo "run=${{ needs.changes.outputs.web }}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - uses: actions/checkout@v4
+        if: steps.check.outputs.run == 'true'
 
       - name: Set up Docker Buildx
+        if: steps.check.outputs.run == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
+        if: steps.check.outputs.run == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push API image
+      - name: Build and push ${{ matrix.name }}
+        if: steps.check.outputs.run == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ./api
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
           push: true
-          tags: ${{ env.API_IMAGE }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-
-  build-web:
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push web image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./web
-          push: true
-          tags: ${{ env.WEB_IMAGE }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          tags: |
+            ${{ env.REGISTRY_PREFIX }}/${{ matrix.name }}:latest
+            ${{ env.REGISTRY_PREFIX }}/${{ matrix.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   deploy:
-    needs: [changes, build-api, build-web]
-    if: |
-      always() &&
-      (needs.build-api.result == 'success' || needs.build-api.result == 'skipped') &&
-      (needs.build-web.result == 'success' || needs.build-web.result == 'skipped')
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
-      - name: Deploy to server
+      - uses: actions/checkout@v4
+
+      - name: Upload compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SERVER_HOST }}
+          port: ${{ vars.SERVER_PORT || 22 }}
+          username: deployuser
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: podman-compose.yml
+          target: ${{ env.SERVER_DEPLOY_PATH }}
+
+      # api/docker/postgres/init/01-roles.sh -> <deploy>/docker/postgres/init/01-roles.sh
+      - name: Upload Postgres init scripts
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SERVER_HOST }}
+          port: ${{ vars.SERVER_PORT || 22 }}
+          username: deployuser
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: api/docker/postgres/init/01-roles.sh
+          target: ${{ env.SERVER_DEPLOY_PATH }}
+          strip_components: 1
+
+      - name: Deploy on server
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ vars.SERVER_HOST }}
-          username: ${{ vars.SERVER_USER }}
+          port: ${{ vars.SERVER_PORT || 22 }}
+          username: deployuser
           key: ${{ secrets.SERVER_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
           script: |
+            set -e
+            export XDG_RUNTIME_DIR=/run/user/$(id -u)
             cd ${{ env.SERVER_DEPLOY_PATH }}
+            test -f .env || { echo "ERROR: falta ${{ env.SERVER_DEPLOY_PATH }}/.env"; exit 1; }
+
+            # Restos de despliegues anteriores: el .sql duplicaba los roles con
+            # una contraseña fija y el override ya no se usa
+            rm -f docker/postgres/init/01-roles.sql docker-compose.override.yml
 
             echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            cat > docker-compose.override.yml <<'EOF'
-            services:
-              api:
-                image: ${{ env.API_IMAGE }}
-                build: null
-              web:
-                image: ${{ env.WEB_IMAGE }}
-                build: null
-            EOF
-
             podman-compose -f podman-compose.yml pull
-            podman-compose -f podman-compose.yml --profile full up -d --force-recreate
 
-            podman logout ghcr.io
+            echo "== Base de datos y almacenamiento"
+            podman-compose -f podman-compose.yml up -d postgres minio
+            for i in $(seq 1 30); do
+              podman healthcheck run sportfrog-postgres >/dev/null 2>&1 && break
+              sleep 2
+            done
 
-  migrate:
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ vars.SERVER_HOST }}
-          username: pasantes
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            podman exec sportfrog-postgres dotnet tool install --global dotnet-ef --version 10.0.4 2>/dev/null
-            podman exec sportfrog-postgres dotnet ef database update --project /app/src/SportFrog.Api || echo "Sin migraciones pendientes o ya aplicadas"
+            # 01-roles.sh solo corre cuando el volumen está vacío; si los roles
+            # no existen (volumen creado sin el script), se ejecuta a mano
+            if ! podman exec sportfrog-postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select rolname from pg_roles"' | grep -qx sportfrog_app; then
+              echo "== Creando roles de Postgres"
+              podman exec sportfrog-postgres bash /docker-entrypoint-initdb.d/01-roles.sh
+            fi
+
+            echo "== Migraciones"
+            podman-compose -f podman-compose.yml up -d --force-recreate --no-deps migrate
+            MIGRATE_EXIT=$(podman wait sportfrog-migrate)
+            podman logs --tail 30 sportfrog-migrate
+            [ "$MIGRATE_EXIT" = "0" ] || { echo "ERROR: las migraciones fallaron ($MIGRATE_EXIT)"; exit 1; }
+
+            echo "== API y web"
+            podman-compose -f podman-compose.yml up -d --force-recreate --no-deps api web
+            podman logout ghcr.io || true
+
+            podman image prune -f
+            podman ps -a --filter name=sportfrog --format "table {{.Names}}\t{{.Status}}"

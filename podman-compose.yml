@@ -15,7 +15,7 @@ services:
       SPORTFROG_APP_PASSWORD: ${SPORTFROG_APP_PASSWORD}
       SPORTFROG_PUBLIC_PASSWORD: ${SPORTFROG_PUBLIC_PASSWORD}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -50,15 +50,29 @@ services:
     networks:
       - net_services
 
+  # Aplica las migraciones y termina. El deploy lo ejecuta antes de la API.
+  migrate:
+    image: ghcr.io/frogtech-solutions/sport-frog/sportfrog-migrations
+    container_name: sportfrog-migrate
+    restart: "no"
+    environment:
+      SPORTFROG_MIGRATIONS_CONNECTION: "Host=sportfrog-postgres;Port=5432;Database=${POSTGRES_DB};Username=${SPORTFROG_OWNER_USER};Password=${SPORTFROG_OWNER_PASSWORD}"
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
+    depends_on:
+      - postgres
+    networks:
+      - net_db
+
   api:
     image: ghcr.io/frogtech-solutions/sport-frog/sportfrog-api
     container_name: sportfrog-api
     restart: unless-stopped
     mem_limit: 1g
     environment:
-      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
-      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
-      ConnectionStrings__Public: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__Default: "Host=sportfrog-postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_app;Password=${SPORTFROG_APP_PASSWORD}"
+      ConnectionStrings__Public: "Host=sportfrog-postgres;Port=5432;Database=${POSTGRES_DB};Username=sportfrog_public;Password=${SPORTFROG_PUBLIC_PASSWORD}"
       Authentication__Jwt__SigningKey: ${Authentication__Jwt__SigningKey}
       Documents__VerificationBaseUrl: ${VERIFICATION_BASE_URL:-http://localhost:5173/verificar}
       Storage__Endpoint: "http://minio:9000"
