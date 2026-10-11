@@ -135,7 +135,6 @@ jobs:
           port: ${{ vars.SERVER_PORT || 22 }}
           username: deployuser
           key: ${{ secrets.SERVER_SSH_KEY }}
-          script_stop: true
           command_timeout: 20m
           script: |
             set -e
