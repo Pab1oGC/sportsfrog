@@ -4,6 +4,7 @@ using SportFrog.Api.Features.Competitions;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Domain.Scheduling;
 
 namespace SportFrog.Api.Features.Draw;
@@ -56,6 +57,7 @@ public static class DrawGroups
     {
         routes.MapPost("/categories/{categoryId:guid}/draw/groups", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(DrawGroups))
             .WithSummary("Draws every team of a category into a group.");
 

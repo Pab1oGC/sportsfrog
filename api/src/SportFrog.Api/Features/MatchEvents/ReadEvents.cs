@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.MatchEvents;
 
@@ -38,11 +39,13 @@ public static class ReadEvents
     {
         routes.MapGet("/matches/{matchId:guid}/events", ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "matchId"))
             .WithName(nameof(ReadEvents))
             .WithSummary("Reads the events of a match.");
 
         routes.MapGet("/events/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.PlayerEvent, "id"))
             .WithName("ReadEvent")
             .WithSummary("Reads one event.");
 

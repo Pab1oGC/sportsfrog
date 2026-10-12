@@ -51,6 +51,7 @@ public static class CreateTeam
             // configuring it, so an operator can do it. Which categories exist
             // and what rules they play by stays with the administrator.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(CreateTeam))
             .WithSummary("Enters a club into a category.");
 

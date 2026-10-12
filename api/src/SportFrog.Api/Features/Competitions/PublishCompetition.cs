@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Competitions;
 
@@ -30,6 +31,7 @@ public static class PublishCompetition
     {
         routes.MapPut("/competitions/{id:guid}/publication", HandleAsync)
             .RequireRole(MembershipRole.Admin)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "id"))
             .WithName(nameof(PublishCompetition))
             .WithSummary("Publishes a competition, or withdraws it from public view.");
 

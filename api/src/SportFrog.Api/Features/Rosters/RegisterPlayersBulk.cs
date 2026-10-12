@@ -55,6 +55,7 @@ public static class RegisterPlayersBulk
     {
         routes.MapPost("/teams/{teamId:guid}/roster/register-bulk", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .WithName(nameof(RegisterPlayersBulk))
             .WithSummary("Registers several people to play for a team in one step.");
 

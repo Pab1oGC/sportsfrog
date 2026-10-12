@@ -46,7 +46,7 @@ public sealed class AttachAthletePhotosJob(
     private sealed record Candidate(Guid Id, string DocumentId, string Name, string? PhotoKey);
 
     /// <summary>A photograph stored and waiting to be pointed at.</summary>
-    private sealed record Attachment(Guid AthleteId, string Key, string? Replaced);
+    private sealed record Attachment(Guid AthleteId, StoredAthletePhoto Photo, string? Replaced);
 
     /// <param name="organizationId">
     /// Which organization this belongs to. Carried as an argument because a
@@ -222,7 +222,17 @@ public sealed class AttachAthletePhotosJob(
                     continue;
                 }
 
+                // Rejected photographs are never kept, here or anywhere else.
+                // Released so a later photograph for the same person still counts.
+                if (stored.Key is null)
+                {
+                    taken.Remove(athlete.Id);
+                    results.Add(new PhotoResult(photo.Name, PhotoOutcome.Rejected, athlete.Name));
+                    continue;
+                }
+
                 attachments.Add(new Attachment(athlete.Id, stored, athlete.PhotoKey));
+
                 results.Add(new PhotoResult(photo.Name, PhotoOutcome.Attached, athlete.Name));
             }
 
@@ -269,7 +279,8 @@ public sealed class AttachAthletePhotosJob(
                     pointed.Add(previous);
                 }
 
-                athlete.PhotoKey = attachment.Key;
+                athlete.PhotoKey = attachment.Photo.Key;
+                attachment.Photo.Assessment.ApplyTo(athlete);
             }
 
             var batch = await database.PhotoImports.SingleAsync(
@@ -286,7 +297,8 @@ public sealed class AttachAthletePhotosJob(
             batch.Failed = results.Count(result =>
                 result.Outcome is PhotoOutcome.Unmatched
                     or PhotoOutcome.Unreadable
-                    or PhotoOutcome.Duplicate);
+                    or PhotoOutcome.Duplicate
+                    or PhotoOutcome.Rejected);
             batch.Total = batch.Matched + batch.Failed;
             batch.Status = PhotoImportState.Finished;
             batch.FinishedAt = DateTimeOffset.UtcNow;

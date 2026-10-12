@@ -42,6 +42,7 @@ public static class ChangeCompetitionStatus
             // played. Cancelling is not part of running one, and is checked
             // separately below.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "id"))
             .WithName(nameof(ChangeCompetitionStatus))
             .WithSummary("Moves a competition to another state.");
 

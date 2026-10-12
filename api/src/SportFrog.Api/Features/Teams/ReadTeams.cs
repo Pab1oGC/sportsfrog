@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Teams;
 
@@ -31,11 +32,18 @@ public static class ReadTeams
     {
         routes.MapGet("/categories/{categoryId:guid}/teams", ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(ReadTeams))
             .WithSummary("Lists the teams entered in a category.");
 
         routes.MapGet("/teams/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            // Either axis reaches it: that event's own administrator and
+            // that club's own delegate both have a legitimate reason to
+            // read one team's detail.
+            .RequireScope(
+                new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Team, "id"),
+                new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "id"))
             .WithName("ReadTeam")
             .WithSummary("Reads one team.");
 

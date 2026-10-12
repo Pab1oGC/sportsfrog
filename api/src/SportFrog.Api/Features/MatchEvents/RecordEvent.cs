@@ -62,6 +62,7 @@ public static class RecordEvent
             // The recorder's job, like the score: this is what somebody at the
             // side of the pitch is doing on their phone.
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "matchId"))
             .WithName(nameof(RecordEvent))
             .WithSummary("Records a player event in a match.");
 

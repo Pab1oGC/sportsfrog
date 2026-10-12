@@ -1,0 +1,33 @@
+# Agrega el servicio del validador de fotos. NO modifica docker-compose.yml:
+# solo suma servicios y redes, y agrega una variable y una red a "api".
+#
+# Uso (junto con el principal, que sigue siendo el que manda):
+#   docker compose -f docker-compose.yml -f docker-compose.validador.yml --profile full up -d --build
+#
+# Sin este archivo, docker compose se comporta exactamente igual que antes.
+# Este archivo no se carga solo: Compose solo lee docker-compose.override.yml
+# automáticamente, no este nombre.
+
+services:
+  validador:
+    build:
+      context: ../validador
+      dockerfile: Dockerfile
+    container_name: sportfrog-validador
+    profiles: ["full"]
+    restart: unless-stopped
+    # OFIQ carga modelos de ~430 MB por proceso. Ajustar después de medir.
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:${VALIDADOR_PORT:-8100}:8000"
+    networks:
+      - validador_net
+
+  api:
+    environment:
+      Validador__Url: "http://validador:8000"
+    networks:
+      - validador_net
+
+networks:
+  validador_net:

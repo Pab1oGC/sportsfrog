@@ -3,6 +3,7 @@
 // settings. Splitting that vocabulary into per-file imports would suggest the
 // folders are separate libraries, and they are not.
 
+global using SportFrog.Domain.Accreditation;
 global using SportFrog.Domain.Competitions;
 global using SportFrog.Domain.Documents;
 global using SportFrog.Domain.Matches;

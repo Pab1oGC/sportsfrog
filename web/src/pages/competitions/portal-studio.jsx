@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
+import { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -23,6 +23,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { portalBaseTheme } from 'src/theme/portal-base';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
+import { ColorField } from 'src/components/color-field';
 import { useApi, apiPut } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
@@ -31,7 +32,7 @@ import {
   PORTAL_FONTS, PORTAL_CORNERS, PORTAL_HERO_STYLES,
   PORTAL_DENSITIES, PORTAL_DECORATIONS, PORTAL_CONTENT_FIGURES, PORTAL_HERO_LAYOUTS, PORTAL_HERO_VARIANTS,
   PORTAL_STANDINGS_VARIANTS, PORTAL_MATCH_CARD_VARIANTS, PORTAL_BRACKET_VARIANTS,
-  buildPortalTheme, portalFontHref, portalFontStack, contrastRatio, readableTextOn, isHex, darken,
+  buildPortalTheme, portalFontHref, portalFontStack, contrastRatio, readableTextOn, darken,
 } from 'src/lib/portal-theme';
 import { readPortalForm } from 'src/pages/competitions/portal-payload';
 import { seccionesVisibles, ordenTrasMover } from 'src/pages/competitions/portal-studio-sections';
@@ -567,70 +568,6 @@ function Section({ title, icon, action, children }) {
       </Box>
       <Stack spacing={1.5}>{children}</Stack>
     </Paper>
-  );
-}
-
-/**
- * El selector nativo `<input type="color">` dispara su onChange en cada tick
- * mientras se arrastra adentro del picker -- no una vez al soltar -- y cada
- * uno de esos ticks terminaba reconstruyendo el tema entero (buildPortalTheme
- * -> createTheme, la parte cara de este panel: paleta, tipografía y overrides
- * de componentes) y volviendo a pintar toda la vista previa. Eso era la
- * lentitud reportada: no un selector lento en sí, sino el resto de la página
- * recalculando algo pesado docenas de veces por segundo detrás de él.
- *
- * `draft` responde al instante -- el cuadrito y el campo de texto se sienten
- * fluidos arrastrando o tipeando -- y lo que sube al formulario (lo que
- * dispara esa reconstrucción) se demora un instante corto, así que solo
- * corre una vez cuando el usuario deja de mover el color.
- */
-function ColorField({ label, value, placeholder, onChange, help }) {
-  const [draft, setDraft] = useState(value);
-  const timeoutRef = useRef(null);
-
-  useEffect(() => { setDraft(value); }, [value]);
-  useEffect(() => () => clearTimeout(timeoutRef.current), []);
-
-  const commit = (v) => {
-    setDraft(v);
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => onChange(v), 120);
-  };
-
-  const clear = () => {
-    clearTimeout(timeoutRef.current);
-    setDraft('');
-    onChange('');
-  };
-
-  const valid = isHex(draft);
-  return (
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box
-          component="input"
-          type="color"
-          value={valid ? draft : (isHex(placeholder) ? placeholder : '#F50057')}
-          onChange={(e) => commit(e.target.value)}
-          sx={{ width: 40, height: 40, p: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'transparent', cursor: 'pointer', flexShrink: 0 }}
-        />
-        <TextField
-          label={label}
-          value={draft}
-          onChange={(e) => commit(e.target.value)}
-          placeholder={placeholder}
-          size="small"
-          fullWidth
-          error={!!draft && !valid}
-          helperText={!!draft && !valid ? 'Se escribe como #rrggbb.' : help}
-        />
-        {draft && (
-          <IconButton size="small" onClick={clear} aria-label={`Quitar ${label}`}>
-            <Iconify icon="eva:close-outline" width={16} />
-          </IconButton>
-        )}
-      </Box>
-    </Box>
   );
 }
 

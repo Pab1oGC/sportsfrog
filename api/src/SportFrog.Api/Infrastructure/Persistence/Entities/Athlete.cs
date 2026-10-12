@@ -1,5 +1,18 @@
 namespace SportFrog.Api.Infrastructure.Persistence.Entities;
 
+/// <summary>What the photo validator concluded about an athlete's photograph.</summary>
+public enum PhotoValidationState
+{
+    /// <summary>The validator never answered for this photograph. Not the same as rejected.</summary>
+    NotEvaluated,
+
+    /// <summary>No calibrated rule failed.</summary>
+    Approved,
+
+    /// <summary>A calibrated rule failed; <c>PhotoValidationReasons</c> says which.</summary>
+    Rejected,
+}
+
 /// <summary>
 /// A person registered by an organization (RF-08).
 ///
@@ -42,6 +55,21 @@ public sealed class Athlete
     /// <c>Features.Athletes.AthletePhoto</c> needs to know that.
     /// </remarks>
     public string? PhotoKey { get; set; }
+
+    /// <summary>What the validator concluded about <see cref="PhotoKey"/>.</summary>
+    public PhotoValidationState PhotoValidationState { get; set; } = PhotoValidationState.NotEvaluated;
+
+    /// <summary>Why the photograph was rejected. Empty unless it was.</summary>
+    public List<string> PhotoValidationReasons { get; set; } = [];
+
+    /// <summary>Rules the validator could not verify yet. These never reject a photograph.</summary>
+    public List<string> PhotoValidationWarnings { get; set; } = [];
+
+    /// <summary>Version of the rules behind the verdict. Null when not evaluated.</summary>
+    public string? PhotoRulesVersion { get; set; }
+
+    /// <summary>When the verdict was recorded. Null when not evaluated.</summary>
+    public DateTimeOffset? PhotoValidatedAt { get; set; }
 
     public string? GuardianName { get; set; }
 

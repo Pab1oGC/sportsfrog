@@ -3,6 +3,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Categories;
 
@@ -20,6 +21,7 @@ public static class DeleteCategory
     {
         routes.MapDelete("/competitions/{competitionId:guid}/categories/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Admin)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "competitionId"))
             .WithName(nameof(DeleteCategory))
             .WithSummary("Removes a category that has no teams or matches.");
 

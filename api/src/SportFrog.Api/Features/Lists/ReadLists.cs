@@ -1,9 +1,11 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Lists.Providers;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Lists;
 
@@ -132,9 +134,12 @@ public static class ReadLists
         HttpContext httpContext,
         IListRegistry registry,
         SportFrogDbContext database,
+        OrganizationContext organization,
+        ScopeResolver scopeResolver,
         CancellationToken cancellationToken)
     {
-        var (table, error) = await ResolveTableAsync(slug, ScopeFrom(httpContext), registry, database, cancellationToken);
+        var (table, error) = await ResolveTableAsync(
+            slug, ScopeFrom(httpContext), registry, database, organization, scopeResolver, cancellationToken);
 
         return error ?? Results.Ok(table);
     }
@@ -145,10 +150,13 @@ public static class ReadLists
         IListRegistry registry,
         SportFrogDbContext database,
         ObjectStore store,
+        OrganizationContext organization,
+        ScopeResolver scopeResolver,
         CancellationToken cancellationToken)
     {
         var scope = ScopeFrom(httpContext);
-        var (table, error) = await ResolveTableAsync(slug, scope, registry, database, cancellationToken);
+        var (table, error) = await ResolveTableAsync(
+            slug, scope, registry, database, organization, scopeResolver, cancellationToken);
 
         if (error is not null)
         {
@@ -166,10 +174,13 @@ public static class ReadLists
         IListRegistry registry,
         SportFrogDbContext database,
         ObjectStore store,
+        OrganizationContext organization,
+        ScopeResolver scopeResolver,
         CancellationToken cancellationToken)
     {
         var scope = ScopeFrom(httpContext);
-        var (table, error) = await ResolveTableAsync(slug, scope, registry, database, cancellationToken);
+        var (table, error) = await ResolveTableAsync(
+            slug, scope, registry, database, organization, scopeResolver, cancellationToken);
 
         if (error is not null)
         {
@@ -192,6 +203,8 @@ public static class ReadLists
         ListScope scope,
         IListRegistry registry,
         SportFrogDbContext database,
+        OrganizationContext organization,
+        ScopeResolver scopeResolver,
         CancellationToken cancellationToken)
     {
         if (!registry.TryFor(slug, out var provider))
@@ -199,7 +212,26 @@ public static class ReadLists
             return (null, Results.NotFound());
         }
 
-        var table = await provider.LoadAsync(scope, database, cancellationToken);
+        if (!await ListScopeGate.ReachesAsync(provider, scope, organization, scopeResolver, cancellationToken))
+        {
+            // Same refusal RequireScope itself gives for a route value out
+            // of reach: nothing about which category or team would have
+            // been enough.
+            return (null, Results.Problem(
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden));
+        }
+
+        // AthletesList is the one provider with no single category or team
+        // to gate on (ListScopeGate let it straight through above) — a
+        // scoped membership gets its rows narrowed instead of refused.
+        var table = provider is AthletesList athletesList
+            ? await athletesList.LoadAsync(
+                scope,
+                organization.IsOrganizationWide ? null : organization.ScopedCompetitionIds,
+                database,
+                cancellationToken)
+            : await provider.LoadAsync(scope, database, cancellationToken);
 
         if (table is null)
         {

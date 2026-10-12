@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
+using SportFrog.Api.Tests.Infrastructure.Validation;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -92,7 +93,10 @@ public sealed class ReadAthletesFilterTests(SportFrogDatabaseFixture fixture)
         // before it ever touches the store (see AthletePhoto.cs) — standing
         // up real object storage for a filter that has nothing to do with
         // photographs would test nothing this suite doesn't already.
-        var photos = new AthletePhoto(null!, organization, NullLogger<AthletePhoto>.Instance);
+        var assessor = new PhotoAssessor(
+            new UnavailablePhotoValidator(), TimeProvider.System, NullLogger<PhotoAssessor>.Instance);
+        var photos = new AthletePhoto(
+            null!, organization, assessor, NullLogger<AthletePhoto>.Instance);
         var httpContext = new DefaultHttpContext();
 
         var result = await ReadAthletes.ListAsync(

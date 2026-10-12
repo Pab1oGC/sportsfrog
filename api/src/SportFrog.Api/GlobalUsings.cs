@@ -7,6 +7,7 @@
 //
 // Anything that is not the domain's vocabulary is imported where it is used.
 
+global using SportFrog.Domain.Accreditation;
 global using SportFrog.Domain.Competitions;
 global using SportFrog.Domain.Documents;
 global using SportFrog.Domain.Matches;

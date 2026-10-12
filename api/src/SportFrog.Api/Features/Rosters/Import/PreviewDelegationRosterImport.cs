@@ -1,6 +1,7 @@
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Rosters.Import;
 
@@ -46,6 +47,7 @@ public static class PreviewDelegationRosterImport
                 "/competitions/{competitionId:guid}/clubs/{clubId:guid}/individuals/import/preview",
                 HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Club, "clubId"))
             .DisableAntiforgery()
             .WithName(nameof(PreviewDelegationRosterImport))
             .WithSummary("Reads a filled-in delegation squad sheet and reports what importing it would do.");

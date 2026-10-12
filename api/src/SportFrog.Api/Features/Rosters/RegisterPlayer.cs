@@ -53,6 +53,7 @@ public static class RegisterPlayer
     {
         routes.MapPost("/teams/{teamId:guid}/roster", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .WithName(nameof(RegisterPlayer))
             .WithSummary("Registers a person to play for a team.");
 

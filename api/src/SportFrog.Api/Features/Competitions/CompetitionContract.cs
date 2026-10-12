@@ -29,7 +29,14 @@ public sealed record CompetitionContract(
     string CaptureLevel,
     DateOnly? StartsOn,
     DateOnly? EndsOn,
-    CompetitionSettings? Settings);
+    CompetitionSettings? Settings,
+
+    /// <summary>
+    /// The credential design this competition prints from. Null means the
+    /// organization's default. Checked against the organization by the handler,
+    /// since only the database knows which designs exist.
+    /// </summary>
+    Guid? CredentialDesignId = null);
 
 internal sealed class CompetitionContractValidator : AbstractValidator<CompetitionContract>
 {

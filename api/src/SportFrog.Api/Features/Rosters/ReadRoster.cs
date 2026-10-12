@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Rosters;
 
@@ -32,11 +33,13 @@ public static class ReadRoster
     {
         routes.MapGet("/teams/{teamId:guid}/roster", ListAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Team, "teamId"))
             .WithName(nameof(ReadRoster))
             .WithSummary("Reads the squad of a team.");
 
         routes.MapGet("/roster/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.RosterEntry, "id"))
             .WithName("ReadRosterEntry")
             .WithSummary("Reads one registration.");
 

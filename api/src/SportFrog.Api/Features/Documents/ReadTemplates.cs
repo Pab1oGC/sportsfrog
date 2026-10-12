@@ -106,6 +106,9 @@ public static class ReadTemplates
 
         return Results.Ok(await database.Set<DocumentTemplate>()
             .AsNoTracking()
+            // Credentials were designed here before they had their own; those
+            // old rows are not listed, since nothing prints from them any more.
+            .Where(template => template.Kind == DocumentKind.Certificate)
             .Where(template => only == null || template.Kind == only)
             .OrderBy(template => template.Kind)
             .ThenByDescending(template => template.IsDefault)

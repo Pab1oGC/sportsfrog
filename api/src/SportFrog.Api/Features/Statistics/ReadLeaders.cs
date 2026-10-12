@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Statistics;
 
@@ -59,6 +60,7 @@ public static class ReadLeaders
     {
         routes.MapGet("/categories/{categoryId:guid}/leaders", HandleAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(ReadLeaders))
             .WithSummary("Ranks the players of a category in each recorded metric.");
 

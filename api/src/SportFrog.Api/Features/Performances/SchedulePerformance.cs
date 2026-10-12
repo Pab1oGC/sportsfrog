@@ -36,6 +36,7 @@ public static class SchedulePerformance
     {
         routes.MapPut("/performances/{id:guid}/schedule", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Performance, "id"))
             .WithName(nameof(SchedulePerformance))
             .WithSummary("Sets a performance's mat, day and turn in the running order.");
 

@@ -32,6 +32,7 @@ public static class AdvanceBracket
     {
         routes.MapPost("/categories/{categoryId:guid}/draw/next-round", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(AdvanceBracket))
             .WithSummary("Draws the next knockout round from the winners of the last.");
 

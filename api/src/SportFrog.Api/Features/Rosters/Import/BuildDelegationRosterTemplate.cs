@@ -28,6 +28,7 @@ public static class BuildDelegationRosterTemplate
                 "/competitions/{competitionId:guid}/clubs/{clubId:guid}/individuals/import/template",
                 HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Club, "clubId"))
             .WithName(nameof(BuildDelegationRosterTemplate))
             .WithSummary("Builds the squad spreadsheet for a delegation entering an individual sport.");
 

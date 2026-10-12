@@ -31,7 +31,8 @@ public static class ReadAthletes
         string? GuardianName,
         string? GuardianPhone,
         bool IsActive,
-        decimal? WeightKg);
+        decimal? WeightKg,
+        PhotoValidationView PhotoValidation);
 
     public static IEndpointRouteBuilder MapReadAthletes(this IEndpointRouteBuilder routes)
     {
@@ -183,5 +184,6 @@ public static class ReadAthletes
             athlete.GuardianName,
             athlete.GuardianPhone,
             athlete.IsActive,
-            athlete.WeightKg);
+            athlete.WeightKg,
+            PhotoValidationView.From(athlete));
 }

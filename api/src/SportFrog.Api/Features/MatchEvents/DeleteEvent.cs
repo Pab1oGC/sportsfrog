@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.MatchEvents;
 
@@ -24,6 +25,7 @@ public static class DeleteEvent
     {
         routes.MapDelete("/events/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.PlayerEvent, "id"))
             .WithName(nameof(DeleteEvent))
             .WithSummary("Removes an event recorded by mistake.");
 

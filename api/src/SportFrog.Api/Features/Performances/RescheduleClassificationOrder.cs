@@ -64,7 +64,11 @@ public static class RescheduleClassificationOrder
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    // internal, not private: testable directly against a real database, the
+    // same convention Lists.ReadLists.PreviewAsync already uses -- the scope
+    // check below is exactly the kind of thing worth proving against real
+    // rows rather than only through the route it is mapped to.
+    internal static async Task<IResult> HandleAsync(
         Request request,
         HttpContext context,
         SportFrogDbContext database,
@@ -106,6 +110,17 @@ public static class RescheduleClassificationOrder
         if (AsValidationProblem() is { } missingProblem)
         {
             return missingProblem;
+        }
+
+        // A scoped membership's reach is per competition, and these targets
+        // came from the body, not a route value RequireScope could gate — so
+        // the whole batch is refused here, before anything else is checked,
+        // the moment one move names a competition outside it.
+        if (!organization.ReachesAllCompetitions(performances.Values.Select(performance => performance.CompetitionId)))
+        {
+            return Results.Problem(
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden);
         }
 
         // Every space named by the batch has to exist and be usable — same

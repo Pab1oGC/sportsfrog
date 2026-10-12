@@ -40,16 +40,27 @@ public enum VerificationState
 /// And it says nothing the card does not already say. Whoever scanned it is
 /// holding the thing: the name and the photograph are printed on it, so
 /// naming the holder adds nothing and lets a referee confirm the card belongs
-/// to the person in front of them. The identity document, the date of birth,
-/// the guardian's contact and the photograph itself are none of a scanner's
-/// business and are not here (RNF-16) — and neither is the reason a document
-/// was revoked, which is an internal matter about a person and not part of
-/// the answer "this card is no longer valid".
+/// to the person in front of them. A credential's visible id is the same
+/// reasoning — it is the one piece of text a steward actually reads off the
+/// card and checks against a printed list, so echoing it back lets them
+/// confirm they scanned the card they meant to. The identity document, the
+/// date of birth, the guardian's contact and the photograph itself are none
+/// of a scanner's business and are not here (RNF-16) — and neither is the
+/// reason a document was revoked, which is an internal matter about a person
+/// and not part of the answer "this card is no longer valid".
 /// </remarks>
 public static class VerifyDocument
 {
     public sealed record Response(
         string SerialNumber,
+
+        /// <summary>
+        /// A credential's own printed identifier — a delegation code and a
+        /// number, e.g. "IND-0042". Null on a certificate, and on a
+        /// credential issued before this identifier existed.
+        /// </summary>
+        string? VisibleId,
+
         DocumentKind Kind,
         VerificationState Status,
         string Holder,
@@ -95,6 +106,7 @@ public static class VerifyDocument
                     .Select(candidate => new
                     {
                         candidate.SerialNumber,
+                        candidate.VisibleId,
                         candidate.Kind,
                         candidate.Status,
                         Holder = candidate.Athlete!.LastName + " " + candidate.Athlete.FirstName,
@@ -122,6 +134,7 @@ public static class VerifyDocument
 
                 return new Response(
                     document.SerialNumber,
+                    document.VisibleId,
                     document.Kind,
                     State(document.Status, document.ValidFrom, document.ValidTo, today),
 

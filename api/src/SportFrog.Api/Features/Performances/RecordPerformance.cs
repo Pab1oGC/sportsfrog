@@ -48,6 +48,7 @@ public static class RecordPerformance
             // The role exists for this: recording a judged score is the
             // narrowest job in the organization, same as recording a match.
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Performance, "id"))
             .WithName(nameof(RecordPerformance))
             .WithSummary("Records a team's judged score for a classification-stage performance.");
 

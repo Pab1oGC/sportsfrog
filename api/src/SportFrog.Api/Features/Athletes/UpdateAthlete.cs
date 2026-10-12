@@ -138,6 +138,7 @@ public static class UpdateAthlete
 
             case RemovePhoto:
                 athlete.PhotoKey = null;
+                PhotoAssessment.Unevaluated.ApplyTo(athlete);
                 break;
 
             default:
@@ -147,7 +148,14 @@ public static class UpdateAthlete
                     return AthletePhoto.NotAnImage();
                 }
 
-                athlete.PhotoKey = stored;
+                // A rejected photograph is not kept, so the athlete keeps the
+                // one they had: nothing is replaced and nothing is forgotten.
+                if (stored.Key is { } key)
+                {
+                    athlete.PhotoKey = key;
+                    stored.Assessment.ApplyTo(athlete);
+                }
+
                 break;
         }
 

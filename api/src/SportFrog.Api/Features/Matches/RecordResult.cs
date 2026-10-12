@@ -56,11 +56,13 @@ public static class RecordResult
             // is the narrowest job in the organization, and it should not
             // require the authority to redraw the calendar.
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName(nameof(RecordResult))
             .WithSummary("Records the result of a match.");
 
         routes.MapPost("/matches/{id:guid}/result/from-events", HandleFromEventsAsync)
             .RequireRole(MembershipRole.Recorder)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Match, "id"))
             .WithName("RecordResultFromEvents")
             .WithSummary("Finishes a match with the score tallied from its recorded events.");
 

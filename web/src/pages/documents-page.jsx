@@ -45,7 +45,8 @@ var DL = { active: 'Vigente', revoked: 'Revocado' };
 var MOTIVOS = {
   no_photo: 'No tiene fotografia cargada',
   already_issued: 'Ya tiene un documento de esta competencia',
-  could_not_print: 'No se pudo componer la credencial'
+  could_not_print: 'No se pudo componer la credencial',
+  not_accredited: 'No tiene categoria de acreditacion asignada'
 };
 
 function emptyForm(compId, catId, teamId) {
@@ -58,7 +59,17 @@ function emptyForm(compId, catId, teamId) {
 
 export default function DocumentsPage() {
   var { data: comps } = useApi(endpoints.competitions);
+  var { data: designs } = useApi(endpoints.credentialDesigns);
   var [compId, setCompId] = useLastCompetition(comps);
+
+  // El diseño que va a usar la competencia: el que eligió, o el predeterminado
+  // de la organización si no eligió ninguno.
+  function nombreDisenoDe(competitionId) {
+    var comp = (comps || []).find(function(c) { return c.id === competitionId; });
+    var elegido = (designs || []).find(function(d) { return d.id === (comp && comp.credentialDesignId); })
+      || (designs || []).find(function(d) { return d.isDefault; });
+    return elegido ? elegido.name : 'ninguno (se imprime con el texto legal por defecto)';
+  }
   var [catId, setCatId] = useState('');
   var [teamId, setTeamId] = useState('');
   var [requestOpen, setRequestOpen] = useState(false);
@@ -76,7 +87,10 @@ export default function DocumentsPage() {
   // recargar la pagina a mano. Ver documents/batch-polling.js para el
   // porqué del sondeo que se apaga solo.
   var { data: batches, mutate: mutateBatches, isLoading: loadingBatches } = useApi(endpoints.documentBatches, {
-    refreshInterval: intervaloDeListaDeLotes,
+    // SWR le pasa el dato crudo de useApi, que es { data, totalCount } --
+    // no el arreglo. Hay que desenvolverlo antes de preguntar cuántos lotes
+    // siguen en vuelo, si no, el primer lote que llega rompe el sondeo.
+    refreshInterval: function(latest) { return intervaloDeListaDeLotes(latest?.data); },
   });
 
   var enVuelo = hayLoteEnVuelo(batches);
@@ -86,7 +100,10 @@ export default function DocumentsPage() {
   var { data: templates } = useApi(endpoints.templates);
 
   var { data: detalle } = useApi(detalleId ? endpoints.documentBatch(detalleId) : null, {
-    refreshInterval: intervaloDeDetalleDeLote,
+    // Mismo desenvuelto que la lista -- aca el dato es el lote puntual, que
+    // tambien viene dentro de { data }. Sin esto, status nunca se lee y el
+    // detalle deja de actualizarse solo sin ningun error visible.
+    refreshInterval: function(latest) { return intervaloDeDetalleDeLote(latest?.data); },
   });
 
   var handleOpenRequest = function() {
@@ -101,7 +118,12 @@ export default function DocumentsPage() {
     try {
       var resp = await apiPost(endpoints.documentBatches, {
         kind: form.kind,
-        templateId: form.templateId,
+        // Una credencial no tiene plantilla -- RequestDocumentBatch del lado
+        // del servidor arma su propio catalogo congelado en su lugar, ver
+        // CredentialSnapshot -- asi que mandar null en vez de la cadena
+        // vacia que deja el formulario es lo que hace que la validacion de
+        // ahi no la confunda con un id ausente a medias.
+        templateId: form.kind === 'certificate' ? form.templateId : null,
         competitionId: form.competitionId,
         categoryId: form.categoryId || null,
         teamId: form.teamId || null,
@@ -252,9 +274,14 @@ export default function DocumentsPage() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Chip label={KL[detalle.kind] || detalle.kind} size="small" />
                 <Chip label={BL[detalle.status] || detalle.status} color={BS[detalle.status] || 'default'} size="small" />
-                <Typography variant="caption" color="text.secondary">
-                  plantilla v{detalle.templateVersion}
-                </Typography>
+                {/* Una credencial no imprime de una plantilla -- ver
+                    CredentialSnapshot del lado del servidor -- asi que
+                    templateVersion llega null y no hay nada que mostrar aca. */}
+                {detalle.templateVersion != null && (
+                  <Typography variant="caption" color="text.secondary">
+                    plantilla v{detalle.templateVersion}
+                  </Typography>
+                )}
               </Box>
 
               {EN_VUELO[detalle.status] && <LinearProgress />}
@@ -328,11 +355,23 @@ export default function DocumentsPage() {
           <TextField select label="Tipo" value={form.kind} onChange={function(e) { setForm(Object.assign({}, form, { kind: e.target.value, templateId: '' })); }} fullWidth>
             {KINDS.map(function(k) { return <MenuItem key={k} value={k}>{KL[k]}</MenuItem>; })}
           </TextField>
-          <TextField select label="Plantilla" value={form.templateId} onChange={function(e) { setForm(Object.assign({}, form, { templateId: e.target.value })); }} fullWidth required
-            helperText={templatesForKind.length === 0 ? 'No hay plantillas de este tipo cargadas.' : 'Se imprime con la version actual del diseno.'}>
-            <MenuItem value="">Seleccionar plantilla</MenuItem>
-            {templatesForKind.map(function(t) { return <MenuItem key={t.id} value={t.id}>{t.name} (v{t.version})</MenuItem>; })}
-          </TextField>
+          {form.kind === 'certificate' && (
+            <TextField select label="Plantilla" value={form.templateId} onChange={function(e) { setForm(Object.assign({}, form, { templateId: e.target.value })); }} fullWidth required
+              helperText={templatesForKind.length === 0 ? 'No hay plantillas de este tipo cargadas.' : 'Se imprime con la version actual del diseno.'}>
+              <MenuItem value="">Seleccionar plantilla</MenuItem>
+              {templatesForKind.map(function(t) { return <MenuItem key={t.id} value={t.id}>{t.name} (v{t.version})</MenuItem>; })}
+            </TextField>
+          )}
+          {form.kind === 'credential' && (
+            // Una credencial no elige diseno: su estructura esta fija por
+            // decreto. Lo que si varia -categorias, zonas, servicios- se
+            // carga desde Documentos > Catalogo de acreditacion, no aca.
+            <Alert severity="info">
+              La credencial se imprime con la estructura fija y el catalogo de acreditacion de la competencia.
+              Diseño: <strong>{nombreDisenoDe(form.competitionId)}</strong>.
+              Verifica antes que cada deportista tenga una categoria asignada, en Documentos &gt; Acreditaciones.
+            </Alert>
+          )}
           <SelectionCompetition value={form.competitionId} onChange={function(e) { setForm(Object.assign({}, form, { competitionId: e.target.value, categoryId: '', teamId: '' })); }} required />
           <SelectionCategory competitionId={form.competitionId} value={form.categoryId} onChange={function(e) { setForm(Object.assign({}, form, { categoryId: e.target.value, teamId: '' })); }} label="Categoria (toda la competencia si se deja vacia)" />
           <SelectionTeam categoryId={form.categoryId} value={form.teamId} onChange={function(e) { setForm(Object.assign({}, form, { teamId: e.target.value })); }} label="Equipo (toda la categoria si se deja vacio)" />
@@ -348,7 +387,7 @@ export default function DocumentsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={function() { setRequestOpen(false); }} disabled={enviando}>Cancelar</Button>
-          <Button variant="contained" onClick={handleRequest} disabled={enviando || !form.templateId || !form.competitionId}>
+          <Button variant="contained" onClick={handleRequest} disabled={enviando || !form.competitionId || (form.kind === 'certificate' && !form.templateId)}>
             {enviando ? 'Solicitando...' : 'Solicitar'}
           </Button>
         </DialogActions>

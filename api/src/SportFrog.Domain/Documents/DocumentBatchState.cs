@@ -32,6 +32,12 @@ public enum SkipReason
 
     /// <summary>The card itself could not be composed. <c>Detail</c> says what happened.</summary>
     CouldNotPrint,
+
+    /// <summary>
+    /// On the roster, but nobody has assigned them an accreditation category
+    /// yet. Credential-only: a certificate has no category to be missing.
+    /// </summary>
+    NotAccredited,
 }
 
 /// <summary>One subject the batch passed over, and why.</summary>

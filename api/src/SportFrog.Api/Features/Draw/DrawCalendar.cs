@@ -73,6 +73,7 @@ public static class DrawCalendar
             // Drawing the calendar is running the competition, the same job
             // that enters the clubs and places the fixtures by hand.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(DrawCalendar))
             .WithSummary("Draws the fixtures of a category.");
 

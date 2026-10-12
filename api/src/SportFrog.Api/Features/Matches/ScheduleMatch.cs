@@ -56,6 +56,7 @@ public static class ScheduleMatch
             // Drawing the calendar is running the competition, which is the
             // operator's work — the same role that enters the clubs.
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(ScheduleMatch))
             .WithSummary("Puts a fixture on the calendar.");
 

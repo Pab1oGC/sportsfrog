@@ -75,6 +75,7 @@ public static class ReadStandings
     {
         routes.MapGet("/categories/{categoryId:guid}/standings", HandleAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Category, "categoryId"))
             .WithName(nameof(ReadStandings))
             .WithSummary("Builds the standings table of a category.");
 

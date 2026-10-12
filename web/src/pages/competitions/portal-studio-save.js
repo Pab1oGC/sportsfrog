@@ -26,6 +26,9 @@ export function buildCompetitionUpdatePayload(row, form) {
     captureLevel: row.captureLevel,
     startsOn: row.startsOn,
     endsOn: row.endsOn,
+    // El diseño de credencial no lo edita el estudio, pero el PUT lo reescribe
+    // entero: sin reenviarlo, cada guardado del portal borraría la elección.
+    credentialDesignId: row.credentialDesignId || null,
     settings: {
       schedule: (row.settings && row.settings.schedule) || null,
       bulletin: (row.settings && row.settings.bulletin) || null,

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Teams;
 
@@ -25,6 +26,7 @@ public static class DeleteTeam
     {
         routes.MapDelete("/teams/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Team, "id"))
             .WithName(nameof(DeleteTeam))
             .WithSummary("Strikes a team entry that has never played.");
 

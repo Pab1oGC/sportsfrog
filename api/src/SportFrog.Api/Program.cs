@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using SportFrog.Api.Features.Accreditation;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Athletes.Photos;
 using SportFrog.Api.Features.Auth;
@@ -163,11 +164,14 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<OrganizationContext>();
+builder.Services.AddScoped<MembershipScopeReader>();
+builder.Services.AddScoped<ScopeResolver>();
 
 // Files live in object storage rather than in a column: a photograph is a
 // megabyte no query ever filters on, and a column carries it into every
 // backup, every replica and every listing that reads the row.
 builder.Services.AddSportFrogStorage(builder.Configuration);
+builder.Services.AddSportFrogPhotoValidation(builder.Configuration);
 
 // Outgoing mail — a club told its fixture moved, today the only thing that
 // sends any. Optional on purpose: see SmtpOptions's remarks.
@@ -240,6 +244,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Clubs.UnaffiliatedClub>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Accreditation.AccreditationResolver>();
 
 // Only ever asked to follow a shortened Google Maps link so the location
 // picker can read the coordinates it hides — never an arbitrary admin-typed
@@ -275,6 +280,7 @@ builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRulesRe
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRulesLookup>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Athletes.PhotoAssessor>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 builder.Services.AddScoped<SportFrog.Api.Features.Clubs.ClubPhoto>();
 builder.Services.AddScoped<SportFrog.Api.Infrastructure.Storage.PortalPicture>();
@@ -282,6 +288,7 @@ builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportRev
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.DelegationRosterImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
+builder.Services.AddScoped<SportFrog.Api.Features.Documents.CredentialNumbering>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.IssueDocumentsJob>();
 
 // Printed on physical cards, so a wrong address is unrecoverable. Validated
@@ -417,7 +424,13 @@ api.MapSchedulePerformance();
 api.MapRescheduleClassificationOrder();
 
 api.MapImportAthletePhotos();
+api.MapPreviewAthletePhoto();
 api.MapReadPhotoImports();
+
+api.MapAccreditationItems();
+api.MapAccreditationCategories();
+api.MapAthleteAccreditations();
+api.MapAthleteAccreditationOverrides();
 
 api.MapReadTemplateDesign();
 api.MapUploadTemplateBackground();
@@ -425,9 +438,14 @@ api.MapCreateTemplate();
 api.MapReadTemplates();
 api.MapUpdateTemplate();
 api.MapDeleteTemplate();
+api.MapCreateCredentialDesign();
+api.MapReadCredentialDesigns();
+api.MapUpdateCredentialDesign();
+api.MapDeleteCredentialDesign();
 api.MapRequestDocumentBatch();
 api.MapReadDocuments();
 api.MapRevokeDocument();
+api.MapPreviewCredential();
 
 api.MapVenues();
 api.MapVenueSpaces();

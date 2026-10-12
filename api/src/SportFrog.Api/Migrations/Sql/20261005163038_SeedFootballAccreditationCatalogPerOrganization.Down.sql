@@ -1,0 +1,10 @@
+-- =============================================================================
+-- Intentionally empty.
+--
+-- Rolling this back does not remove the catalogue it seeded. The rows get
+-- random identifiers, and by the time anybody rolls back, the organizer may
+-- have renamed, recoloured or extended them, or assigned them to people.
+-- Deleting by code or name would also delete catalogues that were typed in
+-- by hand. Removing a seeded catalogue is a decision for a person, made per
+-- competition, not something a migration can do safely.
+-- =============================================================================

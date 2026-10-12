@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Clubs;
@@ -25,6 +26,10 @@ public static class ReadClubs
 
     public static IEndpointRouteBuilder MapReadClubs(this IEndpointRouteBuilder routes)
     {
+        // Unscoped on purpose, same reasoning as ReadCompetitions' own list:
+        // this lists every club of the organization, and RequireScope
+        // answers "may the caller reach this one target", not "which rows
+        // should a list return".
         routes.MapGet("/clubs", ListAsync)
             .RequireRole(MembershipRole.Viewer)
             .WithName(nameof(ReadClubs))
@@ -32,6 +37,7 @@ public static class ReadClubs
 
         routes.MapGet("/clubs/{id:guid}", ReadAsync)
             .RequireRole(MembershipRole.Viewer)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.Club, "id"))
             .WithName("ReadClub")
             .WithSummary("Reads one club.");
 

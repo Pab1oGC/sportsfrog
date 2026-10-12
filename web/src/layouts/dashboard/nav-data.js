@@ -23,6 +23,9 @@ export function getNavData(isPlatformAdmin = false) {
     ]},
     { subheader: "Documentos", items: [
       { title: "Plantillas", path: "/dashboard/templates", icon: "mdi:file-document-outline" },
+      { title: "Diseños de credencial", path: "/dashboard/credential-designs", icon: "mdi:card-account-details-outline" },
+      { title: "Catalogo de acreditacion", path: "/dashboard/accreditation-catalog", icon: "mdi:badge-account-outline" },
+      { title: "Acreditaciones", path: "/dashboard/accreditation", icon: "mdi:account-check-outline" },
       { title: "Documentos emitidos", path: "/dashboard/documents", icon: "mdi:certificate-outline" },
     ]},
     { subheader: "Sistema", items: [

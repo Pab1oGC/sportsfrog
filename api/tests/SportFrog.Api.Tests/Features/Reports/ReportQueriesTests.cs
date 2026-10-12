@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
+using SportFrog.Api.Tests.Infrastructure.Validation;
 using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Reports;
@@ -38,7 +39,10 @@ public sealed class ReportQueriesTests(SportFrogDatabaseFixture fixture)
     // AthletePhoto.BytesAsync always takes its "no key" branch and returns
     // the default avatar without ever touching Store or OrganizationContext
     // — the same reasoning as Store itself, one line up.
-    private static readonly AthletePhoto Photos = new(Store, null!, NullLogger<AthletePhoto>.Instance);
+    private static readonly AthletePhoto Photos = new(
+        Store, null!,
+        new PhotoAssessor(new UnavailablePhotoValidator(), TimeProvider.System, NullLogger<PhotoAssessor>.Instance),
+        NullLogger<AthletePhoto>.Instance);
 
     private sealed class Session(SportFrogDbContext context, IDbContextTransaction transaction) : IAsyncDisposable
     {

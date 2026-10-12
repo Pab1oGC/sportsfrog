@@ -33,6 +33,12 @@ public sealed class SportFrogDatabaseFixture : IAsyncLifetime
     public string AppConnectionString { get; private set; } = null!;
     public string PublicConnectionString { get; private set; } = null!;
 
+    /// <summary>
+    /// The container's own superuser. Only for tests that create and drop
+    /// databases of their own; the owner role cannot create databases.
+    /// </summary>
+    public string SuperuserConnectionString { get; private set; } = null!;
+
     public SportFrogDatabaseFixture()
     {
         var rolesScriptContent = File.ReadAllBytes(FindRepositoryFile("docker/postgres/init/01-roles.sh"));
@@ -62,6 +68,7 @@ public sealed class SportFrogDatabaseFixture : IAsyncLifetime
     {
         await _container.StartAsync();
 
+        SuperuserConnectionString = _container.GetConnectionString();
         OwnerConnectionString = BuildConnectionString(OwnerUser, OwnerPassword);
         AppConnectionString = BuildConnectionString("sportfrog_app", AppPassword);
         PublicConnectionString = BuildConnectionString("sportfrog_public", PublicPassword);

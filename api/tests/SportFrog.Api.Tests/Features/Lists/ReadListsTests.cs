@@ -7,6 +7,7 @@ using SportFrog.Api.Features.Lists;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Tests.Infrastructure.Persistence;
 using SportFrog.Domain.Competitions;
 using SportFrog.Domain.Rules;
@@ -64,6 +65,12 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         new() { Request = { QueryString = new QueryString(queryString) } };
 
     private SportFrogDbContext Database() => fixture.CreateAppContext();
+
+    // A fresh, never-established OrganizationContext is organization-wide by
+    // its own default (both scope sets start empty), so ListScopeGate always
+    // lets these stub providers through without this file needing to
+    // establish a real one -- none of these tests are about scoping.
+    private static OrganizationContext UnscopedOrganization() => new();
 
     [Fact]
     public async Task Catalog_ListsEveryRegisteredProviderWithItsOwnParameters()
@@ -176,7 +183,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.PreviewAsync(
-            "tarjetas", HttpContextWith(), registry, database, CancellationToken.None);
+            "tarjetas", HttpContextWith(), registry, database, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         result.Should().BeOfType<NotFound>();
     }
@@ -188,7 +195,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.PreviewAsync(
-            "goleadores", HttpContextWith(), registry, database, CancellationToken.None);
+            "goleadores", HttpContextWith(), registry, database, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         result.Should().BeOfType<NotFound>();
     }
@@ -201,7 +208,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.PreviewAsync(
-            "goleadores", HttpContextWith(), registry, database, CancellationToken.None);
+            "goleadores", HttpContextWith(), registry, database, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         result.Should().BeOfType<Ok<ListTable>>().Which.Value.Should().BeSameAs(table);
     }
@@ -216,7 +223,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         var categoryId = Guid.NewGuid();
 
         await ReadLists.PreviewAsync(
-            "goleadores", HttpContextWith($"?categoryId={categoryId}"), registry, database, CancellationToken.None);
+            "goleadores", HttpContextWith($"?categoryId={categoryId}"), registry, database, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         provider.ReceivedScope!.GetGuid("categoryId").Should().Be(categoryId);
     }
@@ -228,7 +235,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.ExportXlsxAsync(
-            "tarjetas", HttpContextWith(), registry, database, Store, CancellationToken.None);
+            "tarjetas", HttpContextWith(), registry, database, Store, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         result.Should().BeOfType<NotFound>();
     }
@@ -240,7 +247,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.ExportXlsxAsync(
-            "goleadores", HttpContextWith(), registry, database, Store, CancellationToken.None);
+            "goleadores", HttpContextWith(), registry, database, Store, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         var file = result.Should().BeOfType<FileContentHttpResult>().Subject;
         file.ContentType.Should().Be(ListXlsx.MimeType);
@@ -255,7 +262,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.ExportPdfAsync(
-            "goleadores", HttpContextWith(), registry, database, Store, CancellationToken.None);
+            "goleadores", HttpContextWith(), registry, database, Store, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         var file = result.Should().BeOfType<FileContentHttpResult>().Subject;
         file.ContentType.Should().Be(ListPdf.MimeType);
@@ -269,7 +276,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.ExportXlsxAsync(
-            "goleadores", HttpContextWith(), registry, database, Store, CancellationToken.None);
+            "goleadores", HttpContextWith(), registry, database, Store, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         result.Should().BeOfType<NotFound>();
     }
@@ -281,7 +288,7 @@ public sealed class ReadListsTests(SportFrogDatabaseFixture fixture)
         await using var database = Database();
 
         var result = await ReadLists.ExportXlsxAsync(
-            "goleadores", HttpContextWith(), registry, database, Store, CancellationToken.None);
+            "goleadores", HttpContextWith(), registry, database, Store, UnscopedOrganization(), new ScopeResolver(database), CancellationToken.None);
 
         result.Should().BeOfType<ProblemHttpResult>();
     }

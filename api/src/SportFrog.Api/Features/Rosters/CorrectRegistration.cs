@@ -4,6 +4,7 @@ using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Rosters;
 
@@ -49,6 +50,7 @@ public static class CorrectRegistration
     {
         routes.MapPut("/roster/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Operator)
+            .RequireScope(new ScopeRequirement(ScopeType.Club, ScopeTargetKind.RosterEntry, "id"))
             .WithName(nameof(CorrectRegistration))
             .WithSummary("Corrects the shirt or position of a registration.");
 

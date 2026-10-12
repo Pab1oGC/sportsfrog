@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
+using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Competitions;
@@ -37,6 +39,7 @@ public static class UpdateCompetition
     {
         routes.MapPut("/competitions/{id:guid}", HandleAsync)
             .RequireRole(MembershipRole.Admin)
+            .RequireScope(new ScopeRequirement(ScopeType.Competition, ScopeTargetKind.Competition, "id"))
             .WithName(nameof(UpdateCompetition))
             .WithSummary("Corrects a competition.");
 
@@ -103,6 +106,12 @@ public static class UpdateCompetition
             competition.SportCode = replacement.SportCode;
         }
 
+        if (await CredentialDesignChoice.RefuseUnknownAsync(
+                contract.CredentialDesignId, database, cancellationToken) is { } unknownDesign)
+        {
+            return unknownDesign;
+        }
+
         if (Slug.Normalize(contract.Slug) != competition.Slug)
         {
             return Results.Problem(
@@ -142,6 +151,7 @@ public static class UpdateCompetition
         competition.StartsOn = contract.StartsOn;
         competition.EndsOn = contract.EndsOn;
         competition.Settings = settings ?? new CompetitionSettings();
+        competition.CredentialDesignId = contract.CredentialDesignId;
 
         try
         {

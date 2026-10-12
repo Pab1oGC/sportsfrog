@@ -1,0 +1,62 @@
+# Umbrales del validador. Versión de reglas: 0.1.0 (borrador).
+#
+# Valores: un número = corte provisional (el valor aprobado es >= umbral).
+#          la regla falla -> rechaza la foto.
+#          null       = sin calibrar. La regla no bloquea: la foto pasa con una
+#                       advertencia "No verificado: ...".
+#
+# TODOS los números de aquí son PROVISIONALES: 50 es un punto medio, no una
+# calibración. No se usan para decidir en producción hasta que se calibren
+# sobre retratos reales etiquetados (ver docs/validador-fotos/reglas.md, sección 5).
+
+version_reglas: 0.2.0
+calibrado: false
+
+# Reglas criticas: si fallan, la foto se rechaza y no se guarda.
+# El resto, si falla, solo advierte: la foto se puede guardar bajo la
+# responsabilidad de quien la sube.
+#
+# Una regla es critica cuando la medicion es confiable Y el defecto es grave.
+# Medir mal y bloquear es peor que no bloquear: por eso nitidez y expresion,
+# que funcionan pero con escalas sin calibrar, solo advierten.
+#
+# R14 (mascarilla) es la excepcion decidida a mano: el defecto es grave y se
+# bloquea aunque la medicion todavia no este calibrada. En la prueba sobre
+# recortes de fotos de calle, 47 de 120 caras SIN mascarilla puntuaban como
+# ocluidas. Bajar el corte no lo arregla (la medida es de todo o nada): lo
+# arregla calibrar con retratos reales.
+criticas:
+  - R1   # mas de una cara
+  - R2   # ojos cerrados
+  - R12  # lentes de sol
+  - R13  # cabeza cubierta
+  - R14  # mascarilla
+
+# Que no se detecte una cara (R15) es critico siempre: sin cara no hay nada
+# que evaluar, y no depende de ningun umbral.
+
+umbrales:
+  R1: 50    # SingleFacePresent
+  R2: 50    # EyesOpen
+  R3: 50    # ExpressionNeutrality (CelebA: separa, con falsos positivos)
+  R4: null  # MouthClosed: no separa sonrisa; sin medida válida todavía
+  R5a: null # HeadPoseYaw: sin evidencia de corte
+  R5b: null # HeadPosePitch
+  R5c: null # HeadPoseRoll
+  R6a: null # LeftwardCropOfTheFaceImage
+  R6b: null # RightwardCropOfTheFaceImage
+  R6c: null # MarginAboveOfTheFaceImage
+  R6d: null # MarginBelowOfTheFaceImage
+  R6e: null # HeadSize: escala no verificada (zoom da 74, normales ~15)
+  # Sharpness. Provisional: en TONO ninguna foto normal baja de 40 (0/140 bajo
+  # 30), y las borrosas pasan en cualquier corte entre 25 y 40 (4/10 pasan).
+  # No se calibró con retratos reales.
+  R7: 30
+  R8a: 50   # UnderExposurePrevention
+  R8b: 50   # OverExposurePrevention
+  R9: null  # IlluminationUniformity: evidencia débil
+  R10: 50   # BackgroundUniformity
+  R11: 50   # NaturalColour
+  R12: 50   # EyesVisible (lentes de sol)
+  R13: 50   # NoHeadCoverings
+  R14: 50   # MouthOcclusionPrevention (recortes de calle, sin calibrar)
