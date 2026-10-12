@@ -135,7 +135,7 @@ jobs:
           port: ${{ vars.SERVER_PORT || 22 }}
           username: deployuser
           key: ${{ secrets.SERVER_SSH_KEY }}
-          command_timeout: 20m
+          command_timeout: 15m
           script: |
             set -e
             export XDG_RUNTIME_DIR=/run/user/$(id -u)
@@ -163,14 +163,18 @@ jobs:
               podman exec sportfrog-postgres bash /docker-entrypoint-initdb.d/01-roles.sh
             fi
 
+            # --force-recreate de podman-compose también recrea las dependencias
+            # (postgres/minio); se borra solo el contenedor que hay que renovar
             echo "== Migraciones"
-            podman-compose -f podman-compose.yml up -d --force-recreate --no-deps migrate
+            podman rm -f sportfrog-migrate >/dev/null 2>&1 || true
+            podman-compose -f podman-compose.yml up -d --no-deps migrate
             MIGRATE_EXIT=$(podman wait sportfrog-migrate)
             podman logs --tail 30 sportfrog-migrate
             [ "$MIGRATE_EXIT" = "0" ] || { echo "ERROR: las migraciones fallaron ($MIGRATE_EXIT)"; exit 1; }
 
             echo "== API y web"
-            podman-compose -f podman-compose.yml up -d --force-recreate --no-deps api web
+            podman rm -f sportfrog-web sportfrog-api >/dev/null 2>&1 || true
+            podman-compose -f podman-compose.yml up -d --no-deps api web
             podman logout ghcr.io || true
 
             podman image prune -f
