@@ -25,6 +25,7 @@ jobs:
     outputs:
       api: ${{ steps.filter.outputs.api == 'true' || inputs.build_all == true }}
       web: ${{ steps.filter.outputs.web == 'true' || inputs.build_all == true }}
+      validador: ${{ steps.filter.outputs.validador == 'true' || inputs.build_all == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +37,8 @@ jobs:
               - 'api/**'
             web:
               - 'web/**'
+            validador:
+              - 'validador/**'
 
   build:
     needs: changes
@@ -60,6 +63,10 @@ jobs:
             context: ./web
             target: runtime
             group: web
+          - name: sportfrog-validador
+            context: ./validador
+            target: produccion
+            group: validador
     steps:
       - name: Check if this image changed
         id: check
@@ -67,6 +74,7 @@ jobs:
           case "${{ matrix.group }}" in
             api) echo "run=${{ needs.changes.outputs.api }}" >> "$GITHUB_OUTPUT" ;;
             web) echo "run=${{ needs.changes.outputs.web }}" >> "$GITHUB_OUTPUT" ;;
+            validador) echo "run=${{ needs.changes.outputs.validador }}" >> "$GITHUB_OUTPUT" ;;
           esac
 
       - uses: actions/checkout@v4
@@ -180,6 +188,10 @@ jobs:
             MIGRATE_EXIT=$(podman wait sportfrog-migrate)
             podman logs --tail 30 sportfrog-migrate
             [ "$MIGRATE_EXIT" = "0" ] || { echo "ERROR: las migraciones fallaron ($MIGRATE_EXIT)"; exit 1; }
+
+            echo "== Validador de fotos"
+            podman rm -f sportfrog-validador >/dev/null 2>&1 || true
+            podman-compose -f podman-compose.yml up -d --no-deps validador
 
             echo "== API y web"
             podman rm -f sportfrog-web sportfrog-api >/dev/null 2>&1 || true

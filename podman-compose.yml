@@ -60,6 +60,16 @@ services:
     networks:
       - net_db
 
+  # Validador de fotos (OFIQ). Solo lo consume la API, por una red propia.
+  validador:
+    image: ghcr.io/frogtech-solutions/sport-frog/sportfrog-validador
+    container_name: sportfrog-validador
+    restart: unless-stopped
+    # OFIQ carga modelos de ~430 MB por proceso
+    mem_limit: 2g
+    networks:
+      - validador_net
+
   api:
     image: ghcr.io/frogtech-solutions/sport-frog/sportfrog-api
     container_name: sportfrog-api
@@ -83,6 +93,7 @@ services:
       Smtp__UseStartTls: ${Smtp__UseStartTls:-true}
       Smtp__FromAddress: ${Smtp__FromAddress:-}
       Smtp__FromName: ${Smtp__FromName:-SportFrog}
+      Validador__Url: "http://sportfrog-validador:8000"
     ports:
       - "127.0.0.1:${API_PORT}:8080"
     depends_on:
@@ -90,6 +101,7 @@ services:
     networks:
       - net_db
       - net_services
+      - validador_net
 
   web:
     image: ghcr.io/frogtech-solutions/sport-frog/sportfrog-web
@@ -107,6 +119,8 @@ volumes:
   minio-data:
 
 networks:
+  validador_net:
+    name: sportfrog-validador-net
   net_services:
     external: true
   net_db:
