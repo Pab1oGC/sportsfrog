@@ -147,7 +147,12 @@ jobs:
             rm -f docker/postgres/init/01-roles.sql docker-compose.override.yml
 
             echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+            # podman-compose pull devuelve 0 aunque una imagen falle; se
+            # comprueba cada una antes de tocar ningún contenedor
             podman-compose -f podman-compose.yml pull
+            for img in $(grep -E '^\s+image:' podman-compose.yml | awk '{print $2}'); do
+              podman image exists "$img" || podman image exists "$img:latest" || { echo "ERROR: no se pudo descargar $img; no se toca nada"; exit 1; }
+            done
 
             echo "== Base de datos y almacenamiento"
             podman-compose -f podman-compose.yml up -d postgres minio
@@ -162,6 +167,10 @@ jobs:
               echo "== Creando roles de Postgres"
               podman exec sportfrog-postgres bash /docker-entrypoint-initdb.d/01-roles.sh
             fi
+
+            for c in sportfrog-postgres sportfrog-minio; do
+              podman container exists $c || { echo "ERROR: $c no existe"; exit 1; }
+            done
 
             # --force-recreate de podman-compose también recrea las dependencias
             # (postgres/minio); se borra solo el contenedor que hay que renovar
