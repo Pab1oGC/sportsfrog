@@ -28,7 +28,7 @@ services:
       - net_db
 
   minio:
-    image: quay.io/minio/aistor/minio:RELEASE.2026-09-19T17-05-25Z
+    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: sportfrog-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
