@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT } from "src/lib/inline-photo";
+import { readInlinePhoto, INLINE_PHOTO_REQUIREMENT, readInlineReceipt, INLINE_RECEIPT_REQUIREMENT } from "src/lib/inline-photo";
 
 // MAX_LENGTH no se exporta (es un detalle interno del módulo) -- se replica
 // acá solo para poder construir los casos límite. Si el módulo cambia este
@@ -91,5 +91,55 @@ describe("readInlinePhoto", () => {
 
   it("un error de lectura sin reader.error rechaza con un mensaje genérico legible", async () => {
     await expect(readInlinePhoto(archivo({ error: null }))).rejects.toThrow("No se pudo leer el archivo.");
+  });
+});
+
+// MAX_LENGTH no se exporta -- misma razón que la de readInlinePhoto arriba.
+const RECEIPT_MAX_LENGTH = 8 * 1024 * 1024;
+
+describe("readInlineReceipt", () => {
+  it.each(["image/png", "image/jpeg", "image/webp"])("acepta %s, igual que readInlinePhoto", async (type) => {
+    const dataUrl = `data:${type};base64,QUJD`;
+    await expect(readInlineReceipt(archivo({ type, result: dataUrl }))).resolves.toBe(dataUrl);
+  });
+
+  it("acepta un PDF, a diferencia de readInlinePhoto", async () => {
+    const dataUrl = "data:application/pdf;base64,QUJD";
+    await expect(
+      readInlineReceipt(archivo({ type: "application/pdf", result: dataUrl })),
+    ).resolves.toBe(dataUrl);
+  });
+
+  it("rechaza un tipo que no es ni foto ni PDF", async () => {
+    await expect(readInlineReceipt(archivo({ type: "image/gif" }))).rejects.toThrow(INLINE_RECEIPT_REQUIREMENT);
+  });
+
+  it("rechaza si lo leído no coincide con ningún prefijo aceptado", async () => {
+    await expect(
+      readInlineReceipt(archivo({ type: "application/pdf", result: "data:text/plain;base64,AAAA" })),
+    ).rejects.toThrow(INLINE_RECEIPT_REQUIREMENT);
+  });
+
+  it("acepta una data URL de exactamente su límite de tamaño, mayor que el de una foto", async () => {
+    const dataUrl = "data:application/pdf;base64," +
+      "A".repeat(RECEIPT_MAX_LENGTH - "data:application/pdf;base64,".length);
+    expect(dataUrl.length).toBe(RECEIPT_MAX_LENGTH);
+    await expect(
+      readInlineReceipt(archivo({ type: "application/pdf", result: dataUrl })),
+    ).resolves.toBe(dataUrl);
+  });
+
+  it("rechaza una data URL que pasa su límite de tamaño por un solo caracter", async () => {
+    const dataUrl = "data:application/pdf;base64," +
+      "A".repeat(RECEIPT_MAX_LENGTH - "data:application/pdf;base64,".length + 1);
+    expect(dataUrl.length).toBe(RECEIPT_MAX_LENGTH + 1);
+    await expect(
+      readInlineReceipt(archivo({ type: "application/pdf", result: dataUrl })),
+    ).rejects.toThrow(INLINE_RECEIPT_REQUIREMENT);
+  });
+
+  it("el mensaje de rechazo nombra tanto las fotos como el PDF", () => {
+    expect(INLINE_RECEIPT_REQUIREMENT).toContain("PDF");
+    expect(INLINE_RECEIPT_REQUIREMENT).toContain("8 MB");
   });
 });

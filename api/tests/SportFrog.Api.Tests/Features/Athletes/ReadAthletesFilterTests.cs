@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
 using SportFrog.Api.Tests.Infrastructure.Validation;
 using SportFrog.Api.Features.Athletes;
+using SportFrog.Api.Features.Courses;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Tests.Infrastructure.Persistence;
+using SportFrog.Domain.School;
 
 namespace SportFrog.Api.Tests.Features.Athletes;
 
@@ -79,7 +81,8 @@ public sealed class ReadAthletesFilterTests(SportFrogDatabaseFixture fixture)
         int? minAge = null,
         int? maxAge = null,
         decimal? minWeight = null,
-        decimal? maxWeight = null)
+        decimal? maxWeight = null,
+        bool? hasCourseEnrollment = null)
     {
         await using var context = fixture.CreateAppContext();
         await using var transaction = await context.Database.BeginTransactionAsync();
@@ -101,7 +104,8 @@ public sealed class ReadAthletesFilterTests(SportFrogDatabaseFixture fixture)
 
         var result = await ReadAthletes.ListAsync(
             context, photos, httpContext, Clock, CancellationToken.None,
-            gender: gender, minAge: minAge, maxAge: maxAge, minWeight: minWeight, maxWeight: maxWeight);
+            gender: gender, minAge: minAge, maxAge: maxAge, minWeight: minWeight, maxWeight: maxWeight,
+            hasCourseEnrollment: hasCourseEnrollment);
 
         return Assert.IsType<Ok<List<ReadAthletes.Summary>>>(result).Value!;
     }
@@ -178,5 +182,85 @@ public sealed class ReadAthletesFilterTests(SportFrogDatabaseFixture fixture)
         var listing = await ListAsync(orgId);
 
         listing.Should().HaveCount(2);
+    }
+
+    private async Task EnrollInANewCourseAsync(Guid orgId, Guid athleteId, bool withdrawn = false)
+    {
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, orgId);
+
+        var course = new Course
+        {
+            Id = Guid.NewGuid(),
+            OrgId = orgId,
+            SportCode = "football",
+            Name = $"Curso {Guid.NewGuid():N}",
+            MonthlyFeeBob = 100m,
+            StartsOn = new DateOnly(2026, 3, 1),
+        };
+        course.Schedules.Add(new CourseSchedule
+        {
+            Id = Guid.NewGuid(),
+            OrgId = orgId,
+            CourseId = course.Id,
+            DayOfWeek = DayOfWeek.Tuesday,
+            StartsAt = new TimeOnly(18, 0),
+            EndsAt = new TimeOnly(19, 0),
+        });
+        context.Courses.Add(course);
+
+        context.CourseEnrollments.Add(new CourseEnrollment
+        {
+            Id = Guid.NewGuid(),
+            OrgId = orgId,
+            CourseId = course.Id,
+            AthleteId = athleteId,
+            WithdrawnAt = withdrawn ? TimeProvider.System.GetUtcNow() : null,
+        });
+
+        await context.SaveChangesAsync();
+        await transaction.CommitAsync();
+    }
+
+    [Fact]
+    public async Task ListAsync_HasCourseEnrollmentTrue_OnlyReturnsEnrolledAthletes()
+    {
+        var orgId = await SeedOrganizationAsync();
+        var studentId = await SeedAthleteAsync(orgId, "Estudiante", new DateOnly(2015, 1, 1));
+        await SeedAthleteAsync(orgId, "Competidor", new DateOnly(2010, 1, 1));
+        await EnrollInANewCourseAsync(orgId, studentId);
+
+        var listing = await ListAsync(orgId, hasCourseEnrollment: true);
+
+        listing.Select(row => row.FirstName).Should().Equal("Estudiante");
+    }
+
+    [Fact]
+    public async Task ListAsync_HasCourseEnrollmentFalse_ExcludesAthletesWithAnyEnrollment()
+    {
+        var orgId = await SeedOrganizationAsync();
+        var studentId = await SeedAthleteAsync(orgId, "Estudiante", new DateOnly(2015, 1, 1));
+        await SeedAthleteAsync(orgId, "Competidor", new DateOnly(2010, 1, 1));
+        await EnrollInANewCourseAsync(orgId, studentId);
+
+        var listing = await ListAsync(orgId, hasCourseEnrollment: false);
+
+        listing.Select(row => row.FirstName).Should().Equal("Competidor");
+    }
+
+    [Fact]
+    public async Task ListAsync_HasCourseEnrollmentTrue_CountsAWithdrawnEnrollmentAsHistoryToo()
+    {
+        // A withdrawn enrollment is still a fact about the person's school
+        // history — see EnrollmentPolicy's own remarks on why withdrawal
+        // does not free the slot the same way striking does.
+        var orgId = await SeedOrganizationAsync();
+        var formerStudentId = await SeedAthleteAsync(orgId, "ExEstudiante", new DateOnly(2015, 1, 1));
+        await EnrollInANewCourseAsync(orgId, formerStudentId, withdrawn: true);
+
+        var listing = await ListAsync(orgId, hasCourseEnrollment: true);
+
+        listing.Select(row => row.FirstName).Should().Equal("ExEstudiante");
     }
 }

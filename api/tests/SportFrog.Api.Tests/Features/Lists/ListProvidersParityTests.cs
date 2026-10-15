@@ -9,6 +9,7 @@ using SportFrog.Api.Tests.Infrastructure.Persistence;
 using SportFrog.Domain.Competitions;
 using SportFrog.Domain.Matches;
 using SportFrog.Domain.Rules;
+using SportFrog.Domain.School;
 
 namespace SportFrog.Api.Tests.Features.Lists;
 
@@ -34,7 +35,8 @@ namespace SportFrog.Api.Tests.Features.Lists;
 [Collection(nameof(SportFrogDatabaseCollection))]
 public sealed class ListProvidersParityTests(SportFrogDatabaseFixture fixture)
 {
-    private sealed record Fixture(Guid OrgId, Guid TeamCategoryId, Guid TeamId, Guid JudgedCategoryId);
+    private sealed record Fixture(
+        Guid OrgId, Guid TeamCategoryId, Guid TeamId, Guid JudgedCategoryId, Guid CourseId);
 
     private sealed class Session(SportFrogDbContext context, IDbContextTransaction transaction) : IAsyncDisposable
     {
@@ -47,11 +49,25 @@ public sealed class ListProvidersParityTests(SportFrogDatabaseFixture fixture)
         }
     }
 
+    // Fixed so TuitionArrearsList's "is this charge overdue" question has a
+    // stable "today" to ask it against, regardless of when this test
+    // actually runs — the same reasoning TuitionChargesTests' own Clock is
+    // fixed for.
+    private static readonly TimeProvider Clock = new FixedTimeProvider(
+        new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero));
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
     /// <summary>
     /// One decided football category (a team with a numbered player, a
-    /// finished match carrying a goal and a yellow card) and one judged
-    /// category with a scored entry — between the two, every provider this
-    /// feature registers has a scope it can resolve.
+    /// finished match carrying a goal and a yellow card), one judged
+    /// category with a scored entry, and one school course (an enrolled
+    /// student, a held session marked present, and one overdue, unpaid
+    /// pension charge) — between the three, every provider this feature
+    /// registers has a scope it can resolve.
     /// </summary>
     private async Task<Fixture> SeedAsync()
     {
@@ -182,11 +198,54 @@ public sealed class ListProvidersParityTests(SportFrogDatabaseFixture fixture)
             MetricId = cardMetricId, Quantity = 1,
         });
 
+        var courseId = Guid.NewGuid();
+        var courseAthleteId = Guid.NewGuid();
+        var courseEnrollmentId = Guid.NewGuid();
+        var courseSessionId = Guid.NewGuid();
+
+        setup.Courses.Add(new Course
+        {
+            Id = courseId, OrgId = orgId, SportCode = "football", Name = "Fútbol infantil",
+            MonthlyFeeBob = 100m, StartsOn = new DateOnly(2026, 1, 1),
+        });
+        setup.Athletes.Add(new Athlete
+        {
+            Id = courseAthleteId, OrgId = orgId, FirstName = "Mía", LastName = "Rojas",
+            DocumentId = $"doc-{courseAthleteId:N}", BirthDate = new DateOnly(2015, 1, 1),
+        });
+        setup.CourseEnrollments.Add(new CourseEnrollment
+        {
+            Id = courseEnrollmentId, OrgId = orgId, CourseId = courseId, AthleteId = courseAthleteId,
+            EnrolledAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        setup.CourseSessions.Add(new CourseSession
+        {
+            Id = courseSessionId, OrgId = orgId, CourseId = courseId,
+            SessionDate = new DateOnly(2026, 2, 3), StartsAt = new TimeOnly(18, 0), EndsAt = new TimeOnly(19, 0),
+            Status = CourseSessionState.Held,
+        });
+
+        await setup.SaveChangesAsync();
+
+        setup.AttendanceRecords.Add(new AttendanceRecord
+        {
+            Id = Guid.NewGuid(), OrgId = orgId, SessionId = courseSessionId, EnrollmentId = courseEnrollmentId,
+            Status = AttendanceState.Present,
+        });
+
+        // Overdue relative to Clock's fixed "today" (2026-03-10), and never
+        // paid -- exactly what TuitionArrearsList looks for.
+        setup.TuitionCharges.Add(new TuitionCharge
+        {
+            Id = Guid.NewGuid(), OrgId = orgId, EnrollmentId = courseEnrollmentId,
+            Period = new DateOnly(2026, 1, 1), AmountBob = 100m, DueOn = new DateOnly(2026, 1, 31),
+        });
+
         await setup.SaveChangesAsync();
         await transaction.CommitAsync();
         await setup.DisposeAsync();
 
-        return new Fixture(orgId, teamCategoryId, teamAId, judgedCategoryId);
+        return new Fixture(orgId, teamCategoryId, teamAId, judgedCategoryId, courseId);
     }
 
     private async Task<Session> OpenAsync(Fixture fx)
@@ -208,6 +267,7 @@ public sealed class ListProvidersParityTests(SportFrogDatabaseFixture fixture)
         {
             "posiciones", "goleadores", "tarjetas", "plantel", "plantel-puesto",
             "deportistas", "partidos", "clasificacion",
+            "plantel-curso", "asistencia", "morosos",
         }
         .Select(slug => new object[] { slug });
 
@@ -232,8 +292,14 @@ public sealed class ListProvidersParityTests(SportFrogDatabaseFixture fixture)
         "deportistas" => (new AthletesList(), ListScope.Empty),
         "partidos" => (new MatchesList(), CategoryScope(fx.TeamCategoryId)),
         "clasificacion" => (new ClassificationList(), CategoryScope(fx.JudgedCategoryId)),
+        "plantel-curso" => (new CourseRosterList(), CourseScope(fx.CourseId)),
+        "asistencia" => (new AttendanceList(), CourseScope(fx.CourseId)),
+        "morosos" => (new TuitionArrearsList(Clock), ListScope.Empty),
         _ => throw new ArgumentOutOfRangeException(nameof(slug), slug, "No case wired up for this slug."),
     };
+
+    private static ListScope CourseScope(Guid courseId) =>
+        new(new Dictionary<string, string> { ["courseId"] = courseId.ToString() });
 
     private static ListScope CategoryScope(Guid categoryId) =>
         new(new Dictionary<string, string> { ["categoryId"] = categoryId.ToString() });

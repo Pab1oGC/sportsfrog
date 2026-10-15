@@ -14,7 +14,7 @@ import { withQueryParams } from 'src/lib/query-string';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { PageHeader } from 'src/components/page-header';
 import { CascadeFilters } from 'src/components/cascade-filters';
-import { SelectionField, SelectionTeam } from 'src/components/selectors';
+import { SelectionField, SelectionTeam, SelectionCourse } from 'src/components/selectors';
 import { scopeFromCascade, isScopeComplete, neededCascadeLevels } from 'src/pages/lists/list-scope';
 import { gridColumns, gridRows } from 'src/pages/lists/list-table';
 
@@ -51,6 +51,7 @@ export default function ListsPage() {
     withQueryParams(endpoints.listCatalog, { competitionId: cascade.compId }),
   );
   const [slug, setSlug] = useState('');
+  const [courseId, setCourseId] = useState('');
   const [position, setPosition] = useState('');
   const [search, setSearch] = useState('');
   const [gender, setGender] = useState('');
@@ -58,12 +59,12 @@ export default function ListsPage() {
 
   const selected = (catalog || []).find((entry) => entry.slug === slug) || null;
   const levels = neededCascadeLevels(selected?.parameters);
-  // Ninguno de estos cuatro sale del cascada (Competicion → Categoria →
+  // Ninguno de estos cinco sale del cascada (Competicion → Categoria →
   // Equipo): son campos propios de esta página, así que scopeFromCascade los
   // recibe pegados al mismo objeto en vez de hacerle conocer un segundo
   // origen por cada uno.
   const scope = selected
-    ? scopeFromCascade(selected.parameters, { ...cascade, position, search, gender })
+    ? scopeFromCascade(selected.parameters, { ...cascade, courseId, position, search, gender })
     : {};
   const ready = selected ? isScopeComplete(selected.parameters, scope) : false;
 
@@ -119,6 +120,15 @@ export default function ListsPage() {
               categoryId={cascade.catId}
               value={cascade.teamId}
               onChange={(e) => cascade.setTeamId(e.target.value)}
+              required
+            />
+          </Box>
+        )}
+        {levels.course && (
+          <Box sx={{ flex: 1, minWidth: 200 }}>
+            <SelectionCourse
+              value={courseId}
+              onChange={(e) => setCourseId(e.target.value)}
               required
             />
           </Box>

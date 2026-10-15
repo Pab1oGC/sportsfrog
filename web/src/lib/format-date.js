@@ -17,6 +17,15 @@ export function fechaHora(iso) {
   return `${dd}/${mm}/${yyyy} ${pad(horas)}:${pad(d.getMinutes())} ${ampm}`;
 }
 
+// Un DateOnly del servidor llega como "aaaa-mm-dd"; un periodo de pensión
+// siempre cae en el primero del mes, así que solo el mes y el año importan
+// para mostrarlo. Compartida entre TuitionAccountDialog y PendingReceiptsTab.
+export function periodo(period) {
+  if (!period) return '—';
+  const [anio, mes] = period.split('-');
+  return `${mes}/${anio}`;
+}
+
 // El input datetime-local quiere hora local sin zona ("2026-05-01T16:00"), y
 // lo que guarda el partido es una fecha con zona ("...Z" o "+00:00").
 // Formatear a mano evita el redondeo raro que a veces da toISOString con la

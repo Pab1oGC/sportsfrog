@@ -13,18 +13,20 @@ namespace SportFrog.Api.Features.Lists;
 /// Driven entirely by <see cref="ListParameterKind"/>, never by which
 /// provider is asking: any provider declaring a
 /// <see cref="ListParameterKind.Category"/> parameter is gated on the
-/// competition that category belongs to, and any declaring a
+/// competition that category belongs to, any declaring a
 /// <see cref="ListParameterKind.Team"/> one is gated on either axis that
 /// team belongs to — the same dual reach <c>ReadTeams</c> and
-/// <c>ReadTeamReport</c> already grant a team. A provider adding a new
-/// parameter of either kind is gated this same way automatically, with
-/// nothing here to change.
+/// <c>ReadTeamReport</c> already grant a team — and any declaring a
+/// <see cref="ListParameterKind.Course"/> one is gated the same single way
+/// <c>RequireScope</c> already gates a route's own <c>courseId</c>. A
+/// provider adding a new parameter of any of the three kinds is gated this
+/// same way automatically, with nothing here to change.
 ///
-/// A provider declaring neither — today, only
-/// <see cref="Providers.AthletesList"/> — has no single target to gate on:
-/// <c>ReadLists</c> narrows its rows for a scoped membership instead of
-/// refusing it outright, which is a different question from the one this
-/// class answers.
+/// A provider declaring none of the three — <see cref="Providers.AthletesList"/>
+/// and <see cref="Providers.TuitionArrearsList"/> today — has no single
+/// target to gate on: <c>ReadLists</c> narrows its rows for a scoped
+/// membership instead of refusing it outright, which is a different
+/// question from the one this class answers.
 /// </remarks>
 internal static class ListScopeGate
 {
@@ -61,8 +63,15 @@ internal static class ListScopeGate
                     || RequireScopeExtensions.Reaches(ScopeType.Club, organization, resolved));
         }
 
-        // Neither kind declared: there is no single target here to gate —
-        // see the class remarks.
+        if (provider.Parameters.FirstOrDefault(parameter => parameter.Kind == ListParameterKind.Course) is { } course)
+        {
+            return scope.GetGuid(course.Name) is { } courseId
+                && await ReachesAsync(
+                    ScopeType.Course, ScopeTargetKind.Course, courseId, organization, resolver, cancellationToken);
+        }
+
+        // None of the three kinds declared: there is no single target here
+        // to gate — see the class remarks.
         return true;
     }
 

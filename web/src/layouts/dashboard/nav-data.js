@@ -21,6 +21,10 @@ export function getNavData(isPlatformAdmin = false) {
       { title: "Sedes", path: "/dashboard/venues", icon: "mdi:map-marker-outline" },
       { title: "Reglamentos", path: "/dashboard/rulesets", icon: "mdi:book-open-outline" },
     ]},
+    { subheader: "Escuela", items: [
+      { title: "Cursos", path: "/dashboard/courses", icon: "mdi:school-outline" },
+      { title: "Cobranza", path: "/dashboard/tuition", icon: "mdi:cash-multiple" },
+    ]},
     { subheader: "Documentos", items: [
       { title: "Plantillas", path: "/dashboard/templates", icon: "mdi:file-document-outline" },
       { title: "Diseños de credencial", path: "/dashboard/credential-designs", icon: "mdi:card-account-details-outline" },

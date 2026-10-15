@@ -2,36 +2,9 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import { alpha } from '@mui/material/styles';
-import { Iconify } from 'src/components/iconify';
 import { useApi } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
-
-function StatCard({ title, value, icon, color }) {
-  return (
-    <Card sx={{ '&:hover': { transform: 'translateY(-3px)', boxShadow: (t) => `0 10px 28px ${alpha(t.palette[color].main, 0.16)}` } }}>
-      <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Box
-          sx={{
-            width: 48, height: 48, borderRadius: 2, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            bgcolor: (t) => alpha(t.palette[color].main, 0.12),
-            transition: 'transform 0.2s ease',
-            '.MuiCard-root:hover &': { transform: 'scale(1.08)' },
-          }}
-        >
-          <Iconify icon={icon} width={24} sx={{ color: color + '.main' }} />
-        </Box>
-        <Box>
-          <Typography variant='h4' fontWeight={700}>{value || '--'}</Typography>
-          <Typography variant='body2' color='text.secondary'>{title}</Typography>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
+import { StatCard } from 'src/components/stat-card';
 
 export default function DashboardPage() {
   const { data: comps } = useApi(endpoints.competitions);

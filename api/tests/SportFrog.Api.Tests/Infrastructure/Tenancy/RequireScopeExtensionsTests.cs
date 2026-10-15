@@ -85,14 +85,45 @@ public sealed class RequireScopeExtensionsTests
         RequireScopeExtensions.Reaches(ScopeType.Competition, organization, target).Should().BeFalse();
     }
 
+    [Fact]
+    public void Course_axis_reaches_when_the_target_course_is_in_scope()
+    {
+        var courseId = Guid.NewGuid();
+        var organization = EstablishedWith(courseIds: [courseId]);
+        var target = new ResolvedScopeTarget(CompetitionId: null, ClubId: null, CourseId: courseId);
+
+        RequireScopeExtensions.Reaches(ScopeType.Course, organization, target).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Course_axis_does_not_reach_a_different_course()
+    {
+        var organization = EstablishedWith(courseIds: [Guid.NewGuid()]);
+        var target = new ResolvedScopeTarget(CompetitionId: null, ClubId: null, CourseId: Guid.NewGuid());
+
+        RequireScopeExtensions.Reaches(ScopeType.Course, organization, target).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Course_axis_does_not_reach_a_target_with_no_course_id()
+    {
+        // A competition-only target resolves CourseId to null — a course
+        // has no competition or club of its own, and the reverse holds too.
+        var organization = EstablishedWith(courseIds: [Guid.NewGuid()]);
+        var target = new ResolvedScopeTarget(CompetitionId: Guid.NewGuid(), ClubId: null);
+
+        RequireScopeExtensions.Reaches(ScopeType.Course, organization, target).Should().BeFalse();
+    }
+
     private static OrganizationContext EstablishedWith(
-        IEnumerable<Guid>? competitionIds = null, IEnumerable<Guid>? clubIds = null)
+        IEnumerable<Guid>? competitionIds = null, IEnumerable<Guid>? clubIds = null, IEnumerable<Guid>? courseIds = null)
     {
         var organization = new OrganizationContext();
         organization.Establish(Guid.NewGuid(), MembershipRole.Operator, Guid.NewGuid(), ipAddress: null);
         organization.EstablishScopes(new MembershipScopeSet(
             (competitionIds ?? []).ToHashSet(),
-            (clubIds ?? []).ToHashSet()));
+            (clubIds ?? []).ToHashSet(),
+            (courseIds ?? []).ToHashSet()));
         return organization;
     }
 }

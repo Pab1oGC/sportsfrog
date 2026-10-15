@@ -60,6 +60,20 @@ public sealed class MembershipScopeReaderTests(SportFrogDatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task A_membership_scoped_to_one_course_reads_exactly_that_course()
+    {
+        var fx = await SeedAsync();
+        await AddScopeAsync(fx.OrgId, fx.MembershipId, ScopeType.Course, courseId: fx.CourseId);
+
+        var scopes = await ReadAsync(fx.OrgId, fx.UserId);
+
+        scopes.IsOrganizationWide.Should().BeFalse();
+        scopes.CourseIds.Should().BeEquivalentTo([fx.CourseId]);
+        scopes.CompetitionIds.Should().BeEmpty();
+        scopes.ClubIds.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_membership_scoped_to_both_a_competition_and_a_club_reads_both()
     {
         // The two kinds are independent: a delegate for one club who is also
@@ -120,7 +134,8 @@ public sealed class MembershipScopeReaderTests(SportFrogDatabaseFixture fixture)
     }
 
     private async Task AddScopeAsync(
-        Guid organizationId, Guid membershipId, ScopeType scopeType, Guid? competitionId = null, Guid? clubId = null)
+        Guid organizationId, Guid membershipId, ScopeType scopeType,
+        Guid? competitionId = null, Guid? clubId = null, Guid? courseId = null)
     {
         await using var context = fixture.CreateAppContext();
         await using var transaction = await context.Database.BeginTransactionAsync();
@@ -134,6 +149,7 @@ public sealed class MembershipScopeReaderTests(SportFrogDatabaseFixture fixture)
             ScopeType = scopeType,
             CompetitionId = competitionId,
             ClubId = clubId,
+            CourseId = courseId,
         });
 
         await context.SaveChangesAsync();
@@ -182,7 +198,8 @@ public sealed class MembershipScopeReaderTests(SportFrogDatabaseFixture fixture)
         return membershipId;
     }
 
-    private sealed record Fixture(Guid OrgId, Guid UserId, Guid MembershipId, Guid CompetitionId, Guid ClubId);
+    private sealed record Fixture(
+        Guid OrgId, Guid UserId, Guid MembershipId, Guid CompetitionId, Guid ClubId, Guid CourseId);
 
     private async Task<Fixture> SeedAsync()
     {
@@ -190,6 +207,7 @@ public sealed class MembershipScopeReaderTests(SportFrogDatabaseFixture fixture)
         var userId = Guid.NewGuid();
         var clubId = Guid.NewGuid();
         var competitionId = Guid.NewGuid();
+        var courseId = Guid.NewGuid();
         var rulesetId = Guid.NewGuid();
 
         await using var setup = fixture.CreateAppContext();
@@ -250,9 +268,19 @@ public sealed class MembershipScopeReaderTests(SportFrogDatabaseFixture fixture)
             Settings = new CompetitionSettings(),
         });
 
+        setup.Courses.Add(new Course
+        {
+            Id = courseId,
+            OrgId = orgId,
+            SportCode = "football",
+            Name = "Curso de Prueba",
+            MonthlyFeeBob = 100m,
+            StartsOn = new DateOnly(2026, 3, 1),
+        });
+
         await setup.SaveChangesAsync();
         await transaction.CommitAsync();
 
-        return new Fixture(orgId, userId, membershipId, competitionId, clubId);
+        return new Fixture(orgId, userId, membershipId, competitionId, clubId, courseId);
     }
 }

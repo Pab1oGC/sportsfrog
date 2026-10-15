@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using Hangfire;
 using SportFrog.Api.Features.Accreditation;
 using SportFrog.Api.Features.Athletes;
 using SportFrog.Api.Features.Athletes.Photos;
@@ -14,6 +15,11 @@ using SportFrog.Api.Features.Competitions.Bulletin;
 using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
+using SportFrog.Api.Features.Courses;
+using SportFrog.Api.Features.Courses.Enrollments;
+using SportFrog.Api.Features.Courses.Sessions;
+using SportFrog.Api.Features.Courses.Attendance;
+using SportFrog.Api.Features.Tuition;
 using SportFrog.Api.Features.Organizations;
 using SportFrog.Api.Features.Performances;
 using SportFrog.Api.Features.Rosters;
@@ -233,6 +239,9 @@ builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportF
 builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.AthletesList>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.MatchesList>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.ClassificationList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.CourseRosterList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.AttendanceList>();
+builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportFrog.Api.Features.Lists.Providers.TuitionArrearsList>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListRegistry, SportFrog.Api.Features.Lists.ListRegistry>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
@@ -243,6 +252,8 @@ builder.Services.AddScoped<SportFrog.Api.Features.Teams.TeamUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Clubs.UnaffiliatedClub>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Courses.Enrollments.EnrollmentPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Courses.Attendance.AttendancePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Accreditation.AccreditationResolver>();
 
@@ -290,6 +301,10 @@ builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>(
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.CredentialNumbering>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.IssueDocumentsJob>();
+builder.Services.AddScoped<SportFrog.Api.Features.Tuition.TuitionAccrual>();
+builder.Services.AddScoped<SportFrog.Api.Features.Tuition.TuitionAccrualJob>();
+builder.Services.AddScoped<SportFrog.Api.Features.Tuition.PaymentPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Tuition.PaymentReceipt>();
 
 // Printed on physical cards, so a wrong address is unrecoverable. Validated
 // on start rather than discovered on a laminated credential.
@@ -450,6 +465,38 @@ api.MapPreviewCredential();
 api.MapVenues();
 api.MapVenueSpaces();
 
+api.MapCreateCourse();
+api.MapReadCourses();
+api.MapUpdateCourse();
+api.MapDeleteCourse();
+
+api.MapEnrollStudent();
+api.MapEnrollStudentsBulk();
+api.MapReadEnrollments();
+api.MapWithdrawEnrollment();
+api.MapStrikeEnrollment();
+api.MapSetEnrollmentFee();
+
+api.MapGenerateSessions();
+api.MapReadSessions();
+api.MapCancelSession();
+api.MapRescheduleSession();
+
+api.MapReadSessionAttendance();
+api.MapRecordAttendance();
+api.MapReadAttendanceSummary();
+
+api.MapAccrueTuition();
+api.MapReadTuitionAccount();
+api.MapWaiveCharge();
+api.MapVoidCharge();
+
+api.MapRecordPayment();
+api.MapReviewPayment();
+api.MapVoidPayment();
+api.MapReadPayment();
+api.MapReadPendingReceipts();
+
 api.MapScheduleMatch();
 api.MapReadMatches();
 api.MapRescheduleMatch();
@@ -507,6 +554,22 @@ api.MapChangePassword();
 app.MapGet("/health", () => Results.Ok())
     .AllowAnonymous()
     .WithoutOrganizationContext();
+
+// The first recurring job in this system — every other one is enqueued once,
+// in response to something that just happened. This one answers to nothing;
+// it fires itself, every month, for every organization at once.
+//
+// The service-based API, not the static RecurringJob.AddOrUpdate: that one
+// reaches for JobStorage.Current, a process-wide static Hangfire itself only
+// sets as a side effect of building the app's DI container — reading it this
+// early throws "Current JobStorage instance has not been initialized yet."
+// IRecurringJobManager asks the container directly instead, which by this
+// point already has AddSportFrogJobs' storage registered in it.
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.GetRequiredService<IRecurringJobManager>().AddOrUpdate<TuitionAccrualJob>(
+        "tuition-accrual", job => job.RunAsync(CancellationToken.None), Cron.Monthly);
+}
 
 app.Run();
 

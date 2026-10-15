@@ -222,16 +222,24 @@ public static class ReadLists
                 statusCode: StatusCodes.Status403Forbidden));
         }
 
-        // AthletesList is the one provider with no single category or team
-        // to gate on (ListScopeGate let it straight through above) — a
-        // scoped membership gets its rows narrowed instead of refused.
-        var table = provider is AthletesList athletesList
-            ? await athletesList.LoadAsync(
+        // AthletesList and TuitionArrearsList are the two providers with no
+        // single category, team or course to gate on (ListScopeGate let
+        // them straight through above) — a scoped membership gets its rows
+        // narrowed instead of refused.
+        var table = provider switch
+        {
+            AthletesList athletesList => await athletesList.LoadAsync(
                 scope,
                 organization.IsOrganizationWide ? null : organization.ScopedCompetitionIds,
                 database,
-                cancellationToken)
-            : await provider.LoadAsync(scope, database, cancellationToken);
+                cancellationToken),
+            TuitionArrearsList arrearsList => await arrearsList.LoadAsync(
+                scope,
+                organization.IsOrganizationWide ? null : organization.ScopedCourseIds,
+                database,
+                cancellationToken),
+            _ => await provider.LoadAsync(scope, database, cancellationToken),
+        };
 
         if (table is null)
         {

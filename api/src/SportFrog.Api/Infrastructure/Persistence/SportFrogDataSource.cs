@@ -34,6 +34,10 @@ public static class SportFrogDataSource
         builder.MapEnum<AccreditationItemKind>("accreditation_item_kind");
         builder.MapEnum<PhotoValidationState>("photo_validation_state");
         builder.MapEnum<ScopeType>("membership_scope_type");
+        builder.MapEnum<CourseSessionState>("course_session_state");
+        builder.MapEnum<AttendanceState>("attendance_state");
+        builder.MapEnum<PaymentMethod>("payment_method");
+        builder.MapEnum<ReceiptReviewState>("receipt_review_state");
 
         return builder.Build();
     }
@@ -56,5 +60,9 @@ public static class SportFrogDataSource
         builder.MapEnum<AccreditationItemKind>("accreditation_item_kind");
         builder.MapEnum<PhotoValidationState>("photo_validation_state");
         builder.MapEnum<ScopeType>("membership_scope_type");
+        builder.MapEnum<CourseSessionState>("course_session_state");
+        builder.MapEnum<AttendanceState>("attendance_state");
+        builder.MapEnum<PaymentMethod>("payment_method");
+        builder.MapEnum<ReceiptReviewState>("receipt_review_state");
     }
 }

@@ -21,7 +21,8 @@ namespace SportFrog.Api.Tests.Infrastructure.Persistence;
 [Collection(nameof(SportFrogDatabaseCollection))]
 public sealed class MembershipScopeTests(SportFrogDatabaseFixture fixture)
 {
-    private sealed record Fixture(Guid OrgId, Guid MembershipId, Guid CompetitionId, Guid OtherCompetitionId, Guid ClubId);
+    private sealed record Fixture(
+        Guid OrgId, Guid MembershipId, Guid CompetitionId, Guid OtherCompetitionId, Guid ClubId, Guid CourseId);
 
     [Fact]
     public async Task A_competition_scope_round_trips_through_the_database_unchanged()
@@ -92,6 +93,107 @@ public sealed class MembershipScopeTests(SportFrogDatabaseFixture fixture)
         stored.ScopeType.Should().Be(ScopeType.Club);
         stored.ClubId.Should().Be(fx.ClubId);
         stored.CompetitionId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_course_scope_round_trips_through_the_database_unchanged()
+    {
+        var fx = await SeedAsync();
+        var scopeId = Guid.NewGuid();
+
+        await using (var write = fixture.CreateAppContext())
+        {
+            await using var transaction = await write.Database.BeginTransactionAsync();
+            await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(write, fx.OrgId);
+
+            write.MembershipScopes.Add(new MembershipScope
+            {
+                Id = scopeId,
+                OrgId = fx.OrgId,
+                MembershipId = fx.MembershipId,
+                ScopeType = ScopeType.Course,
+                CourseId = fx.CourseId,
+            });
+            await write.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+
+        await using var read = fixture.CreateAppContext();
+        await using var readTransaction = await read.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(read, fx.OrgId);
+
+        var stored = await read.MembershipScopes.AsNoTracking().SingleAsync(s => s.Id == scopeId);
+
+        stored.ScopeType.Should().Be(ScopeType.Course);
+        stored.CourseId.Should().Be(fx.CourseId);
+        stored.CompetitionId.Should().BeNull();
+        stored.ClubId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_row_naming_both_a_course_and_a_competition_violates_the_target_check()
+    {
+        // The three-branch check added by AddCourseScopeColumn, exercised
+        // the same way the pre-existing competition/club pair already is
+        // below: scope_type names exactly one target, never two.
+        var fx = await SeedAsync();
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
+
+        context.MembershipScopes.Add(new MembershipScope
+        {
+            Id = Guid.NewGuid(),
+            OrgId = fx.OrgId,
+            MembershipId = fx.MembershipId,
+            ScopeType = ScopeType.Course,
+            CourseId = fx.CourseId,
+            CompetitionId = fx.CompetitionId,
+        });
+
+        var attempt = async () => await context.SaveChangesAsync();
+
+        var thrown = await Assert.ThrowsAsync<DbUpdateException>(attempt);
+        var postgres = Assert.IsType<PostgresException>(thrown.InnerException);
+        Assert.Equal(PostgresErrorCodes.CheckViolation, postgres.SqlState);
+        Assert.Contains("ck_membership_scope_target", postgres.ConstraintName ?? postgres.MessageText);
+    }
+
+    [Fact]
+    public async Task Scoping_the_same_membership_twice_to_the_same_course_violates_the_unique_index()
+    {
+        var fx = await SeedAsync();
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
+
+        context.MembershipScopes.Add(new MembershipScope
+        {
+            Id = Guid.NewGuid(),
+            OrgId = fx.OrgId,
+            MembershipId = fx.MembershipId,
+            ScopeType = ScopeType.Course,
+            CourseId = fx.CourseId,
+        });
+        await context.SaveChangesAsync();
+
+        context.MembershipScopes.Add(new MembershipScope
+        {
+            Id = Guid.NewGuid(),
+            OrgId = fx.OrgId,
+            MembershipId = fx.MembershipId,
+            ScopeType = ScopeType.Course,
+            CourseId = fx.CourseId,
+        });
+
+        var attempt = async () => await context.SaveChangesAsync();
+
+        var thrown = await Assert.ThrowsAsync<DbUpdateException>(attempt);
+        var postgres = Assert.IsType<PostgresException>(thrown.InnerException);
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres.SqlState);
+        Assert.Contains("uq_membership_scope_course", postgres.ConstraintName ?? postgres.MessageText);
     }
 
     [Fact]
@@ -232,6 +334,7 @@ public sealed class MembershipScopeTests(SportFrogDatabaseFixture fixture)
         var clubId = Guid.NewGuid();
         var competitionId = Guid.NewGuid();
         var otherCompetitionId = Guid.NewGuid();
+        var courseId = Guid.NewGuid();
         var rulesetId = Guid.NewGuid();
 
         await using var setup = fixture.CreateAppContext();
@@ -305,9 +408,19 @@ public sealed class MembershipScopeTests(SportFrogDatabaseFixture fixture)
             Settings = new CompetitionSettings(),
         });
 
+        setup.Courses.Add(new Course
+        {
+            Id = courseId,
+            OrgId = orgId,
+            SportCode = "football",
+            Name = "Curso de Prueba",
+            MonthlyFeeBob = 100m,
+            StartsOn = new DateOnly(2026, 3, 1),
+        });
+
         await setup.SaveChangesAsync();
         await transaction.CommitAsync();
 
-        return new Fixture(orgId, membershipId, competitionId, otherCompetitionId, clubId);
+        return new Fixture(orgId, membershipId, competitionId, otherCompetitionId, clubId, courseId);
     }
 }

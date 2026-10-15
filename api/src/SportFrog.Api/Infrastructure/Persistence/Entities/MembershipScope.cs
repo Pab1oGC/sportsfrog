@@ -14,18 +14,22 @@ public enum ScopeType
 
     /// <summary>The membership reaches its role for this one club's own data.</summary>
     Club,
+
+    /// <summary>The membership reaches its role for this one course's own data.</summary>
+    Course,
 }
 
 /// <summary>
-/// Narrows a membership's role to one competition or one club, rather than
-/// the whole organization.
+/// Narrows a membership's role to one competition, one club, or one course,
+/// rather than the whole organization.
 ///
 /// A membership with no rows here is unaffected: it reaches its role
 /// everywhere in the organization, exactly as the role check works today
 /// (RF-02). A membership WITH rows reaches that same role only inside the
-/// competitions and clubs those rows name — an event's own administrator,
-/// or a club's delegate, are a role held narrower than the organization,
-/// not a different or lesser role.
+/// competitions, clubs and courses those rows name — an event's own
+/// administrator, a club's delegate, or a coach reaching only the course
+/// they teach, are a role held narrower than the organization, not a
+/// different or lesser role.
 ///
 /// This is deliberately a second, independent axis from
 /// <see cref="MembershipRole"/>'s rank: how much a membership may do and
@@ -36,10 +40,11 @@ public enum ScopeType
 /// </summary>
 /// <remarks>
 /// One row names exactly one target: <see cref="ScopeType"/> says which of
-/// <see cref="CompetitionId"/>/<see cref="ClubId"/> must be set, the database
-/// enforces that the other is null (ck_membership_scope_target), and a
-/// membership that must reach several competitions gets several rows rather
-/// than one row widened to cover them.
+/// <see cref="CompetitionId"/>/<see cref="ClubId"/>/<see cref="CourseId"/>
+/// must be set, the database enforces that the other two are null
+/// (ck_membership_scope_target), and a membership that must reach several
+/// competitions gets several rows rather than one row widened to cover
+/// them.
 ///
 /// Carries org_id and is therefore subject to the isolation policy, like
 /// <see cref="OrganizationMembership"/> itself.
@@ -58,10 +63,13 @@ public sealed class MembershipScope
 
     public Guid? ClubId { get; set; }
 
+    public Guid? CourseId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
     public OrganizationMembership? Membership { get; set; }
     public Competition? Competition { get; set; }
     public Club? Club { get; set; }
+    public Course? Course { get; set; }
 }

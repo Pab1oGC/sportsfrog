@@ -24,6 +24,7 @@ public enum ListParameterKind
     Search,
     Gender,
     DateRange,
+    Course,
 }
 
 /// <summary>

@@ -44,6 +44,10 @@ internal static class StorageKeys
     public static string Picture(Guid organizationId, string category, string extension) =>
         $"{Prefix(organizationId)}pictures/{category}/{Guid.NewGuid():n}.{extension}";
 
+    /// <summary>A pension payment's proof — a photograph of a receipt, or a PDF of one.</summary>
+    public static string PaymentReceipt(Guid organizationId, Guid chargeId, string extension) =>
+        $"{Prefix(organizationId)}receipts/{chargeId:n}/{Guid.NewGuid():n}.{extension}";
+
     /// <summary>
     /// An uploaded archive of photographs, kept under its batch.
     /// </summary>

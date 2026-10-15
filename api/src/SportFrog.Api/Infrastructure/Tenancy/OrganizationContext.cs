@@ -55,12 +55,19 @@ public sealed class OrganizationContext
     public IReadOnlySet<Guid> ScopedClubIds { get; private set; } = new HashSet<Guid>();
 
     /// <summary>
-    /// Whether the caller's role reaches everywhere in the organization
-    /// rather than being narrowed to specific competitions or clubs. True
-    /// for every membership today, and for any membership that has never
-    /// had a scope granted.
+    /// The courses the caller's role is narrowed to. Empty — the ordinary
+    /// case — means it is not narrowed by course at all.
     /// </summary>
-    public bool IsOrganizationWide => ScopedCompetitionIds.Count == 0 && ScopedClubIds.Count == 0;
+    public IReadOnlySet<Guid> ScopedCourseIds { get; private set; } = new HashSet<Guid>();
+
+    /// <summary>
+    /// Whether the caller's role reaches everywhere in the organization
+    /// rather than being narrowed to specific competitions, clubs or
+    /// courses. True for every membership today, and for any membership
+    /// that has never had a scope granted.
+    /// </summary>
+    public bool IsOrganizationWide =>
+        ScopedCompetitionIds.Count == 0 && ScopedClubIds.Count == 0 && ScopedCourseIds.Count == 0;
 
     /// <summary>
     /// False on the paths that legitimately run without one — signing in,
@@ -89,10 +96,16 @@ public sealed class OrganizationContext
     /// could change the organization mid-request would be acting outside the
     /// context the database has already fixed for the transaction.
     /// </summary>
+    /// <param name="userId">
+    /// Null only for work a schedule started rather than a person — see
+    /// <c>TuitionAccrualJob</c>. The audit log already tolerates that: its
+    /// own <see cref="Infrastructure.Persistence.Entities.AuditEntry.UserId"/>
+    /// is nullable for exactly this case.
+    /// </param>
     internal void Establish(
         Guid organizationId,
         MembershipRole role,
-        Guid userId,
+        Guid? userId,
         System.Net.IPAddress? ipAddress)
     {
         if (IsEstablished)
@@ -134,6 +147,7 @@ public sealed class OrganizationContext
 
         ScopedCompetitionIds = scopes.CompetitionIds;
         ScopedClubIds = scopes.ClubIds;
+        ScopedCourseIds = scopes.CourseIds;
         _scopesEstablished = true;
     }
 }

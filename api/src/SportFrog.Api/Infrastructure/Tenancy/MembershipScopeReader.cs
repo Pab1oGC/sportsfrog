@@ -5,26 +5,34 @@ using SportFrog.Api.Infrastructure.Persistence.Entities;
 namespace SportFrog.Api.Infrastructure.Tenancy;
 
 /// <summary>
-/// The competitions and clubs one membership's role is narrowed to.
+/// The competitions, clubs and courses one membership's role is narrowed to.
 /// </summary>
 /// <remarks>
-/// Both sets empty — <see cref="OrganizationWide"/> — is the ordinary case
-/// and means the membership is not narrowed at all: it reaches its role
+/// All three sets empty — <see cref="OrganizationWide"/> — is the ordinary
+/// case and means the membership is not narrowed at all: it reaches its role
 /// everywhere in the organization, the same as before this type existed. A
 /// membership scoped to several targets of the same kind simply has several
 /// entries in that one set; there is no row-per-target plumbing visible here.
+///
+/// <paramref name="CourseIds"/> defaults to empty rather than being
+/// required, so every call site built before the course scope existed —
+/// this record's own two-argument constructions in <see cref="ReadAsync"/>
+/// and across the test suite — keeps compiling unchanged.
 /// </remarks>
-public sealed record MembershipScopeSet(IReadOnlySet<Guid> CompetitionIds, IReadOnlySet<Guid> ClubIds)
+public sealed record MembershipScopeSet(
+    IReadOnlySet<Guid> CompetitionIds, IReadOnlySet<Guid> ClubIds, IReadOnlySet<Guid>? CourseIds = null)
 {
+    public IReadOnlySet<Guid> CourseIds { get; init; } = CourseIds ?? new HashSet<Guid>();
+
     public static readonly MembershipScopeSet OrganizationWide =
         new(new HashSet<Guid>(), new HashSet<Guid>());
 
     /// <summary>
     /// Whether this membership carries no narrowing at all. Checking this
     /// rather than each set individually is what keeps "no rows" reading as
-    /// one deliberate case instead of two coincidentally-empty ones.
+    /// one deliberate case instead of three coincidentally-empty ones.
     /// </summary>
-    public bool IsOrganizationWide => CompetitionIds.Count == 0 && ClubIds.Count == 0;
+    public bool IsOrganizationWide => CompetitionIds.Count == 0 && ClubIds.Count == 0 && CourseIds.Count == 0;
 }
 
 /// <summary>
@@ -60,7 +68,7 @@ public sealed class MembershipScopeReader(SportFrogDbContext database)
     {
         var rows = await database.MembershipScopes
             .Where(scope => scope.Membership!.UserId == userId)
-            .Select(scope => new { scope.ScopeType, scope.CompetitionId, scope.ClubId })
+            .Select(scope => new { scope.ScopeType, scope.CompetitionId, scope.ClubId, scope.CourseId })
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -78,6 +86,11 @@ public sealed class MembershipScopeReader(SportFrogDbContext database)
             .Select(row => row.ClubId!.Value)
             .ToHashSet();
 
-        return new MembershipScopeSet(competitionIds, clubIds);
+        var courseIds = rows
+            .Where(row => row.ScopeType == ScopeType.Course)
+            .Select(row => row.CourseId!.Value)
+            .ToHashSet();
+
+        return new MembershipScopeSet(competitionIds, clubIds, courseIds);
     }
 }

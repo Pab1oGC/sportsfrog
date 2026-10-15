@@ -5,8 +5,8 @@ namespace SportFrog.Api.Infrastructure.Tenancy;
 /// <summary>
 /// One way an endpoint accepts being reached by a scoped membership: the
 /// route value named <see cref="RouteKey"/>, read as a
-/// <see cref="ScopeTargetKind"/> and resolved to a competition or a club,
-/// checked against whichever of those two the caller is scoped to by
+/// <see cref="ScopeTargetKind"/> and resolved to a competition, a club or a
+/// course, checked against whichever of those the caller is scoped to by
 /// <see cref="Axis"/>.
 /// </summary>
 /// <remarks>
@@ -28,8 +28,8 @@ public sealed record RequiredScope(IReadOnlyList<ScopeRequirement> AnyOf);
 public static class RequireScopeExtensions
 {
     /// <summary>
-    /// Narrows an already-required role to specific competitions or clubs:
-    /// refuses the request unless the caller's membership is
+    /// Narrows an already-required role to specific competitions, clubs or
+    /// courses: refuses the request unless the caller's membership is
     /// organization-wide, or reaches at least one of <paramref name="anyOf"/>.
     /// </summary>
     /// <remarks>
@@ -131,6 +131,8 @@ public static class RequireScopeExtensions
                 && organization.ScopedCompetitionIds.Contains(competitionId),
             ScopeType.Club => target.ClubId is { } clubId
                 && organization.ScopedClubIds.Contains(clubId),
+            ScopeType.Course => target.CourseId is { } courseId
+                && organization.ScopedCourseIds.Contains(courseId),
             _ => throw new ArgumentOutOfRangeException(nameof(axis), axis, "Unknown scope axis."),
         };
 

@@ -88,6 +88,20 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
+    public DbSet<Course> Courses => Set<Course>();
+
+    public DbSet<CourseSchedule> CourseSchedules => Set<CourseSchedule>();
+
+    public DbSet<CourseEnrollment> CourseEnrollments => Set<CourseEnrollment>();
+
+    public DbSet<CourseSession> CourseSessions => Set<CourseSession>();
+
+    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+
+    public DbSet<TuitionCharge> TuitionCharges => Set<TuitionCharge>();
+
+    public DbSet<TuitionPayment> TuitionPayments => Set<TuitionPayment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

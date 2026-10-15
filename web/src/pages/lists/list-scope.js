@@ -15,6 +15,7 @@ const SOURCE_VALUE_BY_KIND = {
   competition: (source) => source.compId,
   category: (source) => source.catId,
   team: (source) => source.teamId,
+  course: (source) => source.courseId,
   position: (source) => source.position,
   search: (source) => source.search,
   gender: (source) => source.gender,
@@ -45,14 +46,17 @@ export function isScopeComplete(parameters, scope) {
 // competicion elegida como para tenerlas resueltas de antemano, así que no
 // hace falta volver a decidir si mostrarlas. Equipo sí sigue siendo propio
 // de la lista elegida: solo "plantel" lo pide, y para entonces la categoria
-// ya está elegida -- useCascade ya resuelve esa dependencia. Los demás no
-// dependen de nada: se muestran exactamente cuando la lista elegida los
-// declara.
+// ya está elegida -- useCascade ya resuelve esa dependencia. Curso no
+// depende de ninguna de las dos -- un curso no pertenece a ninguna
+// competicion -- así que se muestra exactamente cuando la lista elegida lo
+// declara, con su propio desplegable y sin pasar por el cascada. Los demás
+// tampoco dependen de nada.
 export function neededCascadeLevels(parameters) {
   const kinds = new Set((parameters || []).map((param) => param.kind));
 
   return {
     team: kinds.has('team'),
+    course: kinds.has('course'),
     position: kinds.has('position'),
     search: kinds.has('search'),
     gender: kinds.has('gender'),

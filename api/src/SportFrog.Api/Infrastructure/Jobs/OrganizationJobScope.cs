@@ -26,7 +26,9 @@ namespace SportFrog.Api.Infrastructure.Jobs;
 /// The person is carried too, because a change with no author is a change the
 /// audit log cannot file (RNF-12). The photographs a batch attaches were
 /// asked for by whoever uploaded the archive, and that is who the log names —
-/// not the worker process.
+/// not the worker process. Null is accepted all the same, for the one kind of
+/// job nobody asked for: a schedule firing on its own, with no person behind
+/// it to name.
 /// </remarks>
 public sealed class OrganizationJobScope(IServiceScopeFactory scopes)
 {
@@ -42,7 +44,7 @@ public sealed class OrganizationJobScope(IServiceScopeFactory scopes)
     /// </remarks>
     public async Task<T> RunAsync<T>(
         Guid organizationId,
-        Guid userId,
+        Guid? userId,
         Func<IServiceProvider, SportFrogDbContext, Task<T>> work,
         CancellationToken cancellationToken)
     {
@@ -92,7 +94,7 @@ public sealed class OrganizationJobScope(IServiceScopeFactory scopes)
     /// </remarks>
     public async Task<T> RunDetachedAsync<T>(
         Guid organizationId,
-        Guid userId,
+        Guid? userId,
         Func<IServiceProvider, Task<T>> work)
     {
         await using var scope = scopes.CreateAsyncScope();
@@ -112,7 +114,7 @@ public sealed class OrganizationJobScope(IServiceScopeFactory scopes)
     /// ask for, running later. Refusing it now on a role check would be
     /// refusing a decision that has already been made.
     /// </remarks>
-    private static void Establish(IServiceProvider services, Guid organizationId, Guid userId) =>
+    private static void Establish(IServiceProvider services, Guid organizationId, Guid? userId) =>
         services.GetRequiredService<OrganizationContext>()
             .Establish(organizationId, MembershipRole.Owner, userId, ipAddress: null);
 }

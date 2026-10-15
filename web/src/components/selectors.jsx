@@ -44,6 +44,15 @@ function SelectionTeam({ categoryId, value, onChange, ...props }) {
   return <SelectionField label="Equipo" value={value} onChange={onChange} options={options} isLoading={isLoading} disabled={!categoryId} {...props} />;
 }
 
+// Un curso no depende de ninguna competicion ni categoria -- a diferencia
+// de SelectionTeam, este desplegable no tiene nada que esperar antes de
+// pedir su propia lista.
+function SelectionCourse({ value, onChange, ...props }) {
+  const { data, isLoading } = useApi(endpoints.courses);
+  const options = (data || []).map((c) => ({ value: c.id, label: c.name }));
+  return <SelectionField label="Curso" value={value} onChange={onChange} options={options} isLoading={isLoading} {...props} />;
+}
+
 // Un Autocomplete, no un SelectionField mas: elegir una persona entre una
 // lista que puede ser larga se hace buscando por nombre a medida que se
 // tipea, no scrolleando un <Select> -- mismo problema que ya resuelve el
@@ -123,6 +132,15 @@ function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText,
   );
 }
 
+// El catalogo de deportes es compartido por toda la plataforma (no tiene
+// org_id, ver Sport.cs) y corto: no necesita busqueda, un desplegable comun
+// alcanza.
+function SelectionSport({ value, onChange, ...props }) {
+  const { data, isLoading } = useApi(endpoints.sports);
+  const options = (data || []).map((s) => ({ value: s.code, label: s.name }));
+  return <SelectionField label="Deporte" value={value} onChange={onChange} options={options} isLoading={isLoading} {...props} />;
+}
+
 function SelectionClub({ value, onChange, ...props }) {
   const { data, isLoading } = useApi(endpoints.clubs);
   const options = (data || []).map((c) => ({ value: c.id, label: c.name }));
@@ -154,4 +172,4 @@ function SelectionSpace({ value, onChange, ...props }) {
   return <SelectionField label="Cancha / espacio" value={value} onChange={onChange} options={options} isLoading={isLoading} helperText={helperText} {...props} />;
 }
 
-export { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam, SelectionAthletes, SelectionClub, SelectionVenue, SelectionSpace };
+export { SelectionField, SelectionCompetition, SelectionCategory, SelectionTeam, SelectionCourse, SelectionAthletes, SelectionClub, SelectionVenue, SelectionSpace, SelectionSport };

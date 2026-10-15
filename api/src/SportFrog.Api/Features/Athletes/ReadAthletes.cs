@@ -90,6 +90,7 @@ public static class ReadAthletes
         int? maxAge = null,
         decimal? minWeight = null,
         decimal? maxWeight = null,
+        bool? hasCourseEnrollment = null,
         int? skip = null,
         int? take = null)
     {
@@ -102,6 +103,17 @@ public static class ReadAthletes
                 || EF.Functions.ILike(athlete.LastName, $"%{search}%")
                 || EF.Functions.ILike(athlete.FirstName, $"%{search}%"))
             .Where(athlete => gender == null || athlete.Gender == gender);
+
+        // Lets the roster of competitors and the school's own register of
+        // students be told apart on one listing — true for whoever has ever
+        // been enrolled in a course, withdrawn or not: this answers "does
+        // this person have a school history", not "is in one today".
+        if (hasCourseEnrollment is { } enrolled)
+        {
+            query = enrolled
+                ? query.Where(athlete => database.CourseEnrollments.Any(entry => entry.AthleteId == athlete.Id))
+                : query.Where(athlete => !database.CourseEnrollments.Any(entry => entry.AthleteId == athlete.Id));
+        }
 
         if (minAge is not null || maxAge is not null)
         {

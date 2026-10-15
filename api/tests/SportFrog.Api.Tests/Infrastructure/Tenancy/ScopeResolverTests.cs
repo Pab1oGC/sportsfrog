@@ -97,6 +97,38 @@ public sealed class ScopeResolverTests(SportFrogDatabaseFixture fixture)
         resolved.Should().Be(new ResolvedScopeTarget(fx.CompetitionId, fx.ClubId));
     }
 
+    [Fact]
+    public async Task Course_kind_resolves_to_itself_with_no_query()
+    {
+        // No row of any kind has to exist for this one either: the route
+        // value IS the course id, same shape as Competition and Club.
+        var fx = await SeedAsync();
+        var resolved = await ResolveAsync(fx.OrgId, ScopeTargetKind.Course, fx.CourseId);
+
+        resolved.Should().Be(new ResolvedScopeTarget(null, null, fx.CourseId));
+    }
+
+    [Fact]
+    public async Task CourseEnrollment_kind_resolves_to_its_course_and_to_neither_other_axis()
+    {
+        // Unlike RosterEntry, which resolves to both a competition and a
+        // club, an enrollment has only the course to resolve to — a course
+        // belongs to neither axis the rest of this file is built around.
+        var fx = await SeedAsync();
+        var resolved = await ResolveAsync(fx.OrgId, ScopeTargetKind.CourseEnrollment, fx.CourseEnrollmentId);
+
+        resolved.Should().Be(new ResolvedScopeTarget(null, null, fx.CourseId));
+    }
+
+    [Fact]
+    public async Task CourseSession_kind_resolves_to_its_course_and_to_neither_other_axis()
+    {
+        var fx = await SeedAsync();
+        var resolved = await ResolveAsync(fx.OrgId, ScopeTargetKind.CourseSession, fx.CourseSessionId);
+
+        resolved.Should().Be(new ResolvedScopeTarget(null, null, fx.CourseId));
+    }
+
     [Theory]
     [InlineData(ScopeTargetKind.Category)]
     [InlineData(ScopeTargetKind.Team)]
@@ -104,6 +136,8 @@ public sealed class ScopeResolverTests(SportFrogDatabaseFixture fixture)
     [InlineData(ScopeTargetKind.Performance)]
     [InlineData(ScopeTargetKind.PlayerEvent)]
     [InlineData(ScopeTargetKind.RosterEntry)]
+    [InlineData(ScopeTargetKind.CourseEnrollment)]
+    [InlineData(ScopeTargetKind.CourseSession)]
     public async Task An_id_naming_no_row_of_that_kind_resolves_to_null(ScopeTargetKind kind)
     {
         var fx = await SeedAsync();
@@ -135,7 +169,10 @@ public sealed class ScopeResolverTests(SportFrogDatabaseFixture fixture)
         Guid MatchId,
         Guid PerformanceId,
         Guid PlayerEventId,
-        Guid RosterEntryId);
+        Guid RosterEntryId,
+        Guid CourseId,
+        Guid CourseEnrollmentId,
+        Guid CourseSessionId);
 
     private async Task<Fixture> SeedAsync()
     {
@@ -280,10 +317,51 @@ public sealed class ScopeResolverTests(SportFrogDatabaseFixture fixture)
             MetricId = metricId,
         });
 
+        var courseId = Guid.NewGuid();
+        setup.Courses.Add(new Course
+        {
+            Id = courseId,
+            OrgId = orgId,
+            SportCode = "football",
+            Name = "Curso de Prueba",
+            MonthlyFeeBob = 100m,
+            StartsOn = new DateOnly(2026, 3, 1),
+        });
+        setup.CourseSchedules.Add(new CourseSchedule
+        {
+            Id = Guid.NewGuid(),
+            OrgId = orgId,
+            CourseId = courseId,
+            DayOfWeek = DayOfWeek.Tuesday,
+            StartsAt = new TimeOnly(18, 0),
+            EndsAt = new TimeOnly(19, 0),
+        });
+
+        var courseEnrollmentId = Guid.NewGuid();
+        setup.CourseEnrollments.Add(new CourseEnrollment
+        {
+            Id = courseEnrollmentId,
+            OrgId = orgId,
+            CourseId = courseId,
+            AthleteId = athleteId,
+        });
+
+        var courseSessionId = Guid.NewGuid();
+        setup.CourseSessions.Add(new CourseSession
+        {
+            Id = courseSessionId,
+            OrgId = orgId,
+            CourseId = courseId,
+            SessionDate = new DateOnly(2026, 3, 3),
+            StartsAt = new TimeOnly(18, 0),
+            EndsAt = new TimeOnly(19, 0),
+        });
+
         await setup.SaveChangesAsync();
         await transaction.CommitAsync();
 
         return new Fixture(
-            orgId, clubId, competitionId, categoryId, teamId, matchId, performanceId, playerEventId, rosterEntryId);
+            orgId, clubId, competitionId, categoryId, teamId, matchId, performanceId, playerEventId, rosterEntryId,
+            courseId, courseEnrollmentId, courseSessionId);
     }
 }

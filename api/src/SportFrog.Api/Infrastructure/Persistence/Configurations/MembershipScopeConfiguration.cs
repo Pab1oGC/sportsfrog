@@ -30,6 +30,7 @@ internal sealed class MembershipScopeConfiguration : IEntityTypeConfiguration<Me
 
         builder.Property(x => x.CompetitionId).HasColumnName("competition_id");
         builder.Property(x => x.ClubId).HasColumnName("club_id");
+        builder.Property(x => x.CourseId).HasColumnName("course_id");
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
@@ -40,10 +41,11 @@ internal sealed class MembershipScopeConfiguration : IEntityTypeConfiguration<Me
             .HasDefaultValueSql("now()")
             .ValueGeneratedOnAddOrUpdate();
 
-        // Mirrors the database's two partial unique indexes
-        // (uq_membership_scope_competition / uq_membership_scope_club):
-        // declared for EF's own metadata and for anyone reading the model,
-        // even though the migration's SQL is what actually enforces them.
+        // Mirrors the database's three partial unique indexes
+        // (uq_membership_scope_competition / uq_membership_scope_club /
+        // uq_membership_scope_course): declared for EF's own metadata and
+        // for anyone reading the model, even though the migration's SQL is
+        // what actually enforces them.
         builder.HasIndex(x => new { x.MembershipId, x.CompetitionId })
             .IsUnique()
             .HasFilter("scope_type = 'competition'")
@@ -52,9 +54,14 @@ internal sealed class MembershipScopeConfiguration : IEntityTypeConfiguration<Me
             .IsUnique()
             .HasFilter("scope_type = 'club'")
             .HasDatabaseName("uq_membership_scope_club");
+        builder.HasIndex(x => new { x.MembershipId, x.CourseId })
+            .IsUnique()
+            .HasFilter("scope_type = 'course'")
+            .HasDatabaseName("uq_membership_scope_course");
 
         builder.HasOne(x => x.Membership).WithMany().HasForeignKey(x => x.MembershipId);
         builder.HasOne(x => x.Competition).WithMany().HasForeignKey(x => x.CompetitionId);
         builder.HasOne(x => x.Club).WithMany().HasForeignKey(x => x.ClubId);
+        builder.HasOne(x => x.Course).WithMany().HasForeignKey(x => x.CourseId);
     }
 }

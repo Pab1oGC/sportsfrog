@@ -43,15 +43,46 @@ public enum ScopeTargetKind
     /// shape as <see cref="Team"/>, one step removed.
     /// </summary>
     RosterEntry,
+
+    /// <summary>The route value already is a course id.</summary>
+    Course,
+
+    /// <summary>
+    /// An enrollment, resolved to the course it belongs to — the same one
+    /// step removed as <see cref="RosterEntry"/> is from <see cref="Team"/>,
+    /// just on a single axis: a course has no club or competition of its
+    /// own for an enrollment to also belong to.
+    /// </summary>
+    CourseEnrollment,
+
+    /// <summary>
+    /// A session, resolved to the course it belongs to — the same shape as
+    /// <see cref="CourseEnrollment"/>.
+    /// </summary>
+    CourseSession,
+
+    /// <summary>
+    /// A pension charge, resolved to the course of the enrollment it was
+    /// raised for — one join further than <see cref="CourseEnrollment"/>,
+    /// the same shape <see cref="RosterEntry"/> is from <see cref="Team"/>.
+    /// </summary>
+    TuitionCharge,
 }
 
 /// <summary>
 /// What one route value, of a given <see cref="ScopeTargetKind"/>, resolves
-/// to. Either side is null when that target has no such owner — a category
+/// to. Each side is null when that target has no such owner — a category
 /// belongs to a competition but no club, so its <see cref="ClubId"/> is
-/// always null.
+/// always null, and a course belongs to neither, so a course target's
+/// <see cref="CompetitionId"/> and <see cref="ClubId"/> are both always
+/// null.
 /// </summary>
-public sealed record ResolvedScopeTarget(Guid? CompetitionId, Guid? ClubId);
+/// <param name="CourseId">
+/// Defaults to null so every <c>ResolvedScopeTarget(competitionId, clubId)</c>
+/// built before the course axis existed — this file's own and the test
+/// suite's — keeps compiling unchanged.
+/// </param>
+public sealed record ResolvedScopeTarget(Guid? CompetitionId, Guid? ClubId, Guid? CourseId = null);
 
 /// <summary>
 /// Turns a route value naming some business entity into the competition
@@ -171,6 +202,43 @@ public sealed class ScopeResolver(SportFrogDbContext database)
                 ).SingleOrDefaultAsync(cancellationToken);
 
                 return row is null ? null : new ResolvedScopeTarget(row.CompetitionId, row.ClubId);
+            }
+
+            case ScopeTargetKind.Course:
+                // The route value already is the answer, same shape as
+                // Competition and Club above.
+                return new ResolvedScopeTarget(null, null, id);
+
+            case ScopeTargetKind.CourseEnrollment:
+            {
+                var courseId = await database.CourseEnrollments
+                    .Where(entry => entry.Id == id)
+                    .Select(entry => (Guid?)entry.CourseId)
+                    .SingleOrDefaultAsync(cancellationToken);
+
+                return courseId is { } found ? new ResolvedScopeTarget(null, null, found) : null;
+            }
+
+            case ScopeTargetKind.CourseSession:
+            {
+                var courseId = await database.CourseSessions
+                    .Where(session => session.Id == id)
+                    .Select(session => (Guid?)session.CourseId)
+                    .SingleOrDefaultAsync(cancellationToken);
+
+                return courseId is { } found ? new ResolvedScopeTarget(null, null, found) : null;
+            }
+
+            case ScopeTargetKind.TuitionCharge:
+            {
+                var courseId = await (
+                    from charge in database.TuitionCharges
+                    join entry in database.CourseEnrollments on charge.EnrollmentId equals entry.Id
+                    where charge.Id == id
+                    select (Guid?)entry.CourseId
+                ).SingleOrDefaultAsync(cancellationToken);
+
+                return courseId is { } found ? new ResolvedScopeTarget(null, null, found) : null;
             }
 
             default:

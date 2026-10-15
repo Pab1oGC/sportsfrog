@@ -1,0 +1,17 @@
+-- =============================================================================
+-- ExtendMembershipScopeTypeWithCourse - rollback
+--
+-- PostgreSQL has no ALTER TYPE ... DROP VALUE: once a label is added to an
+-- enum it cannot be removed short of recreating the type from scratch,
+-- which would mean rewriting every row of membership_scopes (and anything
+-- else that uses membership_scope_type) under a new type and dropping the
+-- old one — far more dangerous than leaving one unused label behind.
+--
+-- So this intentionally does nothing. A rollback after this migration
+-- leaves 'course' in the enum, orphaned: AddCourseScopeColumn's own
+-- rollback removes the column and the constraint that could ever store it,
+-- so nothing can write a 'course' row without this migration's forward
+-- half having also run again. An unused enum label is harmless; it is
+-- exactly the state the organization started in before 'course' had
+-- anywhere to attach to.
+-- =============================================================================

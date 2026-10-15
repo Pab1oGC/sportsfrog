@@ -3,14 +3,15 @@ import { scopeFromCascade, isScopeComplete, neededCascadeLevels } from "src/page
 
 const categoriaRequerida = [{ name: "categoryId", kind: "category", required: true }];
 const equipoRequerido = [{ name: "teamId", kind: "team", required: true }];
+const cursoRequerido = [{ name: "courseId", kind: "course", required: true }];
 const puestoRequerido = [{ name: "position", kind: "position", required: true }];
 const busquedaOpcional = [{ name: "search", kind: "search", required: false }];
 const generoOpcional = [{ name: "gender", kind: "gender", required: false }];
 
-const SIN_NIVELES = { team: false, position: false, search: false, gender: false };
+const SIN_NIVELES = { team: false, course: false, position: false, search: false, gender: false };
 
-function cascade({ compId = "", catId = "", teamId = "", position = "", search = "", gender = "" } = {}) {
-  return { compId, catId, teamId, position, search, gender };
+function cascade({ compId = "", catId = "", teamId = "", courseId = "", position = "", search = "", gender = "" } = {}) {
+  return { compId, catId, teamId, courseId, position, search, gender };
 }
 
 describe("scopeFromCascade", () => {
@@ -22,6 +23,11 @@ describe("scopeFromCascade", () => {
   it("un parámetro de equipo lee cascade.teamId", () => {
     const scope = scopeFromCascade(equipoRequerido, cascade({ teamId: "team-1" }));
     expect(scope).toEqual({ teamId: "team-1" });
+  });
+
+  it("un parámetro de curso lee courseId, que no sale del cascada sino del estado propio de la página", () => {
+    const scope = scopeFromCascade(cursoRequerido, cascade({ courseId: "course-1" }));
+    expect(scope).toEqual({ courseId: "course-1" });
   });
 
   it("un parámetro de puesto lee position, que no sale del cascada sino del estado propio de la página", () => {
@@ -81,6 +87,10 @@ describe("neededCascadeLevels", () => {
 
   it("un parámetro de equipo necesita el nivel de equipo", () => {
     expect(neededCascadeLevels(equipoRequerido)).toEqual({ ...SIN_NIVELES, team: true });
+  });
+
+  it("un parámetro de curso necesita el nivel de curso", () => {
+    expect(neededCascadeLevels(cursoRequerido)).toEqual({ ...SIN_NIVELES, course: true });
   });
 
   it("un parámetro de puesto no necesita ningún nivel del cascada por sí solo", () => {
