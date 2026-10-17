@@ -13,7 +13,18 @@ import { Scrollbar } from "src/components/scrollbar";
 export function NavVertical({ data, collapsed, isDesktop, mobileOpen, onCloseMobile, onToggle }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [openSub, setOpenSub] = useState({});
+  // Expandido por default: un desplegable que arranca cerrado esconde que
+  // tiene algo adentro hasta que alguien repare en la flecha y la toque, y
+  // lo que cuelga ahí (Categorias, Equipos, Nomina) es justo lo que no
+  // conviene que pase desapercibido. Clickear la flecha sigue pudiendo
+  // cerrarlo para quien prefiera el menú más corto.
+  const [openSub, setOpenSub] = useState(() => {
+    const abiertos = {};
+    data.forEach((section) => section.items.forEach((item) => {
+      if (item.children?.length > 0) abiertos[item.title] = true;
+    }));
+    return abiertos;
+  });
 
   // "/dashboard" es prefijo de cualquier otra ruta del panel, así que solo él
   // exige coincidencia exacta: si no, "Dashboard" queda marcado activo en
@@ -41,11 +52,22 @@ export function NavVertical({ data, collapsed, isDesktop, mobileOpen, onCloseMob
           {!collapsed && <Typography variant="caption" sx={{ px: 2, py: 1, display: "block", color: "text.disabled", fontWeight: 600, textTransform: "uppercase", fontSize: 11 }}>{section.subheader}</Typography>}
           {section.items.map((item) => {
             const hasChildren = item.children?.length > 0;
-            const open = openSub[item.title];
+            // Abierto si se tocó la flecha, o sin tocarla todavía, si ya se
+            // está en una de las hijas -- entrar a Categorías por un link
+            // directo (no por este menú) tiene que mostrar el submenú
+            // abierto con ella marcada, no uno colapsado que no dice dónde
+            // estás parado.
+            const open = !!openSub[item.title] || (hasChildren && item.children.some((child) => isActive(child.path)));
             return (
               <Box key={item.title}>
                 <ListItemButton
-                  onClick={() => { if (hasChildren) setOpenSub(p => ({ ...p, [item.title]: !open })); else goTo(item.path); }}
+                  // El click navega siempre -- "Competiciones" sigue siendo
+                  // un destino propio, no solo una carpeta -- y de paso abre
+                  // el submenú, para que entrar ahí muestre de una qué vive
+                  // adentro. Contraerlo es cosa de la flecha, aparte (ver
+                  // abajo): si el click principal tambien colapsara, un solo
+                  // gesto no podría a la vez ir a la pagina y mostrar sus hijas.
+                  onClick={() => { goTo(item.path); if (hasChildren) setOpenSub(p => ({ ...p, [item.title]: true })); }}
                   selected={isActive(item.path)}
                   sx={{
                     minHeight: 44, borderRadius: 1, mx: 1, mb: 0.25, px: 1.5,
@@ -54,7 +76,17 @@ export function NavVertical({ data, collapsed, isDesktop, mobileOpen, onCloseMob
                 >
                   <ListItemIcon sx={{ minWidth: 32, transition: "color 0.15s ease" }}><Iconify icon={item.icon || "mdi:circle-outline"} width={20} /></ListItemIcon>
                   {!collapsed && <ListItemText primary={item.title} slotProps={{ primary: { fontSize: 14, fontWeight: isActive(item.path) ? 700 : 500, sx: { transition: "font-weight 0.15s ease" } } }} />}
-                  {!collapsed && hasChildren && <Iconify icon={open ? "eva:arrow-ios-upward-fill" : "eva:arrow-ios-downward-fill"} width={16} sx={{ color: "text.disabled" }} />}
+                  {!collapsed && hasChildren && (
+                    <Box
+                      component="span"
+                      role="button"
+                      aria-label={open ? "Contraer" : "Expandir"}
+                      onClick={(e) => { e.stopPropagation(); setOpenSub(p => ({ ...p, [item.title]: !open })); }}
+                      sx={{ display: "flex", p: 0.5, m: -0.5, borderRadius: 0.5, "&:hover": { bgcolor: "action.hover" } }}
+                    >
+                      <Iconify icon={open ? "eva:arrow-ios-upward-fill" : "eva:arrow-ios-downward-fill"} width={16} sx={{ color: "text.disabled" }} />
+                    </Box>
+                  )}
                 </ListItemButton>
                 {hasChildren && !collapsed && (
                   <Collapse in={open} timeout="auto" unmountOnExit>

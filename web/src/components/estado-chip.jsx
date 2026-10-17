@@ -27,6 +27,12 @@ import { Iconify } from 'src/components/iconify';
  * el click, no el estado actual: `onTooltip` se ve con el chip en su estado
  * "on" y describe la acción que apaga, y viceversa -- igual que ya hacía el
  * "Desactivar"/"Activar" por defecto.
+ *
+ * `disabled`/`disabledTooltip` son la misma idea aplicada a cuando el click
+ * no puede encenderlo todavía -- "Pública" en una competencia que sigue en
+ * borrador, ver motivoPublicacionInhabilitada. Sin `disabled`, el chip sigue
+ * exactamente como antes; con él, el tooltip explica el motivo en vez de
+ * dejar que el click llegue al servidor y vuelva con un 409.
  */
 export function EstadoChip({
   activo,
@@ -40,22 +46,31 @@ export function EstadoChip({
   offColor = 'default',
   onTooltip = 'Desactivar',
   offTooltip = 'Activar',
+  disabled = false,
+  disabledTooltip,
 }) {
   const label = activo
     ? (onLabel ?? (femenino ? 'Activa' : 'Activo'))
     : (offLabel ?? (femenino ? 'Inactiva' : 'Inactivo'));
 
+  const tooltip = disabled && disabledTooltip ? disabledTooltip : (activo ? onTooltip : offTooltip);
+
   return (
-    <Tooltip title={activo ? onTooltip : offTooltip}>
-      <IconButton size="small" onClick={onClick} sx={{ p: 0.25 }}>
-        <Chip
-          label={label}
-          color={activo ? onColor : offColor}
-          size="small"
-          variant="outlined"
-          icon={<Iconify icon={activo ? onIcon : offIcon} width={14} />}
-        />
-      </IconButton>
+    // El span es obligatorio con disabled: un IconButton deshabilitado no
+    // dispara los eventos de mouse que el Tooltip necesita para saber
+    // cuándo mostrarse -- mismo motivo que ya resuelve RowActionsMenu.
+    <Tooltip title={tooltip}>
+      <span>
+        <IconButton size="small" disabled={disabled} onClick={onClick} sx={{ p: 0.25 }}>
+          <Chip
+            label={label}
+            color={activo ? onColor : offColor}
+            size="small"
+            variant="outlined"
+            icon={<Iconify icon={activo ? onIcon : offIcon} width={14} />}
+          />
+        </IconButton>
+      </span>
     </Tooltip>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -77,7 +78,11 @@ const SL = { scheduled: 'Programado', in_progress: 'En curso', finished: 'Finali
  */
 export default function MatchesPage() {
   const confirm = useConfirm();
-  const cascade = useCascade();
+  const [searchParams] = useSearchParams();
+  // Mismo mecanismo que CategoriesPage: el resumen de una competencia
+  // (overview-page.jsx) manda para acá con esta señal en la URL porque useCascade
+  // ya sabía recibirla -- solo hacía falta pasársela.
+  const cascade = useCascade(searchParams.get('competition'));
   const { data: competiciones } = useApi(endpoints.competitions);
   const { data: matches, mutate, isLoading } = useApi(cascade.compId ? endpoints.competitionMatches(cascade.compId) : null);
   const { data: teams, mutate: mutateTeams } = useApi(cascade.catId ? endpoints.teams(cascade.catId) : null);

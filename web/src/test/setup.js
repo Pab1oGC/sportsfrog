@@ -22,8 +22,9 @@ beforeEach(() => {
 
 // ─── APIs que jsdom no implementa ───────────────────────────────────────────
 
-// window.matchMedia: usado por use-prefers-reduced-motion.js, lib/motion.js,
-// playful-hero.jsx y el useMediaQuery de MUI en dashboard/layout.jsx. jsdom
+// window.matchMedia: usado por use-prefers-reduced-motion.js, lib/motion.js
+// (y por lo tanto cada pantalla que lo usa, ver su comentario) y el
+// useMediaQuery de MUI en dashboard/layout.jsx. jsdom
 // no lo define en absoluto, así que sin este stub cualquier componente que
 // lo toque revienta con "matchMedia is not a function" antes de llegar a la
 // aserción que la prueba realmente quiere hacer. Devuelve matches:false por
@@ -65,4 +66,26 @@ if (!URL.createObjectURL) {
 }
 if (!URL.revokeObjectURL) {
   URL.revokeObjectURL = vi.fn();
+}
+
+// IntersectionObserver: lo usa pages/landing/section-nav.jsx para saber qué
+// sección de la landing está en pantalla. jsdom no lo implementa en absoluto
+// -- sin este stub, montar SectionNav tira "IntersectionObserver is not a
+// constructor" antes de llegar a la aserción.
+if (!("IntersectionObserver" in window)) {
+  class IntersectionObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  window.IntersectionObserver = IntersectionObserverStub;
+  globalThis.IntersectionObserver = IntersectionObserverStub;
+}
+
+// Element.scrollIntoView: lo usa section-nav.jsx al hacer click en una pill.
+// jsdom no mide layout real, así que no hay destino al que "scrollear" -- lo
+// que importa es que exista, para que el click no tire
+// "scrollIntoView is not a function".
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
 }

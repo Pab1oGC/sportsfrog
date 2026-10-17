@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { getNavData, navData } from "src/layouts/dashboard/nav-data";
 
+// Ítems y sus hijos, todos al mismo nivel -- para los chequeos que no les
+// importa de qué nivel viene cada ruta (que empiece con /dashboard, que no
+// se repita), aplanar un nivel más alcanza.
+function todosLosItems(secciones) {
+  return secciones.flatMap((s) => s.items).flatMap((i) => [i, ...(i.children || [])]);
+}
+
 describe("getNavData", () => {
   it("sin isPlatformAdmin (por defecto), no incluye 'Crear Organización'", () => {
     const secciones = getNavData();
-    const items = secciones.flatMap((s) => s.items);
-    expect(items.some((i) => i.path === "/dashboard/register-organization")).toBe(false);
+    expect(todosLosItems(secciones).some((i) => i.path === "/dashboard/register-organization")).toBe(false);
   });
 
   it("isPlatformAdmin=false explícito tampoco la incluye", () => {
-    const items = getNavData(false).flatMap((s) => s.items);
-    expect(items.some((i) => i.path === "/dashboard/register-organization")).toBe(false);
+    expect(todosLosItems(getNavData(false)).some((i) => i.path === "/dashboard/register-organization")).toBe(false);
   });
 
   it("isPlatformAdmin=true agrega 'Crear Organización' al final de la sección Sistema", () => {
@@ -22,13 +27,12 @@ describe("getNavData", () => {
     });
   });
 
-  it("todas las rutas empiezan con /dashboard", () => {
-    const items = getNavData(true).flatMap((s) => s.items);
-    expect(items.every((i) => i.path.startsWith("/dashboard"))).toBe(true);
+  it("todas las rutas, incluidas las de los hijos, empiezan con /dashboard", () => {
+    expect(todosLosItems(getNavData(true)).every((i) => i.path.startsWith("/dashboard"))).toBe(true);
   });
 
-  it("no hay dos ítems con la misma ruta", () => {
-    const paths = getNavData(true).flatMap((s) => s.items).map((i) => i.path);
+  it("no hay dos ítems con la misma ruta, ni entre padres e hijos", () => {
+    const paths = todosLosItems(getNavData(true)).map((i) => i.path);
     expect(new Set(paths).size).toBe(paths.length);
   });
 

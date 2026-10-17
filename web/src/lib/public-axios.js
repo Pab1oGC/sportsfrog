@@ -17,8 +17,8 @@ publicAxios.interceptors.response.use(
 export default publicAxios;
 
 // Compartido por cada pantalla que arma su propio useSWR contra la API
-// publica (landing-page.jsx, playful-hero.jsx) -- antes duplicado como
-// funcion local en cada una.
+// publica (landing/live-competitions.jsx, public-competition.jsx,
+// match-card-parts.jsx) -- antes duplicado como funcion local en cada una.
 export function publicFetcher(url) {
   return publicAxios.get(url).then((r) => r.data);
 }

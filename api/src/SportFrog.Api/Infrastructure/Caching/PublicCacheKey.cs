@@ -37,6 +37,28 @@ public readonly record struct PublicCacheKey
     public static PublicCacheKey Classification(Guid competitionId) => new("classification", competitionId);
 
     /// <summary>
+    /// A competition's public page — everything <c>ReadPublicCompetition</c>
+    /// answers except its <c>PortalMoment</c>, which is a fact read off
+    /// "right now" and is never cached under any key.
+    /// </summary>
+    /// <remarks>
+    /// Invalidated by every writer that changes something the shell shows:
+    /// <c>UpdateCompetition</c> and <c>ChangeCompetitionStatus</c> for the
+    /// competition's own fields (its settings, its status), and
+    /// <c>CreateCategory</c>/<c>UpdateCategory</c>/<c>DeleteCategory</c> and
+    /// <c>CreateTeam</c>/<c>EnrollIndividual</c>/<c>DeleteTeam</c> for its
+    /// divisions and their team counts. Not by <c>PublishCompetition</c>:
+    /// whether a competition is public decides if the resolver ever reaches
+    /// this key at all, not what the shell holds once it does. Not by
+    /// <c>UpdateTeam</c> either: a team's name, seed and active flag are not
+    /// part of the shell, only how many a category has, which renaming one
+    /// does not change. Whatever a future writer still misses is bounded by
+    /// <see cref="IPublicQueryCache"/>'s own expiration ceiling in the
+    /// meantime.
+    /// </remarks>
+    public static PublicCacheKey CompetitionPage(Guid competitionId) => new("competition-page", competitionId);
+
+    /// <summary>
     /// The literal cache key. Exposed only for the cache implementation
     /// itself — callers compare and pass <see cref="PublicCacheKey"/> values,
     /// never this string.

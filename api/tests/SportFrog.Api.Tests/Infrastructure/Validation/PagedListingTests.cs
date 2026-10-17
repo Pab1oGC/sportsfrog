@@ -46,7 +46,7 @@ public sealed class PagedListingTests(SportFrogDatabaseFixture fixture)
     }
 
     private async Task<(IReadOnlyList<Club> Page, DefaultHttpContext Context)> ApplyAsync(
-        Guid orgId, int? skip, int? take)
+        Guid orgId, int? skip, int? take, int? maxWhenUnpaged = null)
     {
         await using var context = fixture.CreateAppContext();
         await using var transaction = await context.Database.BeginTransactionAsync();
@@ -55,7 +55,8 @@ public sealed class PagedListingTests(SportFrogDatabaseFixture fixture)
         var httpContext = new DefaultHttpContext();
         var query = context.Clubs.OrderBy(club => club.Name);
 
-        var page = await PagedListing.ApplyAsync(query, httpContext, skip, take, CancellationToken.None);
+        var page = await PagedListing.ApplyAsync(
+            query, httpContext, skip, take, CancellationToken.None, maxWhenUnpaged);
 
         return (page, httpContext);
     }
@@ -112,5 +113,27 @@ public sealed class PagedListingTests(SportFrogDatabaseFixture fixture)
         var (page, _) = await ApplyAsync(orgId, skip: -10, take: 1);
 
         page.Select(club => club.Name).Should().Equal("Club A");
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NeitherSkipNorTakeGiven_WithMaxWhenUnpagedBelowTheTotal_CapsButStillReportsTheRealTotal()
+    {
+        var orgId = await SeedFiveClubsAsync();
+
+        var (page, httpContext) = await ApplyAsync(orgId, skip: null, take: null, maxWhenUnpaged: 3);
+
+        page.Select(club => club.Name).Should().Equal("Club A", "Club B", "Club C");
+        httpContext.Response.Headers[PagedListing.TotalCountHeader].ToString().Should().Be("5");
+    }
+
+    [Fact]
+    public async Task ApplyAsync_NeitherSkipNorTakeGiven_WithMaxWhenUnpagedAboveTheTotal_ReturnsEveryRow()
+    {
+        var orgId = await SeedFiveClubsAsync();
+
+        var (page, httpContext) = await ApplyAsync(orgId, skip: null, take: null, maxWhenUnpaged: 500);
+
+        page.Should().HaveCount(5);
+        httpContext.Response.Headers[PagedListing.TotalCountHeader].ToString().Should().Be("5");
     }
 }

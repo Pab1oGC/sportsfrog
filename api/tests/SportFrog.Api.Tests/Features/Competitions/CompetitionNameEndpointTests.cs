@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using SportFrog.Api.Features.Competitions;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -18,11 +20,18 @@ namespace SportFrog.Api.Tests.Features.Competitions;
 /// <remarks>
 /// The picture store is never reached, since none of these contracts carry
 /// portal pictures, so it is passed as null rather than standing up object
-/// storage for a rule that has nothing to do with it.
+/// storage for a rule that has nothing to do with it. The public query cache
+/// is a real in-memory one rather than null: <c>UpdateCompetition</c>
+/// invalidates it unconditionally on every successful save, and every key it
+/// touches is scoped to the competition id under test, so sharing one
+/// instance across these tests risks nothing.
 /// </remarks>
 [Collection(nameof(SportFrogDatabaseCollection))]
 public sealed class CompetitionNameEndpointTests(SportFrogDatabaseFixture fixture)
 {
+    private static readonly IPublicQueryCache PublicCache =
+        new PublicQueryCache(new MemoryCache(new MemoryCacheOptions()));
+
     private static OrganizationContext ActingIn(CompetitionTenant tenant)
     {
         var organization = new OrganizationContext();
@@ -52,7 +61,7 @@ public sealed class CompetitionNameEndpointTests(SportFrogDatabaseFixture fixtur
     private static Task<IResult> Update(
         CompetitionTenant tenant, CompetitionTenant.Scope scope, Guid id, string name, string slug) =>
         UpdateCompetition.HandleAsync(
-            id, Contract(tenant, name, slug), scope.Context, null!, CancellationToken.None);
+            id, Contract(tenant, name, slug), scope.Context, null!, PublicCache, CancellationToken.None);
 
     private static void AssertConflict(IResult result, string expectedDetail)
     {

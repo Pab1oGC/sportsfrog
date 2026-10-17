@@ -68,7 +68,21 @@ public static class PublishCompetition
         // answer has to be available immediately and unconditionally.
         competition.IsPublic = request.IsPublic;
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else changed this same competition in the meantime —
+            // most often ChangeCompetitionStatus moving it back to Draft,
+            // which forces IsPublic false at the same instant this tried to
+            // set it true.
+            return Results.Problem(
+                detail: "Alguien más cambió esta competencia mientras se procesaba esta " +
+                        "publicación. Volvé a revisarla antes de reintentar.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.NoContent();
     }

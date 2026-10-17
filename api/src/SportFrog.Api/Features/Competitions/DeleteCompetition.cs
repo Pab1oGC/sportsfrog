@@ -64,7 +64,19 @@ public static class DeleteCompetition
         // same clock the rest of the application is tested against.
         competition.DeletedAt = clock.GetUtcNow();
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else changed this same competition — its status or
+            // its settings — between the check above and this save.
+            return Results.Problem(
+                detail: "Alguien más cambió esta competencia mientras se procesaba esta baja. " +
+                        "Volvé a revisarla antes de reintentar.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         return Results.NoContent();
     }

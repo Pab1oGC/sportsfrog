@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -44,6 +45,7 @@ public static class UpdateCategory
         CategoryContract contract,
         SportFrogDbContext database,
         CategoryPolicy policy,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var category = await database.Categories.SingleOrDefaultAsync(
@@ -116,6 +118,11 @@ public static class UpdateCategory
                 detail: "Esta competencia ya tiene una categoría con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The public page's divisions carry this category's own name and
+        // gender — see ReadPublicCompetition.Shell. Invalidating a key
+        // nobody cached is a no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(competitionId));
 
         return Results.NoContent();
     }

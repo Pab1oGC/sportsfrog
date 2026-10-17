@@ -12,6 +12,7 @@ var LandingPage = lazy(function() { return import("src/pages/landing-page"); });
 var SignInPage = lazy(function() { return import("src/pages/sign-in"); });
 var DashboardPage = lazy(function() { return import("src/pages/dashboard-page"); });
 var CompetitionsPage = lazy(function() { return import("src/pages/competitions-page"); });
+var CompetitionOverviewPage = lazy(function() { return import("src/pages/competitions/overview-page"); });
 var PortalStudioPage = lazy(function() { return import("src/pages/competitions/portal-studio"); });
 var ClubsPage = lazy(function() { return import("src/pages/clubs-page"); });
 var AthletesPage = lazy(function() { return import("src/pages/athletes-page"); });
@@ -82,6 +83,7 @@ export var routesSection = [
     children: [
       { index: true, element: <LazyPage Component={DashboardPage} /> },
       { path: "competitions", element: <LazyPage Component={CompetitionsPage} /> },
+      { path: "competitions/:id", element: <LazyPage Component={CompetitionOverviewPage} /> },
       { path: "competitions/:id/portal", element: <LazyPage Component={PortalStudioPage} /> },
       { path: "clubs", element: <LazyPage Component={ClubsPage} /> },
       { path: "athletes", element: <LazyPage Component={AthletesPage} /> },

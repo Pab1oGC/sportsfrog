@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -33,6 +34,7 @@ public static class DeleteCategory
         Guid id,
         SportFrogDbContext database,
         CategoryUsage usage,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var category = await database.Categories.SingleOrDefaultAsync(
@@ -71,6 +73,11 @@ public static class DeleteCategory
                         "eliminar.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The public page's divisions no longer include this one — see
+        // ReadPublicCompetition.Shell. Invalidating a key nobody cached is a
+        // no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(competitionId));
 
         return Results.NoContent();
     }

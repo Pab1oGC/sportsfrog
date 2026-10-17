@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -55,6 +56,7 @@ public static class ChangeCompetitionStatus
         SportFrogDbContext database,
         CompetitionActivity activity,
         OrganizationContext organization,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var competition = await database.Competitions.SingleOrDefaultAsync(
@@ -115,7 +117,26 @@ public static class ChangeCompetitionStatus
             competition.IsPublic = false;
         }
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else changed this same competition — its own status,
+            // its settings, or PublishCompetition's flag — between when
+            // this request read it and when it saved.
+            return Results.Problem(
+                detail: "Alguien más cambió esta competencia mientras se procesaba este cambio " +
+                        "de estado. Volvé a leerla antes de reintentar.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // The public page, if anyone published one for this competition,
+        // showed the status this just moved away from — and, moving back to
+        // Draft, the publication this just withdrew. Invalidating a key
+        // nobody cached is a no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(id));
 
         return Results.NoContent();
     }

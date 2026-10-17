@@ -17,7 +17,7 @@ import { useNavigate, Link as RouterLink } from 'react-router';
 import useSWR from 'swr';
 import publicAxios from 'src/lib/public-axios';
 import { Iconify } from 'src/components/iconify';
-import { FREDOKA_HREF, FREDOKA_STACK } from 'src/pages/landing/playful-hero';
+import { FREDOKA_HREF, FREDOKA_STACK } from 'src/theme/fonts';
 import { stickerShadow } from 'src/theme/shadows';
 
 const SL = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };

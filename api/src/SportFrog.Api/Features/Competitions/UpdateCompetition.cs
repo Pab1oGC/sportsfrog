@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Documents;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
@@ -51,6 +52,7 @@ public static class UpdateCompetition
         CompetitionContract contract,
         SportFrogDbContext database,
         PortalPicture pictures,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var competition = await database.Competitions.SingleOrDefaultAsync(
@@ -162,6 +164,22 @@ public static class UpdateCompetition
         {
             return CompetitionUniqueness.ConflictFor(exception)!;
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else corrected this same competition, or moved it
+            // through its lifecycle (ChangeCompetitionStatus,
+            // PublishCompetition), between when this request read it and
+            // when it saved.
+            return Results.Problem(
+                detail: "Alguien más cambió esta competencia mientras la tenías abierta. Volvé " +
+                        "a leerla antes de guardar de nuevo.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // The public page, if anyone published one for this competition,
+        // described whatever this just corrected — its name, its dates, its
+        // own settings. Invalidating a key nobody cached is a no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(id));
 
         // Only once the row is safely saved: a picture forgotten before that
         // and then a rollback would leave the still-referenced key gone.

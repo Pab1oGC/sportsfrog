@@ -67,3 +67,40 @@ describe("EstadoChip -- interacción", () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 });
+
+describe("EstadoChip -- disabled (caso 'Pública' en borrador)", () => {
+  it("con disabled, el botón queda deshabilitado", () => {
+    render(<EstadoChip activo={false} onClick={vi.fn()} disabled disabledTooltip="Pasala a Programada primero." />);
+
+    expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("con disabled, el tooltip muestra el motivo en vez del verbo de siempre", async () => {
+    const user = userEvent.setup();
+    render(
+      <EstadoChip
+        activo={false}
+        onClick={vi.fn()}
+        offTooltip="Activar"
+        disabled
+        disabledTooltip="Pasala a Programada primero."
+      />,
+    );
+
+    // El span envolvente (necesario para que el Tooltip funcione sobre un
+    // botón deshabilitado) es lo que de verdad hay que hoverear.
+    await user.hover(screen.getByRole("button").parentElement);
+    expect(await screen.findByText("Pasala a Programada primero.")).toBeInTheDocument();
+    expect(screen.queryByText("Activar")).not.toBeInTheDocument();
+  });
+
+  it("sin disabled, el comportamiento de siempre no cambia", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<EstadoChip activo onClick={onClick} />);
+
+    expect(screen.getByRole("button")).not.toBeDisabled();
+    await user.click(screen.getByRole("button"));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+});

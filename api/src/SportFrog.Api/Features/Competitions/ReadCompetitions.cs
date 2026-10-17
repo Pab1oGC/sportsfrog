@@ -86,6 +86,13 @@ public static class ReadCompetitions
     /// the question is almost always "what is running now", and an
     /// organization that has been on the platform for three years has far
     /// more finished competitions than live ones.
+    ///
+    /// Unpaged is also bounded — see <c>maxWhenUnpaged</c> below — because
+    /// half a dozen dropdowns and cascading filters across the panel read
+    /// this same unpaged list to populate themselves (every competition a
+    /// match, a category or a document could belong to) and none of them
+    /// will ever ask for a page. The admin grid is the one caller that does
+    /// page, through the <c>skip</c>/<c>take</c> below.
     /// </remarks>
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
@@ -133,7 +140,8 @@ public static class ReadCompetitions
             .OrderByDescending(competition => competition.Season)
             .ThenBy(competition => competition.Name));
 
-        var competitions = await PagedListing.ApplyAsync(query, httpContext, skip, take, cancellationToken);
+        var competitions = await PagedListing.ApplyAsync(
+            query, httpContext, skip, take, cancellationToken, maxWhenUnpaged: PagedListing.MaximumPageSize);
 
         var listing = new List<Summary>(competitions.Count);
 

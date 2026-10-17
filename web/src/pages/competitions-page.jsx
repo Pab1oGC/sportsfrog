@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useCrudDialog } from 'src/hooks/use-crud';
 import Box from '@mui/material/Box';
@@ -16,11 +16,11 @@ import AccordionDetails from '@mui/material/AccordionDetails';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
+import Alert from '@mui/material/Alert';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPut } from 'src/hooks/use-api';
-import { endpoints, default as axios } from 'src/lib/axios';
-import { downloadBlob } from 'src/lib/download-blob';
+import { useApi, apiPost } from 'src/hooks/use-api';
+import { endpoints } from 'src/lib/axios';
 import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
@@ -29,14 +29,14 @@ import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { EstadoChip } from 'src/components/estado-chip';
 import { SelectionSpace } from 'src/components/selectors';
-import { useConfirm } from 'src/components/confirm-dialog';
-import { toast } from 'sonner';
+import {
+  STATUS_LABEL, STATUS_COLOR, STATUS_ICON, NEXT_STATUS, FORMAT_LABEL, motivoPublicacionInhabilitada,
+} from 'src/pages/competitions/competition-lifecycle';
+import { useCompetitionActions } from 'src/pages/competitions/use-competition-actions';
+import { buildDefaultRulesetConfig, defaultRulesetName } from 'src/pages/rulesets/default-ruleset';
 
-const SC = { draft: 'default', scheduled: 'info', in_progress: 'warning', finished: 'success', cancelled: 'error' };
-const SL = { draft: 'Borrador', scheduled: 'Programada', in_progress: 'En curso', finished: 'Finalizada', cancelled: 'Cancelada' };
 const FORMATS = ['league', 'knockout', 'groups'];
 const CAPS = ['basic', 'detailed'];
-const NEXT_STATUS = { draft: ['scheduled', 'cancelled'], scheduled: ['draft', 'in_progress', 'cancelled'], in_progress: ['finished'], finished: [], cancelled: [] };
 const FORMATO_INFO = {
   league: 'Todos juegan contra todos.',
   knockout: 'El que pierde queda afuera.',
@@ -85,14 +85,13 @@ const ACCORDION_SUMMARY_SX = {
 // settings.public los comparte con el estudio en portal-payload.js para que
 // los dos no se pisen.
 const emptyForm = () => ({
-  name: '', slug: '', season: '', format: 'league', rulesetId: '', captureLevel: 'basic', credentialDesignId: '',
+  name: '', slug: '', season: '', format: 'league', sportCode: '', rulesetId: '', captureLevel: 'basic', credentialDesignId: '',
   bufferMinutes: '', scheduleSpaceIds: [],
   bulletinIntroduction: '', bulletinSanctions: '', bulletinGeneralProvisions: '', bulletinContactInfo: '',
   ...EMPTY_PORTAL_FORM,
 });
 
 export default function CompetitionsPage() {
-  const confirm = useConfirm();
   const navigate = useNavigate();
   const { data: rulesets } = useApi(endpoints.rulesets);
   const { data: sports } = useApi(endpoints.sports);
@@ -106,6 +105,12 @@ export default function CompetitionsPage() {
   // de useCrudDialog.
   const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 25 });
 
+  // Un ref y no un estado: lo escribe save() justo antes de guardar y lo lee
+  // savedMessage() del otro lado de ese mismo guardado -- ninguno de los dos
+  // necesita volver a renderizar nada por esto, así que un estado de React
+  // sería puro ruido.
+  const reglamentoCreadoRef = useRef(null);
+
   const {
     rows: data, rowCount, isLoading, mutate, open, editId, form, setForm, error, setError, saving, openCreate: openCreateBase,
     openEdit: openEditBase, close, save: saveBase, remove,
@@ -116,20 +121,34 @@ export default function CompetitionsPage() {
     entityName: 'competencia',
     entityGender: 'f',
     buildUrl: (base, id) => endpoints.competition(id),
-    savedMessage: (result, wasEdit) => (wasEdit
-      ? 'Competencia guardada.'
-      : 'Competencia creada. Ahora agregale al menos una categoria.'),
-    // Sin categorias no hay nada que sortear ni programar (RF backend), asi
-    // que el siguiente paso siempre es este — llevar directo ahi en vez de
-    // devolver a una lista donde hay que volver a elegirla.
+    savedMessage: (result, wasEdit) => {
+      if (wasEdit) return 'Competencia guardada.';
+
+      const nombreReglamento = reglamentoCreadoRef.current;
+      reglamentoCreadoRef.current = null;
+
+      if (!nombreReglamento) return 'Competencia creada. Ahora agregale al menos una categoria.';
+
+      return {
+        message: `Competencia creada junto con el reglamento "${nombreReglamento}". ` +
+          'Ahora agregale al menos una categoria.',
+        options: { action: { label: 'Ver reglamentos', onClick: () => navigate('/dashboard/rulesets') } },
+      };
+    },
+    // El resumen de la competencia (overview-page.jsx) es lo que antes
+    // faltaba entre crear una competencia y saber qué hacer con ella: su
+    // propio checklist ya señala "agregá una categoría" como el primer paso
+    // pendiente, así que no hace falta elegir de antemano a cuál de las
+    // pantallas siguientes (Categorías, Portal) conviene mandar a alguien
+    // que recién la creó.
     onSaved: (result, wasEdit) => {
-      if (!wasEdit) navigate(`/dashboard/categories?competition=${result.id}`);
+      if (!wasEdit) navigate(`/dashboard/competitions/${result.id}`);
     },
     mapToForm: (row) => {
       const sched = (row.settings && row.settings.schedule) || {};
       const bulletin = (row.settings && row.settings.bulletin) || {};
       return {
-        name: row.name, slug: row.slug, season: row.season, format: row.format,
+        name: row.name, slug: row.slug, season: row.season, format: row.format, sportCode: row.sportCode,
         rulesetId: row.rulesetId || '', captureLevel: row.captureLevel, credentialDesignId: row.credentialDesignId || '',
         bufferMinutes: sched.bufferMinutes ?? '',
         scheduleSpaceIds: sched.spaceIds || [],
@@ -173,6 +192,14 @@ export default function CompetitionsPage() {
   const slugError = form.slug || slugTouched ? problemaDeSlug(form.slug) : null;
   const slugHelp = `/${slugDeOrganizacion()}/${normalizarSlug(form.slug) || '...'}`;
 
+  // El deporte elige el reglamento, nunca al revés (ver el comentario de
+  // CompetitionContract del lado del servidor sobre por qué el sport no se
+  // manda por separado): esta lista es la única razón de ser del select de
+  // Deporte en el diálogo.
+  const deporteElegido = (sports || []).find((s) => s.code === form.sportCode);
+  const reglamentosDelDeporte = (rulesets || []).filter((r) => r.sportCode === form.sportCode);
+  const deporteSinReglamentos = !!form.sportCode && reglamentosDelDeporte.length === 0;
+
   const openDialog = useCallback((row) => {
     setSlugTouched(!!row);
     (row ? openEditBase : openCreateBase)(row);
@@ -181,10 +208,43 @@ export default function CompetitionsPage() {
   // El slug no es un campo mas: hay que validarlo antes de que el pedido
   // salga, y marcarlo "tocado" para que su error se muestre si todavia no lo
   // estaba (por ejemplo, guardando sin haber escrito nunca el nombre).
+  //
+  // Si la organización no tiene todavía ningún reglamento de este deporte
+  // (deporteSinReglamentos, reflejado en el diálogo por el Alert en vez del
+  // select de Reglamento), guardar crea uno estándar primero -- con los
+  // mismos valores de partida que armaría el formulario de Reglamentos para
+  // ese deporte, ver buildDefaultRulesetConfig -- y recién entonces crea la
+  // competencia apuntando a él. `overrides` existe exactamente para este
+  // caso: el id nuevo tiene que llegar al cuerpo de este guardado, no al del
+  // próximo render (ver el comentario de useCrudDialog.save).
   const save = async () => {
     const problem = problemaDeSlug(form.slug);
     if (problem) { setSlugTouched(true); setError(problem); return; }
-    await saveBase();
+
+    let overrides;
+
+    if (!form.rulesetId) {
+      if (!deporteElegido) { setError('Elegí un deporte.'); return; }
+
+      if (!deporteSinReglamentos) { setError('Elegí un reglamento.'); return; }
+
+      try {
+        const nombre = defaultRulesetName(deporteElegido);
+        const creado = await apiPost(endpoints.rulesets, {
+          sportCode: deporteElegido.code,
+          name: nombre,
+          config: buildDefaultRulesetConfig(deporteElegido),
+        });
+        reglamentoCreadoRef.current = nombre;
+        overrides = { rulesetId: creado.id };
+        setForm((f) => ({ ...f, rulesetId: creado.id }));
+      } catch (err) {
+        setError(err.message || 'No se pudo crear el reglamento por defecto.');
+        return;
+      }
+    }
+
+    await saveBase(overrides);
   };
 
   const agregarCancha = () => setForm((f) => ({ ...f, scheduleSpaceIds: [...f.scheduleSpaceIds, ''] }));
@@ -205,35 +265,32 @@ export default function CompetitionsPage() {
     setForm((f) => ({ ...f, slug: normalizarSlug(e.target.value) }));
   };
 
-  const changeStatus = async (id, st) => {
-    const ok = await confirm(`Cambiar estado a "${SL[st] || st}"?`, { confirmLabel: 'Cambiar' });
-    if (!ok) return;
-    try { await apiPut(endpoints.competitionStatus(id), { status: st }); mutate(); }
-    catch (err) { toast.error(err.message); }
-  };
-
-  const togglePublish = async (id, current) => {
-    try { await apiPut(endpoints.competitionPublication(id), { isPublic: !current }); mutate(); }
-    catch (err) { toast.error(err.message); }
-  };
-
-  const descargarConvocatoria = async (id, formato) => {
-    const url = formato === 'pdf' ? endpoints.competitionBulletinPdf(id) : endpoints.competitionBulletinWord(id);
-    const fallback = formato === 'pdf' ? 'convocatoria.pdf' : 'convocatoria.docx';
-    try {
-      const res = await axios.get(url, { responseType: 'blob' });
-      downloadBlob(res, fallback);
-    } catch (err) { toast.error(err.message); }
-  };
+  const { changeStatus, togglePublish, descargarConvocatoria } = useCompetitionActions(mutate);
 
   const columns = [
-    { field: 'name', headerName: 'Nombre', flex: 1, minWidth: 180 },
+    {
+      field: 'name',
+      headerName: 'Nombre',
+      flex: 1,
+      minWidth: 180,
+      // Clickeable hacia el resumen de la competencia (overview-page.jsx):
+      // es la puerta de entrada a Categorías, Partidos y Portal ya con esta
+      // competencia elegida, sin ocupar un ícono más en "Acciones".
+      renderCell: ({ value, row }) => (
+        <Box
+          onClick={() => navigate(`/dashboard/competitions/${row.id}`)}
+          sx={{ cursor: 'pointer', color: 'primary.main', fontWeight: 600, '&:hover': { textDecoration: 'underline' } }}
+        >
+          {value}
+        </Box>
+      ),
+    },
     { field: 'sportCode', headerName: 'Deporte', width: 110, renderCell: ({ value }) => nombreDeporte(value) },
     { field: 'season', headerName: 'Temporada', width: 120 },
-    { field: 'format', headerName: 'Formato', width: 110, renderCell: ({ value }) => value === 'league' ? 'Todos vs todos' : value === 'knockout' ? 'Eliminacion' : 'Grupos' },
+    { field: 'format', headerName: 'Formato', width: 110, renderCell: ({ value }) => FORMAT_LABEL[value] || value },
     { field: 'status', headerName: 'Estado', width: 190, align: 'center', headerAlign: 'center', renderCell: ({ value, row }) => (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 0.75 }}>
-        <Chip label={SL[value] || value} color={SC[value] || 'default'} size="small" />
+        <Chip label={STATUS_LABEL[value] || value} color={STATUS_COLOR[value] || 'default'} size="small" />
         {row.categoryCount === 0 && (
           <Tooltip title="Sin categorias todavia: no se puede sortear ni programar. Agregale una desde Categorias.">
             <Chip
@@ -249,19 +306,23 @@ export default function CompetitionsPage() {
         )}
       </Box>
     )},
-    { field: 'isPublic', headerName: 'Pública', width: 80, renderCell: ({ value, row }) => (
-      <EstadoChip
-        activo={value}
-        onClick={() => togglePublish(row.id, value)}
-        onLabel="Si" offLabel="No"
-        onIcon="eva:globe-fill" offIcon="eva:eye-off-outline"
-        onTooltip="Alternar publicación" offTooltip="Alternar publicación"
-      />
-    )},
+    { field: 'isPublic', headerName: 'Pública', width: 80, renderCell: ({ value, row }) => {
+      const motivo = motivoPublicacionInhabilitada(row);
+
+      return (
+        <EstadoChip
+          activo={value}
+          onClick={() => togglePublish(row.id, value)}
+          onLabel="Si" offLabel="No"
+          onIcon="eva:globe-fill" offIcon="eva:eye-off-outline"
+          onTooltip="Alternar publicación" offTooltip="Alternar publicación"
+          disabled={!!motivo}
+          disabledTooltip={motivo}
+        />
+      );
+    }},
     { field: 'actions', headerName: 'Acciones', width: 150, align: 'center', headerAlign: 'center', renderCell: ({ row }) => {
       const next = NEXT_STATUS[row.status] || [];
-      const icons = { scheduled: 'eva:calendar-outline', in_progress: 'eva:play-circle-fill', finished: 'eva:checkmark-circle-fill', draft: 'eva:edit-fill', cancelled: 'eva:close-circle-fill' };
-      const colors = { scheduled: 'info', in_progress: 'warning', finished: 'success', draft: 'default', cancelled: 'error' };
       return (
         <RowActionsMenu
           primary={[
@@ -275,7 +336,14 @@ export default function CompetitionsPage() {
             { icon: 'eva:trash-2-outline', label: 'Eliminar', color: 'error.main', onClick: () => remove(row.id) },
           ]}
           actions={[
-            ...next.map((s) => ({ icon: icons[s] || 'eva:arrow-right-fill', label: SL[s], color: `${colors[s]}.main`, onClick: () => changeStatus(row.id, s) })),
+            ...next.map((s) => ({
+              icon: STATUS_ICON[s] || 'eva:arrow-right-fill',
+              label: STATUS_LABEL[s],
+              // "default" no es una paleta real de MUI fuera de Chip -- un
+              // volver a Borrador con color: 'default.main' no pintaba nada.
+              color: STATUS_COLOR[s] === 'default' ? 'text.secondary' : `${STATUS_COLOR[s]}.main`,
+              onClick: () => changeStatus(row.id, s),
+            })),
             { icon: 'mdi:file-pdf-box', label: 'Descargar convocatoria (PDF)', onClick: () => descargarConvocatoria(row.id, 'pdf') },
             { icon: 'mdi:file-word-box', label: 'Descargar convocatoria (Word)', onClick: () => descargarConvocatoria(row.id, 'docx') },
           ].filter(Boolean)}
@@ -320,11 +388,61 @@ export default function CompetitionsPage() {
         <TextField select label="Formato" value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value })} fullWidth helperText={FORMATO_INFO[form.format]}>
           {FORMATS.map((f) => <MenuItem key={f} value={f}>{f === 'league' ? 'Todos vs todos' : f === 'knockout' ? 'Eliminacion' : 'Grupos'}</MenuItem>)}
         </TextField>
-        <TextField select label="Reglamento" value={form.rulesetId} onChange={(e) => setForm({ ...form, rulesetId: e.target.value })} fullWidth required>
+        <TextField
+          select
+          label="Deporte"
+          value={form.sportCode}
+          // Cambiar de deporte deja un reglamento elegido de otro deporte sin
+          // sentido -- se limpia junto con el cambio en vez de esperar a que
+          // el backend lo rechace.
+          onChange={(e) => setForm((f) => ({ ...f, sportCode: e.target.value, rulesetId: '' }))}
+          fullWidth
+          required
+        >
           <MenuItem value="">Seleccionar</MenuItem>
-          {(rulesets || []).map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+          {(sports || []).map((s) => <MenuItem key={s.code} value={s.code}>{s.name}</MenuItem>)}
         </TextField>
-        <TextField select label="Captura" value={form.captureLevel} onChange={(e) => setForm({ ...form, captureLevel: e.target.value })} fullWidth>
+        {deporteSinReglamentos ? (
+          <Alert severity="info">
+            Esta organización todavía no tiene un reglamento de {deporteElegido.name}. Al guardar se
+            va a crear uno estándar («{defaultRulesetName(deporteElegido)}») que vas a poder ajustar
+            o reemplazar después desde Reglamentos.
+          </Alert>
+        ) : (
+          <TextField
+            select
+            label="Reglamento"
+            value={form.rulesetId}
+            onChange={(e) => setForm({ ...form, rulesetId: e.target.value })}
+            fullWidth
+            required
+            disabled={!form.sportCode}
+            helperText={!form.sportCode ? 'Elegí un deporte primero.' : undefined}
+          >
+            <MenuItem value="">Seleccionar</MenuItem>
+            {reglamentosDelDeporte.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+          </TextField>
+        )}
+        <TextField
+          select
+          label="Captura"
+          value={form.captureLevel}
+          onChange={(e) => setForm({ ...form, captureLevel: e.target.value })}
+          fullWidth
+          // El reglamento elegido puede definir qué métricas se registran
+          // (goles, tarjetas...), pero esa lista no sirve de nada si la
+          // captura queda en Básica: ahí no se carga ningún evento, así que
+          // tampoco hay tabla de goleadores ni línea de tiempo del partido
+          // -- ver EventPolicy.RefuseMatch del lado del servidor, que
+          // rechaza cualquier evento mientras esto no sea Detallado. Y a
+          // diferencia del reglamento, que se puede ajustar más adelante,
+          // esto queda fijo apenas la competencia sale de Borrador.
+          helperText={
+            form.captureLevel === 'basic'
+              ? 'Solo se guarda el resultado final. Ningún evento del partido se registra -- sin goleadores, sin línea de tiempo -- aunque el reglamento elegido los tenga previstos. Fijo una vez que la competencia sale de Borrador.'
+              : 'Permite cargar los eventos del partido (goles, tarjetas...) por jugador. Fijo una vez que la competencia sale de Borrador.'
+          }
+        >
           {CAPS.map((c) => <MenuItem key={c} value={c}>{c === 'basic' ? 'Basico' : 'Detallado'}</MenuItem>)}
         </TextField>
         <TextField

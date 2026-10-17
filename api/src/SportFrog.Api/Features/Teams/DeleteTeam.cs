@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -38,6 +39,7 @@ public static class DeleteTeam
         SportFrogDbContext database,
         TeamUsage usage,
         TimeProvider clock,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var team = await database.Teams.SingleOrDefaultAsync(
@@ -78,6 +80,17 @@ public static class DeleteTeam
                         "leerlo antes de anular su inscripción.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The public page's category cards count their teams — see
+        // ReadPublicCompetition.Shell. A team carries no competition id of
+        // its own, so this is reached through its category. Invalidating a
+        // key nobody cached is a no-op.
+        var competitionId = await database.Categories
+            .Where(category => category.Id == team.CategoryId)
+            .Select(category => category.CompetitionId)
+            .SingleAsync(cancellationToken);
+
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(competitionId));
 
         return Results.NoContent();
     }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -39,6 +40,7 @@ public static class CreateCategory
         SportFrogDbContext database,
         CategoryPolicy policy,
         OrganizationContext organization,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var competition = await database.Competitions
@@ -102,6 +104,12 @@ public static class CreateCategory
                 detail: "Esta competencia ya tiene una categoría con ese nombre.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The public page lists this competition's divisions — see
+        // ReadPublicCompetition.Shell — and a new one belongs on that list
+        // the instant it exists. Invalidating a key nobody cached is a
+        // no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(competitionId));
 
         return Results.Created(
             $"/competitions/{competitionId}/categories/{category.Id}",

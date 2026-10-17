@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Standings;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Storage;
@@ -22,6 +23,14 @@ namespace SportFrog.Api.Features.Public;
 /// answered as not found, and the three are indistinguishable from outside
 /// on purpose (RNF-16) — knowing a slug is not authorization to learn whether
 /// an organization is suspended.
+///
+/// Everything except <see cref="PortalMoment"/> is cached past the publish
+/// check — see <see cref="IPublicQueryCache"/> and
+/// <see cref="PublicCacheKey.CompetitionPage"/> — for the same reason
+/// <see cref="ReadPublicClassification"/> caches its own build: this is
+/// exactly the page a crowd refreshes repeatedly during a live event, and
+/// the shell underneath the live moment changes only when an organizer
+/// touches the competition, not on every one of those refreshes.
 /// </remarks>
 public static class ReadPublicCompetition
 {
@@ -215,6 +224,7 @@ public static class ReadPublicCompetition
         string competitionSlug,
         PublicCompetitionReader reader,
         ObjectStore store,
+        IPublicQueryCache cache,
         CancellationToken cancellationToken)
     {
         var page = await reader.ReadAsync(
@@ -222,161 +232,22 @@ public static class ReadPublicCompetition
             competitionSlug,
             async (database, resolved) =>
             {
-                var competition = await database.Competitions
-                    .AsNoTracking()
-                    .Where(candidate => candidate.Id == resolved.CompetitionId)
-                    .Select(candidate => new
-                    {
-                        candidate.Name,
-                        candidate.Season,
-                        candidate.SportCode,
-                        SportName = candidate.Sport!.Name,
-                        ScoringUnit = candidate.Sport.ScoringUnit,
-                        PeriodLabel = candidate.Sport.PeriodLabel,
-                        IsPlayedInSets = candidate.Sport.ScoreMode == ScoreMode.Sets,
-                        IsJudged = candidate.Sport.ScoreMode == ScoreMode.Judged,
-                        IsIndividual = candidate.Sport.IsIndividual,
-                        candidate.Format,
-                        candidate.Status,
-                        candidate.StartsOn,
-                        candidate.EndsOn,
-                        candidate.Settings,
-                        Organization = database.Organizations
-                            .Where(org => org.Id == resolved.OrganizationId)
-                            .Select(org => new { org.Name, org.LogoUrl })
-                            .First(),
-                    })
+                // Cached past the publish check and inside the transaction
+                // the reader already opened — same placement, and the same
+                // reason, as ReadPublicClassification. See Shell's own
+                // remarks for exactly what this does and does not cover.
+                var shell = await cache.GetOrCreateAsync(
+                    PublicCacheKey.CompetitionPage(resolved.CompetitionId),
+                    _ => BuildShellAsync(database, store, resolved, cancellationToken),
+                    cancellationToken);
 
-                    // Single rather than SingleOrDefault: the resolver found
-                    // this row a moment ago, under this same context and this
-                    // same transaction. Absent here would not be a missing
-                    // page, it would be the isolation context having come
-                    // undone between two statements — which is worth throwing
-                    // over rather than answering with a tidy 404.
-                    .SingleAsync(cancellationToken);
-
-                var categories = await database.Categories
-                    .AsNoTracking()
-                    .Where(category => category.CompetitionId == resolved.CompetitionId)
-                    .OrderBy(category => category.DisplayOrder)
-                    .ThenBy(category => category.Name)
-                    .Select(category => new CategorySummary(
-                        category.Id,
-                        category.Name,
-                        category.Gender,
-                        database.Teams.Count(team => team.CategoryId == category.Id)))
-                    .ToListAsync(cancellationToken);
-
-                var shows = competition.Settings.Public;
-
-                var organizationLogoUrl = string.IsNullOrEmpty(competition.Organization.LogoUrl)
-                    ? null
-                    : await store.ReadLinkAsync(
-                        resolved.OrganizationId, competition.Organization.LogoUrl, cancellationToken);
-
-                var bannerUrl = string.IsNullOrEmpty(shows?.BannerKey)
-                    ? null
-                    : await store.ReadLinkAsync(resolved.OrganizationId, shows.BannerKey, cancellationToken);
-
-                var competitionLogoUrl = string.IsNullOrEmpty(shows?.LogoKey)
-                    ? null
-                    : await store.ReadLinkAsync(resolved.OrganizationId, shows.LogoKey, cancellationToken);
-
-                var sponsors = new List<SponsorSummary>();
-
-                foreach (var sponsor in shows?.Sponsors ?? [])
-                {
-                    if (await store.ReadLinkAsync(resolved.OrganizationId, sponsor.LogoKey, cancellationToken)
-                        is { } logoUrl)
-                    {
-                        sponsors.Add(new SponsorSummary(sponsor.Name, sponsor.Url, logoUrl));
-                    }
-                }
-
-                var gallery = new List<GalleryPhotoSummary>();
-
-                foreach (var photo in shows?.Gallery ?? [])
-                {
-                    if (await store.ReadLinkAsync(resolved.OrganizationId, photo.Key, cancellationToken)
-                        is { } photoUrl)
-                    {
-                        gallery.Add(new GalleryPhotoSummary(photo.Caption, photoUrl));
-                    }
-                }
-
-                // Defaults filled and the legacy accent colour folded in here,
-                // once, rather than on the page: a stored theme is deliberately
-                // sparse and every client would otherwise re-derive the same
-                // fallbacks. Null when the competition never dressed its page
-                // up, which the client reads as "stay on the plain theme".
-                var theme = PortalTheme.Resolve(shows);
-
-                var sectionOrder = PortalSection.Resolve(shows?.SectionOrder);
-
+                // Never cached, whether the shell above was a hit or a miss —
+                // see PortalMoment's own remarks on why a fact read off
+                // "right now" cannot be.
                 var moment = await MomentAsync(
-                    database, store, resolved, competition.Status, categories, cancellationToken);
+                    database, store, resolved, shell.Status, shell.Categories, cancellationToken);
 
-                // Competition-wide, not per category: the tab either exists
-                // or it does not, and which category a visitor happens to
-                // have selected is a question for what's inside it, not for
-                // whether it's there at all — see Sections.Bracket.
-                var hasBracket = await database.Matches
-                    .AsNoTracking()
-                    .AnyAsync(
-                        match => match.CompetitionId == resolved.CompetitionId && match.Phase != null,
-                        cancellationToken);
-
-                return new Response(
-                    competition.Organization.Name,
-                    organizationLogoUrl,
-                    competition.Name,
-                    competition.Season,
-                    competition.SportCode,
-                    competition.SportName,
-                    competition.ScoringUnit,
-                    competition.PeriodLabel,
-                    competition.IsPlayedInSets,
-                    competition.IsJudged,
-                    competition.IsIndividual,
-                    competition.Format,
-                    competition.Status,
-                    competition.StartsOn,
-                    competition.EndsOn,
-
-                    // Absent settings mean the defaults the record declares:
-                    // standings, leaders, classification and the gallery
-                    // shown, rosters not. A competition published without
-                    // ever opening its settings still has a page worth
-                    // reading, and its rosters still stay private.
-                    //
-                    // Standings is refused outright for a knockout-only
-                    // competition, regardless of the organizer's own
-                    // switch: single elimination has no group stage to
-                    // tabulate, so the switch has nothing honest to turn on
-                    // (see the same rule in StandingsQuery, which answers
-                    // null for the same reason).
-                    new Sections(
-                        competition.Format != CompetitionFormat.Knockout && (shows?.ShowStandings ?? true),
-                        shows?.ShowLeaders ?? true,
-                        shows?.ShowRosters ?? false,
-                        shows?.ShowClassification ?? true,
-                        shows?.ShowGallery ?? true,
-                        hasBracket),
-                    categories,
-                    new Portal(
-                        bannerUrl,
-                        competitionLogoUrl,
-                        theme?.Primary ?? shows?.AccentColor,
-                        theme,
-                        sectionOrder,
-                        shows?.Description,
-                        shows?.Instagram,
-                        shows?.Facebook,
-                        shows?.WhatsApp,
-                        shows?.Website,
-                        sponsors,
-                        gallery),
-                    moment);
+                return shell.ToResponse(moment);
             },
             cancellationToken);
 
@@ -384,6 +255,214 @@ public static class ReadPublicCompetition
         // wrong competition, suspended, unpublished. Distinguishing them here
         // would hand an address-guesser a map.
         return page is null ? Results.NotFound() : Results.Ok(page);
+    }
+
+    /// <summary>
+    /// Everything a competition's public page shows except
+    /// <see cref="PortalMoment"/>: the half that answers from the
+    /// competition's own settings, categories and teams rather than from the
+    /// instant it happens to be read, and that is what
+    /// <see cref="PublicCacheKey.CompetitionPage"/> caches.
+    /// </summary>
+    private sealed record Shell(
+        string OrganizationName,
+        string? OrganizationLogoUrl,
+        string Name,
+        string Season,
+        string SportCode,
+        string SportName,
+        string ScoringUnit,
+        string PeriodLabel,
+        bool IsPlayedInSets,
+        bool IsJudged,
+        bool IsIndividual,
+        string Format,
+        CompetitionState Status,
+        DateOnly? StartsOn,
+        DateOnly? EndsOn,
+        Sections Shows,
+        IReadOnlyList<CategorySummary> Categories,
+        Portal Portal)
+    {
+        /// <summary>Completes the shell with the one half that was never cached.</summary>
+        public Response ToResponse(PortalMoment moment) => new(
+            OrganizationName,
+            OrganizationLogoUrl,
+            Name,
+            Season,
+            SportCode,
+            SportName,
+            ScoringUnit,
+            PeriodLabel,
+            IsPlayedInSets,
+            IsJudged,
+            IsIndividual,
+            Format,
+            Status,
+            StartsOn,
+            EndsOn,
+            Shows,
+            Categories,
+            Portal,
+            moment);
+    }
+
+    private static async Task<Shell> BuildShellAsync(
+        SportFrogDbContext database,
+        ObjectStore store,
+        PublicCompetition resolved,
+        CancellationToken cancellationToken)
+    {
+        var competition = await database.Competitions
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == resolved.CompetitionId)
+            .Select(candidate => new
+            {
+                candidate.Name,
+                candidate.Season,
+                candidate.SportCode,
+                SportName = candidate.Sport!.Name,
+                ScoringUnit = candidate.Sport.ScoringUnit,
+                PeriodLabel = candidate.Sport.PeriodLabel,
+                IsPlayedInSets = candidate.Sport.ScoreMode == ScoreMode.Sets,
+                IsJudged = candidate.Sport.ScoreMode == ScoreMode.Judged,
+                IsIndividual = candidate.Sport.IsIndividual,
+                candidate.Format,
+                candidate.Status,
+                candidate.StartsOn,
+                candidate.EndsOn,
+                candidate.Settings,
+                Organization = database.Organizations
+                    .Where(org => org.Id == resolved.OrganizationId)
+                    .Select(org => new { org.Name, org.LogoUrl })
+                    .First(),
+            })
+
+            // Single rather than SingleOrDefault: the resolver found this row
+            // a moment ago, under this same context and this same
+            // transaction. Absent here would not be a missing page, it would
+            // be the isolation context having come undone between two
+            // statements — which is worth throwing over rather than
+            // answering with a tidy 404.
+            .SingleAsync(cancellationToken);
+
+        var categories = await database.Categories
+            .AsNoTracking()
+            .Where(category => category.CompetitionId == resolved.CompetitionId)
+            .OrderBy(category => category.DisplayOrder)
+            .ThenBy(category => category.Name)
+            .Select(category => new CategorySummary(
+                category.Id,
+                category.Name,
+                category.Gender,
+                database.Teams.Count(team => team.CategoryId == category.Id)))
+            .ToListAsync(cancellationToken);
+
+        var shows = competition.Settings.Public;
+
+        var organizationLogoUrl = string.IsNullOrEmpty(competition.Organization.LogoUrl)
+            ? null
+            : await store.ReadLinkAsync(
+                resolved.OrganizationId, competition.Organization.LogoUrl, cancellationToken);
+
+        var bannerUrl = string.IsNullOrEmpty(shows?.BannerKey)
+            ? null
+            : await store.ReadLinkAsync(resolved.OrganizationId, shows.BannerKey, cancellationToken);
+
+        var competitionLogoUrl = string.IsNullOrEmpty(shows?.LogoKey)
+            ? null
+            : await store.ReadLinkAsync(resolved.OrganizationId, shows.LogoKey, cancellationToken);
+
+        var sponsors = new List<SponsorSummary>();
+
+        foreach (var sponsor in shows?.Sponsors ?? [])
+        {
+            if (await store.ReadLinkAsync(resolved.OrganizationId, sponsor.LogoKey, cancellationToken)
+                is { } logoUrl)
+            {
+                sponsors.Add(new SponsorSummary(sponsor.Name, sponsor.Url, logoUrl));
+            }
+        }
+
+        var gallery = new List<GalleryPhotoSummary>();
+
+        foreach (var photo in shows?.Gallery ?? [])
+        {
+            if (await store.ReadLinkAsync(resolved.OrganizationId, photo.Key, cancellationToken)
+                is { } photoUrl)
+            {
+                gallery.Add(new GalleryPhotoSummary(photo.Caption, photoUrl));
+            }
+        }
+
+        // Defaults filled and the legacy accent colour folded in here, once,
+        // rather than on the page: a stored theme is deliberately sparse and
+        // every client would otherwise re-derive the same fallbacks. Null
+        // when the competition never dressed its page up, which the client
+        // reads as "stay on the plain theme".
+        var theme = PortalTheme.Resolve(shows);
+
+        var sectionOrder = PortalSection.Resolve(shows?.SectionOrder);
+
+        // Competition-wide, not per category: the tab either exists or it
+        // does not, and which category a visitor happens to have selected is
+        // a question for what's inside it, not for whether it's there at all
+        // — see Sections.Bracket.
+        var hasBracket = await database.Matches
+            .AsNoTracking()
+            .AnyAsync(
+                match => match.CompetitionId == resolved.CompetitionId && match.Phase != null,
+                cancellationToken);
+
+        return new Shell(
+            competition.Organization.Name,
+            organizationLogoUrl,
+            competition.Name,
+            competition.Season,
+            competition.SportCode,
+            competition.SportName,
+            competition.ScoringUnit,
+            competition.PeriodLabel,
+            competition.IsPlayedInSets,
+            competition.IsJudged,
+            competition.IsIndividual,
+            competition.Format,
+            competition.Status,
+            competition.StartsOn,
+            competition.EndsOn,
+
+            // Absent settings mean the defaults the record declares:
+            // standings, leaders, classification and the gallery shown,
+            // rosters not. A competition published without ever opening its
+            // settings still has a page worth reading, and its rosters still
+            // stay private.
+            //
+            // Standings is refused outright for a knockout-only competition,
+            // regardless of the organizer's own switch: single elimination
+            // has no group stage to tabulate, so the switch has nothing
+            // honest to turn on (see the same rule in StandingsQuery, which
+            // answers null for the same reason).
+            new Sections(
+                competition.Format != CompetitionFormat.Knockout && (shows?.ShowStandings ?? true),
+                shows?.ShowLeaders ?? true,
+                shows?.ShowRosters ?? false,
+                shows?.ShowClassification ?? true,
+                shows?.ShowGallery ?? true,
+                hasBracket),
+            categories,
+            new Portal(
+                bannerUrl,
+                competitionLogoUrl,
+                theme?.Primary ?? shows?.AccentColor,
+                theme,
+                sectionOrder,
+                shows?.Description,
+                shows?.Instagram,
+                shows?.Facebook,
+                shows?.WhatsApp,
+                shows?.Website,
+                sponsors,
+                gallery));
     }
 
     /// <summary>

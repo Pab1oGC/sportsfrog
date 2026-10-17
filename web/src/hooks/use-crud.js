@@ -97,18 +97,34 @@ export function useCrudDialog(opts) {
 
   const close = useCallback(() => setOpen(false), []);
 
-  const save = useCallback(async () => {
+  // `overrides` tapa un hueco de timing, no agrega una funcionalidad nueva:
+  // una página que necesita escribir algo en el `form` justo antes de guardar
+  // (CompetitionsPage, creando el reglamento por defecto) no puede hacerlo
+  // con `setForm` y esperar que este `save` ya lo vea -- `save` todavía tiene
+  // cerrado por encima el `form` del render anterior, porque `setForm` recién
+  // produce uno nuevo en el próximo render, no en este mismo llamado. Lo que
+  // `setForm` sí sirve para dejar es el diálogo consistente si guardar falla.
+  const save = useCallback(async (overrides) => {
     setSaving(true);
     setError('');
     try {
       const wasEdit = Boolean(editId);
-      const body = mapToSend(form, wasEdit);
+      const body = { ...mapToSend(form, wasEdit), ...overrides };
       const target = typeof createUrl === 'function' ? createUrl(form) : createUrl;
       const result = wasEdit ? await apiPut(getUrl(editId), body) : await apiPost(target, body);
       setOpen(false);
       mutate();
       if (savedMessage) {
-        toast.success(typeof savedMessage === 'function' ? savedMessage(result, wasEdit) : savedMessage);
+        const resolved = typeof savedMessage === 'function' ? savedMessage(result, wasEdit) : savedMessage;
+        // Una página puede devolver un string, como siempre, o
+        // { message, options } cuando el toast necesita algo más (ver
+        // CompetitionsPage, que agrega un botón de acción al crear un
+        // reglamento por defecto junto con la competencia).
+        if (typeof resolved === 'string') {
+          toast.success(resolved);
+        } else if (resolved) {
+          toast.success(resolved.message, resolved.options);
+        }
       }
       onSaved?.(result, wasEdit);
     } catch (err) {

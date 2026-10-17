@@ -20,8 +20,9 @@ import { alpha } from '@mui/material/styles';
  * lib/portal-theme.js a partir de lo que el organizador elige en el estudio.
  */
 
-// Capa 1 -- los colores. Los azules son los de la portada (landing-page.jsx y
-// playful-hero.jsx); el verde lima es el acento que ya usa la insignia del hero.
+// Capa 1 -- los colores. Los azules son los de la portada (landing-page.jsx,
+// landing/hero.jsx); el verde lima es el acento que usa el degrade de la
+// tarjeta final (landing-page.jsx, "cta-card").
 export const swatches = {
   blueDeep: '#1D709F',   // azul principal
   blueLight: '#4CB8E6',  // azul claro: bordes y contornos
@@ -31,6 +32,11 @@ export const swatches = {
   lime: '#7CFC00',       // acento
   ink: '#111315',        // texto y sombras
   white: '#ffffff',
+  // Grises neutros para el registro formal de la landing (ver rediseño):
+  // a diferencia del resto de la marca, que es 100% azul, estos no llevan
+  // tinte de color -- son el fondo de las secciones que no quieren "gritar".
+  graySurface: '#F6F7F9',
+  graySurfaceDeep: '#EEF0F3',
 };
 
 // Podio (oro / plata / bronce). Aparte de `swatches` porque no es color de
@@ -39,11 +45,15 @@ export const swatches = {
 export const medalColors = { 1: '#C9A227', 2: '#8E8E93', 3: '#B87333' };
 
 // Capa 2 -- los roles. Devuelve la `palette` que recibe createTheme, incluidas
-// tres claves propias del proyecto:
+// cuatro claves propias del proyecto:
 //   brand   -- colores de marca que MUI no trae (borde, brillo, tinte, acento)
 //   overlay -- capas semitransparentes (el fondo que tapa la pantalla tras un modal)
 //   ui      -- colores de piezas puntuales que theme/components.js necesita
 //              (encabezado de las tablas, barra de scroll)
+//   panel   -- fondos para secciones de landing que se alternan en secuencia
+//              (ver pages/landing/section-panel.jsx): un array, no un objeto,
+//              porque a quien lo consume no le importa cuál sección es cada
+//              una, solo que la siguiente se distinga de la anterior.
 export function createAppPalette(colors = swatches) {
   return {
     mode: 'light',
@@ -69,5 +79,6 @@ export function createAppPalette(colors = swatches) {
       tableHeader: alpha(colors.blueDeep, 0.05),
       scrollbarThumb: colors.blueLight,
     },
+    panel: [colors.white, colors.graySurface, colors.blueTint, colors.graySurfaceDeep, colors.bluePage],
   };
 }

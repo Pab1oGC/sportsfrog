@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -63,6 +64,7 @@ public static class CreateTeam
         Request request,
         SportFrogDbContext database,
         OrganizationContext organization,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var category = await database.Categories
@@ -171,6 +173,11 @@ public static class CreateTeam
                 detail: $"{club.Name} ya está inscripto en esta categoría.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The public page's category cards count their teams — see
+        // ReadPublicCompetition.Shell. Invalidating a key nobody cached is a
+        // no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(competition.Id));
 
         return Results.Created($"/teams/{team.Id}", new Response(team.Id, team.Name));
     }

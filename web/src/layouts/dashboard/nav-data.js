@@ -4,10 +4,17 @@ export function getNavData(isPlatformAdmin = false) {
       { title: "Dashboard", path: "/dashboard", icon: "mdi:view-dashboard-outline" },
     ]},
     { subheader: "Competencia", items: [
-      { title: "Competiciones", path: "/dashboard/competitions", icon: "mdi:trophy-outline" },
-      { title: "Categorias", path: "/dashboard/categories", icon: "mdi:tag-outline" },
-      { title: "Equipos / Inscripciones", path: "/dashboard/teams", icon: "mdi:account-group-outline" },
-      { title: "Nomina", path: "/dashboard/roster", icon: "mdi:account-multiple-check-outline" },
+      // Categorias, Equipos y Nomina ya viven como pestañas dentro de una
+      // competencia (ver CompetitionOverviewPage): colgarlas acá es que el
+      // menú diga lo mismo que ya dice la pantalla, en vez de sugerir que
+      // son secciones sueltas al mismo nivel que Competiciones. Siguen
+      // siendo rutas propias -- NavVertical navega a "Competiciones" igual
+      // que a cualquier otra, el desplegable es además, no en cambio.
+      { title: "Competiciones", path: "/dashboard/competitions", icon: "mdi:trophy-outline", children: [
+        { title: "Categorias", path: "/dashboard/categories" },
+        { title: "Equipos / Inscripciones", path: "/dashboard/teams" },
+        { title: "Nomina", path: "/dashboard/roster" },
+      ]},
       { title: "Clasificación", path: "/dashboard/performances", icon: "mdi:podium-gold" },
       { title: "Fixtures/Partidos", path: "/dashboard/matches", icon: "mdi:calendar-clock-outline" },
       { title: "Tabla posiciones", path: "/dashboard/standings", icon: "mdi:format-list-numbered" },

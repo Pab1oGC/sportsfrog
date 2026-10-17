@@ -4,6 +4,7 @@ using Npgsql;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Rosters;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 using SportFrog.Api.Infrastructure.Tenancy;
@@ -94,6 +95,7 @@ public static class EnrollIndividual
         RosterPolicy policy,
         UnaffiliatedClub unaffiliatedClub,
         OrganizationContext organization,
+        IPublicQueryCache publicCache,
         CancellationToken cancellationToken)
     {
         var category = await database.Categories
@@ -250,6 +252,11 @@ public static class EnrollIndividual
                         "Volvé a leer la categoría e intentá de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // The public page's category cards count their teams — see
+        // ReadPublicCompetition.Shell. Invalidating a key nobody cached is a
+        // no-op.
+        publicCache.Invalidate(PublicCacheKey.CompetitionPage(competition.Id));
 
         return Results.Created(
             $"/teams/{team.Id}",

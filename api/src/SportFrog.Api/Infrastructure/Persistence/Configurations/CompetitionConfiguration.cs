@@ -78,6 +78,27 @@ internal sealed class CompetitionConfiguration : IEntityTypeConfiguration<Compet
             .HasDefaultValueSql("now()")
             .ValueGeneratedOnAddOrUpdate();
 
+        // Same reasoning as Match's own xmin column: UpdateCompetition,
+        // DeleteCompetition, ChangeCompetitionStatus and PublishCompetition
+        // all read this same row, decide something from its current state,
+        // and save later — the read-then-write shape that let two saves
+        // race silently. The state machine depends on that decision staying
+        // true until the save lands: ChangeCompetitionStatus forces
+        // IsPublic false the instant a competition returns to Draft, and a
+        // PublishCompetition request that read the row a moment earlier
+        // could still try to set it true. xmin — the row version Postgres
+        // already keeps for every row, no column of our own needed — makes
+        // EF include the version it read in every UPDATE's WHERE clause; if
+        // the row moved since, zero rows match and SaveChangesAsync throws
+        // DbUpdateConcurrencyException instead of silently overwriting, and
+        // every handler that saves a Competition catches that and reports
+        // 409, the same way a unique violation already does.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+
         // Unique among the living, matching the partial index: an address
         // freed by a logical deletion can be taken again.
         builder.HasIndex(x => new { x.OrgId, x.Slug })
