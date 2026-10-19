@@ -16,6 +16,7 @@ export function getNavData(isPlatformAdmin = false) {
       { title: "Listas", path: "/dashboard/lists", icon: "mdi:format-list-bulleted" },
     ]},
     { subheader: "Gestion", items: [
+      { title: "Gestión escolar", path: "/dashboard/school", icon: "mdi:school-outline" },
       { title: "Clubes", path: "/dashboard/clubs", icon: "mdi:office-building-outline" },
       { title: "Deportistas", path: "/dashboard/athletes", icon: "mdi:run" },
       { title: "Sedes", path: "/dashboard/venues", icon: "mdi:map-marker-outline" },
