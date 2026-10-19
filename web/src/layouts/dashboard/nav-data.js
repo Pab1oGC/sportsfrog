@@ -15,6 +15,7 @@ export function getNavData(isPlatformAdmin = false) {
         { title: "Equipos / Inscripciones", path: "/dashboard/teams" },
         { title: "Nomina", path: "/dashboard/roster" },
       ]},
+      { title: "Sanciones", path: "/dashboard/sanctions", icon: "mdi:gavel" },
       { title: "Clasificación", path: "/dashboard/performances", icon: "mdi:podium-gold" },
       { title: "Fixtures/Partidos", path: "/dashboard/matches", icon: "mdi:calendar-clock-outline" },
       { title: "Tabla posiciones", path: "/dashboard/standings", icon: "mdi:format-list-numbered" },

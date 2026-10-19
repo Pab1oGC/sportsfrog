@@ -44,6 +44,14 @@ public enum ScopeTargetKind
     /// </summary>
     RosterEntry,
 
+    /// <summary>
+    /// A staff row, resolved to both the competition its team's category
+    /// belongs to and the club that team is fielded by — the same two-axis
+    /// shape as <see cref="RosterEntry"/>, for the other kind of person a
+    /// team has.
+    /// </summary>
+    TeamStaff,
+
     /// <summary>The route value already is a course id.</summary>
     Course,
 
@@ -198,6 +206,21 @@ public sealed class ScopeResolver(SportFrogDbContext database)
                     join team in database.Teams on entry.TeamId equals team.Id
                     join category in database.Categories on team.CategoryId equals category.Id
                     where entry.Id == id
+                    select new { team.ClubId, category.CompetitionId }
+                ).SingleOrDefaultAsync(cancellationToken);
+
+                return row is null ? null : new ResolvedScopeTarget(row.CompetitionId, row.ClubId);
+            }
+
+            case ScopeTargetKind.TeamStaff:
+            {
+                // The same two joins RosterEntry needs, for the same reason:
+                // the row carries only TeamId.
+                var row = await (
+                    from staff in database.TeamStaff
+                    join team in database.Teams on staff.TeamId equals team.Id
+                    join category in database.Categories on team.CategoryId equals category.Id
+                    where staff.Id == id
                     select new { team.ClubId, category.CompetitionId }
                 ).SingleOrDefaultAsync(cancellationToken);
 

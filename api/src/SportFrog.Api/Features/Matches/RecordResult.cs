@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Discipline;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -29,12 +30,49 @@ public static class RecordResult
 {
     public sealed record Request(IReadOnlyList<PeriodScore> PeriodScores, string? Notes);
 
+    /// <summary>
+    /// Somebody sent off in this match, nobody has sanctioned yet for it.
+    /// </summary>
+    /// <remarks>
+    /// A suggestion, never an action: what a red card is worth — how many
+    /// matches, whether a fine too — is the organizer's own rule, the same
+    /// reason the competition bulletin states it as prose rather than this
+    /// schema modeling it (see <see cref="SportFrog.Domain.Discipline.SanctionCompletionRule"/>'s
+    /// own remarks). Recording a result only ever surfaces that a red card
+    /// was shown; imposing the sanction it might call for is a separate,
+    /// deliberate act through <c>ImposeSanction</c>.
+    /// </remarks>
+    public sealed record SuggestedSanction(
+        Guid AthleteId, string AthleteFirstName, string AthleteLastName, Guid TeamId, string TeamName, Guid MatchId);
+
+    /// <summary>
+    /// Somebody on either side's roster who carries a sanction that blocks
+    /// them today.
+    /// </summary>
+    /// <remarks>
+    /// A warning, not a refusal: whether this person actually took the field
+    /// is not something recording a result can see — the schema has no
+    /// lineup, only what was logged against the match (see
+    /// <see cref="Infrastructure.Persistence.Entities.PlayerEvent"/>'s own
+    /// remarks) — so a quiet substitute who never touched the ball would be
+    /// invisible to this the same way a quiet starter is. This names
+    /// everyone eligible for the roster who is sanctioned, for whoever
+    /// recorded the result to check by eye, rather than silently trusting
+    /// that nobody suspended was fielded.
+    /// </remarks>
+    public sealed record SuspendedPlayerWarning(
+        Guid AthleteId, string AthleteFirstName, string AthleteLastName, Guid TeamId, string TeamName, string SanctionReason);
+
     /// <param name="HomeTotal">
     /// The match score, consolidated. Returned because it is derived rather
     /// than sent, and the caller has no other way to learn what their periods
     /// added up to.
     /// </param>
-    public sealed record Response(int HomeTotal, int AwayTotal);
+    public sealed record Response(
+        int HomeTotal,
+        int AwayTotal,
+        IReadOnlyList<SuggestedSanction> SuggestedSanctions,
+        IReadOnlyList<SuspendedPlayerWarning> SuspendedPlayerWarnings);
 
     internal sealed class Validator : AbstractValidator<Request>
     {
@@ -69,13 +107,14 @@ public static class RecordResult
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    internal static async Task<IResult> HandleAsync(
         Guid id,
         Request request,
         SportFrogDbContext database,
         MatchRulesLookup rulesLookup,
         ResultPolicy policy,
         IMatchOutcomeRulesRegistry outcomeRules,
+        ActiveSanctions activeSanctions,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -95,8 +134,8 @@ public static class RecordResult
         }
 
         return await FinishAsync(
-            match!, rules!, request.PeriodScores, request.Notes, database, outcomeRules, organization, clock,
-            cancellationToken);
+            match!, rules!, request.PeriodScores, request.Notes, database, outcomeRules, activeSanctions,
+            organization, clock, cancellationToken);
     }
 
     /// <summary>
@@ -120,12 +159,13 @@ public static class RecordResult
     /// configures — a bout won in two never fights a third, and
     /// <see cref="ComputePeriods"/> would misread that silence as a 0-0 tie.
     /// </remarks>
-    private static async Task<IResult> HandleFromEventsAsync(
+    internal static async Task<IResult> HandleFromEventsAsync(
         Guid id,
         SportFrogDbContext database,
         MatchRulesLookup rulesLookup,
         ResultPolicy policy,
         IMatchOutcomeRulesRegistry outcomeRules,
+        ActiveSanctions activeSanctions,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -188,7 +228,8 @@ public static class RecordResult
         }
 
         return await FinishAsync(
-            match, rules, periods, notes: null, database, outcomeRules, organization, clock, cancellationToken);
+            match, rules, periods, notes: null, database, outcomeRules, activeSanctions, organization, clock,
+            cancellationToken);
     }
 
     /// <summary>
@@ -260,6 +301,7 @@ public static class RecordResult
         string? notes,
         SportFrogDbContext database,
         IMatchOutcomeRulesRegistry outcomeRules,
+        ActiveSanctions activeSanctions,
         OrganizationContext organization,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -318,6 +360,109 @@ public static class RecordResult
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        return Results.Ok(new Response(home, away));
+        // Read after the match is already saved: neither list changes what
+        // was just recorded, and the match being finished is what makes
+        // asking worthwhile — see RecordResult.FinishAsync's own class
+        // remarks on why this happens at the end of a match, not at the
+        // moment a card is shown.
+        var suggestedSanctions = await SuggestedSanctionsAsync(match, database, cancellationToken);
+        var suspendedPlayerWarnings = await SuspendedPlayerWarningsAsync(match, database, activeSanctions, cancellationToken);
+
+        return Results.Ok(new Response(home, away, suggestedSanctions, suspendedPlayerWarnings));
+    }
+
+    /// <summary>Red card code from the sport catalog — see <c>Features.Lists.Providers.CardsList</c>'s own narrower list for the sibling that also reads yellow cards.</summary>
+    private const string RedCardMetricCode = "red_card";
+
+    /// <summary>
+    /// Everybody sent off in this match who nobody has sanctioned for it
+    /// yet.
+    /// </summary>
+    /// <remarks>
+    /// "For it" is answered by <see cref="Sanction.MatchId"/>: a sanction
+    /// already pointing at this match, for this person, is not suggested
+    /// again the next time a result is corrected. A sanction entered without
+    /// linking the match is not matched here and would surface once more —
+    /// a redundant suggestion is a click to dismiss, not a wrong one.
+    /// </remarks>
+    private static async Task<IReadOnlyList<SuggestedSanction>> SuggestedSanctionsAsync(
+        Match match, SportFrogDbContext database, CancellationToken cancellationToken)
+    {
+        var sentOff = await database.PlayerEvents
+            .AsNoTracking()
+            .Where(recorded => recorded.MatchId == match.Id && recorded.Metric!.Code == RedCardMetricCode)
+            .Select(recorded => new
+            {
+                recorded.RosterEntry!.AthleteId,
+                recorded.RosterEntry.TeamId,
+                recorded.RosterEntry.Athlete!.FirstName,
+                recorded.RosterEntry.Athlete.LastName,
+                TeamName = recorded.RosterEntry.Team!.Name,
+            })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (sentOff.Count == 0)
+        {
+            return [];
+        }
+
+        var alreadySanctioned = await database.Sanctions
+            .AsNoTracking()
+            .Where(sanction => sanction.MatchId == match.Id)
+            .Select(sanction => sanction.AthleteId)
+            .ToListAsync(cancellationToken);
+
+        return sentOff
+            .Where(player => !alreadySanctioned.Contains(player.AthleteId))
+            .Select(player => new SuggestedSanction(
+                player.AthleteId, player.FirstName, player.LastName, player.TeamId, player.TeamName, match.Id))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Everybody on either side's active roster who carries a sanction that
+    /// blocks them today — see this method's own <see cref="SuspendedPlayerWarning"/>
+    /// for why this asks the roster rather than the events.
+    /// </summary>
+    private static async Task<IReadOnlyList<SuspendedPlayerWarning>> SuspendedPlayerWarningsAsync(
+        Match match, SportFrogDbContext database, ActiveSanctions activeSanctions, CancellationToken cancellationToken)
+    {
+        var roster = await database.RosterEntries
+            .AsNoTracking()
+            .Where(entry => entry.WithdrawnAt == null)
+            .Where(entry => entry.TeamId == match.HomeTeamId || entry.TeamId == match.AwayTeamId)
+            .Select(entry => new { entry.AthleteId, entry.TeamId, TeamName = entry.Team!.Name })
+            .ToListAsync(cancellationToken);
+
+        if (roster.Count == 0)
+        {
+            return [];
+        }
+
+        var sanctioned = await activeSanctions.ForAthletesAsync(
+            match.CompetitionId, roster.Select(entry => entry.AthleteId).Distinct().ToList(), cancellationToken);
+
+        if (sanctioned.Count == 0)
+        {
+            return [];
+        }
+
+        // One roster row per athlete is all a single competition's own
+        // rules allow; GroupBy/First is a defensive read, not a sign this
+        // ever actually happens.
+        var rosterByAthlete = roster
+            .GroupBy(entry => entry.AthleteId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return sanctioned
+            .Select(sanction => new SuspendedPlayerWarning(
+                sanction.AthleteId,
+                sanction.AthleteFirstName,
+                sanction.AthleteLastName,
+                rosterByAthlete[sanction.AthleteId].TeamId,
+                rosterByAthlete[sanction.AthleteId].TeamName,
+                sanction.Reason))
+            .ToList();
     }
 }

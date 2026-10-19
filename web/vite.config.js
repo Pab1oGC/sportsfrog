@@ -23,11 +23,18 @@ export default defineConfig({
     },
   },
   server: {
+    // Without this Vite binds its dev server to localhost only, so a phone
+    // on the same Wi-Fi can't reach it at all (connection refused) even
+    // with the right LAN IP in the URL. `true` binds every interface
+    // (0.0.0.0) and prints the LAN address Vite picked on startup.
+    host: true,
     // Vite refuses requests whose Host header it doesn't recognize, as a
     // guard against DNS-rebinding attacks. A quick cloudflared tunnel picks
     // a random "*.trycloudflare.com" subdomain each time it starts, so
     // listing today's host would break the moment the tunnel is restarted —
-    // the wildcard is what actually keeps working across runs.
+    // the wildcard is what actually keeps working across runs. Plain IPv4/
+    // IPv6 hosts (e.g. a LAN IP like 192.168.1.4) are always allowed by
+    // Vite regardless of this list, so LAN testing by IP needs no entry here.
     allowedHosts: [".trycloudflare.com"],
     proxy: {
       "/api": {

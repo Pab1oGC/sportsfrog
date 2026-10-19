@@ -47,8 +47,16 @@ function JudgedScoreField({ label, value, onChange }) {
   );
 }
 
-/** Registra el resultado de un partido, periodo por periodo. */
-export function ResultDialog({ open, onClose, selMatch, sportInfo, mutate, loading, setLoading, error, setError }) {
+/**
+ * Registra el resultado de un partido, periodo por periodo.
+ *
+ * `onFinished`, si se pasa, recibe la respuesta completa del servidor --
+ * además del marcador, cualquier tarjeta roja sin sanción todavía y
+ * cualquier jugador de los dos planteles con una sanción activa (ver
+ * RecordResult.cs). Quien llama decide qué hacer con eso; este diálogo sólo
+ * lo reenvía.
+ */
+export function ResultDialog({ open, onClose, selMatch, sportInfo, mutate, onFinished, loading, setLoading, error, setError }) {
   const [form, setForm] = useState({ periodScores: [], notes: '' });
   const juzgado = esJuzgado(sportInfo);
 
@@ -89,11 +97,12 @@ export function ResultDialog({ open, onClose, selMatch, sportInfo, mutate, loadi
     if (!selMatch) return;
     setLoading(true); setError('');
     try {
-      await apiPut(endpoints.matchResult(selMatch.id), {
+      const response = await apiPut(endpoints.matchResult(selMatch.id), {
         periodScores: form.periodScores.map(aPeriodoApi),
         notes: form.notes,
       });
       onClose(); mutate(); toast.success('Resultado registrado.');
+      onFinished?.(response);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };

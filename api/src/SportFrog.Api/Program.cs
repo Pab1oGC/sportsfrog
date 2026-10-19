@@ -13,6 +13,7 @@ using SportFrog.Api.Features.Public;
 using SportFrog.Api.Features.Competitions;
 using SportFrog.Api.Features.Competitions.Bulletin;
 using SportFrog.Api.Features.Documents;
+using SportFrog.Api.Features.Discipline;
 using SportFrog.Api.Features.Categories;
 using SportFrog.Api.Features.Clubs;
 using SportFrog.Api.Features.Courses;
@@ -30,6 +31,7 @@ using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Features.Reports;
 using SportFrog.Api.Features.Lists;
 using SportFrog.Api.Features.Standings;
+using SportFrog.Api.Features.Staff;
 using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Features.Venues;
@@ -252,6 +254,13 @@ builder.Services.AddScoped<SportFrog.Api.Features.Teams.TeamUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Clubs.UnaffiliatedClub>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.RosterUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Staff.StaffPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Staff.StaffUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Discipline.SanctionProgress>();
+builder.Services.AddScoped<SportFrog.Api.Features.Discipline.SanctionPaymentPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.Discipline.SanctionReceipt>();
+builder.Services.AddScoped<SportFrog.Api.Features.Discipline.SanctionFinePayments>();
+builder.Services.AddScoped<SportFrog.Api.Features.Discipline.ActiveSanctions>();
 builder.Services.AddScoped<SportFrog.Api.Features.Courses.Enrollments.EnrollmentPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Courses.Attendance.AttendancePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Venues.VenueUsage>();
@@ -424,6 +433,24 @@ api.MapReadRoster();
 api.MapCorrectRegistration();
 api.MapWithdrawPlayer();
 api.MapStrikeRegistration();
+
+api.MapRegisterStaff();
+api.MapReadTeamStaff();
+api.MapUpdateStaffRole();
+api.MapWithdrawStaff();
+api.MapStrikeStaff();
+
+api.MapImposeSanction();
+api.MapReadSanctions();
+api.MapLiftSanction();
+api.MapVoidSanction();
+api.MapWaiveSanctionFine();
+api.MapWithholdCredential();
+api.MapRecordSanctionPayment();
+api.MapReviewSanctionPayment();
+api.MapVoidSanctionPayment();
+api.MapReadPendingSanctionReceipts();
+api.MapScanCredential();
 api.MapBuildRosterTemplate();
 api.MapPreviewRosterImport();
 api.MapApplyRosterImport();
@@ -536,11 +563,7 @@ api.MapReadPublicCalendar();
 api.MapReadPublicRoster();
 api.MapReadPublicMatchEvents();
 
-// Desconectado a propósito (2026-09-27): la verificación pública de
-// credenciales no hace falta todavía — la emisión y el diseño siguen activos,
-// solo esta ruta queda sin mapear. VerifyDocument.cs no se tocó: para volver
-// a activarla alcanza con descomentar la línea de abajo.
-// api.MapVerifyDocument();
+api.MapVerifyDocument();
 
 api.MapCreateAthlete();
 api.MapReadAthletes();

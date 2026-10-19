@@ -21,6 +21,18 @@ public enum VerificationState
 
     /// <summary>Its period has not started.</summary>
     NotYetValid,
+
+    /// <summary>
+    /// Real, current, and not usable today because the person it names has
+    /// an unresolved sanction — see <c>SportFrog.Domain.Discipline.SanctionLedger</c>.
+    /// </summary>
+    /// <remarks>
+    /// Says only that, never why: the reason behind a sanction is exactly
+    /// the disciplinary detail this endpoint already refuses for a
+    /// revocation, and extending that refusal here is the whole point of
+    /// answering a state rather than the sanction itself.
+    /// </remarks>
+    Blocked,
 }
 
 /// <summary>
@@ -86,7 +98,7 @@ public static class VerifyDocument
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    internal static async Task<IResult> HandleAsync(
         string organizationSlug,
         string serial,
         PublicDocumentReader reader,
@@ -109,6 +121,8 @@ public static class VerifyDocument
                         candidate.VisibleId,
                         candidate.Kind,
                         candidate.Status,
+                        candidate.AthleteId,
+                        candidate.CompetitionId,
                         Holder = candidate.Athlete!.LastName + " " + candidate.Athlete.FirstName,
                         Team = candidate.Team!.Name,
                         Club = candidate.Team.Club!.Name,
@@ -132,11 +146,34 @@ public static class VerifyDocument
                     .Select(candidate => candidate.Name)
                     .SingleAsync(cancellationToken);
 
+                var status = State(document.Status, document.ValidFrom, document.ValidTo, today);
+
+                // Only asked where it could change the answer: a document
+                // already revoked or expired needs no second reason, and a
+                // document issued to a team names nobody a sanction could
+                // name either. sportfrog_public has no grant on sanctions
+                // itself — see this call's own migration for why a bare
+                // boolean is what crosses that line instead.
+                if (status == VerificationState.Valid && document.AthleteId is { } athleteId)
+                {
+                    var blocked = await database.Database
+                        .SqlQuery<bool>(
+                            $"""
+                             SELECT sanction_blocks_entry({athleteId}, {document.CompetitionId}) AS "Value"
+                             """)
+                        .SingleAsync(cancellationToken);
+
+                    if (blocked)
+                    {
+                        status = VerificationState.Blocked;
+                    }
+                }
+
                 return new Response(
                     document.SerialNumber,
                     document.VisibleId,
                     document.Kind,
-                    State(document.Status, document.ValidFrom, document.ValidTo, today),
+                    status,
 
                     // A document issued to a team has no athlete, so the team
                     // is the holder. Both cannot be absent: the schema forbids
@@ -178,8 +215,14 @@ public static class VerifyDocument
     /// A document with no dates never expires, which is right for a
     /// certificate: taking part in the 2026 season is not something that stops
     /// being true.
+    ///
+    /// Internal rather than private: <c>Features.Documents.ScanCredential</c>,
+    /// the authenticated counterpart reached by a steward's own session,
+    /// reuses this exact mapping so the two never answer a document's own
+    /// dates and revocation differently — only in how (or whether) a
+    /// sanction is layered on top does the authenticated side say more.
     /// </remarks>
-    private static VerificationState State(
+    internal static VerificationState State(
         DocumentState status,
         DateOnly? from,
         DateOnly? to,

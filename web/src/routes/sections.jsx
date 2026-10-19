@@ -35,11 +35,13 @@ var CredentialDesignsPage = lazy(function() { return import("src/pages/credentia
 var DocumentsPage = lazy(function() { return import("src/pages/documents-page"); });
 var AccreditationCatalogPage = lazy(function() { return import("src/pages/accreditation-catalog-page"); });
 var AccreditationAssignmentPage = lazy(function() { return import("src/pages/accreditation-assignment-page"); });
+var SanctionsPage = lazy(function() { return import("src/pages/sanctions-page"); });
 var MembersPage = lazy(function() { return import("src/pages/members-page"); });
 var OrganizationPage = lazy(function() { return import("src/pages/organization-page"); });
 var RegisterOrganizationPage = lazy(function() { return import("src/pages/register-organization-page"); });
 var PublicPortalPage = lazy(function() { return import("src/pages/public/public-portal"); });
 var PublicCompetitionPage = lazy(function() { return import("src/pages/public/public-competition"); });
+var VerifyDocumentPage = lazy(function() { return import("src/pages/public/verify-document"); });
 
 function LazyPage(props) {
   return (
@@ -67,10 +69,12 @@ export var routesSection = [
   { path: "/", element: <LazyPage Component={LandingPage} /> },
   { path: "/public", element: <LazyPage Component={PublicPortalPage} /> },
   { path: "/public/:orgSlug/:compSlug", element: <PortalLazyPage Component={PublicCompetitionPage} /> },
-  // Desconectada a propósito (2026-09-27): la verificación pública de
-  // credenciales no hace falta todavía. La API ya no mapea
-  // /public/verify/{org}/{serie} (ver Program.cs); esta ruta tampoco apunta
-  // a nada del lado del cliente (PublicCompetitionPage no lee :serial).
+  // A donde apunta el QR de cada documento (VerificationBaseUrl + "/verificar",
+  // ver DocumentOptions.cs / VerificationCode.Address). LazyPage y no
+  // PortalLazyPage: esto no es el portal de una competencia que un
+  // organizador personaliza, es una herramienta propia con la paleta de la
+  // marca, igual que /public (ver el comentario de PortalLazyPage arriba).
+  { path: "/verificar/:orgSlug/:serial", element: <LazyPage Component={VerifyDocumentPage} /> },
 
   // Auth
   { path: "/auth/jwt/sign-in", element: <GuestGuard><SignInPage /></GuestGuard> },
@@ -91,6 +95,7 @@ export var routesSection = [
       { path: "categories", element: <LazyPage Component={CategoriesPage} /> },
       { path: "teams", element: <LazyPage Component={TeamsPage} /> },
       { path: "roster", element: <LazyPage Component={RosterPage} /> },
+      { path: "sanctions", element: <LazyPage Component={SanctionsPage} /> },
       { path: "performances", element: <LazyPage Component={PerformancesPage} /> },
       { path: "matches", element: <LazyPage Component={MatchesPage} /> },
       { path: "standings", element: <LazyPage Component={StandingsPage} /> },

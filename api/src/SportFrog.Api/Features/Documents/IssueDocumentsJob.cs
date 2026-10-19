@@ -93,6 +93,32 @@ public sealed class IssueDocumentsJob(
         IReadOnlyList<CredentialGrant>? Grants,
         string? DocumentId = null);
 
+    /// <summary>
+    /// One person a credential batch is about, before their accreditation is
+    /// resolved.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than left as the shape of a projection because two reads
+    /// produce it now — the roster and the team's staff — and an anonymous
+    /// type cannot be shared between them. The card does not distinguish the
+    /// two: a credential prints no shirt number and no position, so what a
+    /// player and a coach each need from here is the same list of facts.
+    ///
+    /// <paramref name="TeamName"/> is carried only to order the two reads
+    /// into one sequence after they are merged; nothing is drawn from it.
+    /// </remarks>
+    private sealed record CredentialCandidate(
+        Guid AthleteId,
+        Guid TeamId,
+        string TeamName,
+        string FirstName,
+        string LastName,
+        string? PhotoKey,
+        string? DocumentId,
+        string ClubName,
+        string? ClubShortName,
+        string? ClubLogoKey);
+
     /// <summary>Everything drawing a batch of credentials needs, read in one go.</summary>
     private sealed record CredentialWork(
         Guid CompetitionId,
@@ -315,31 +341,17 @@ public sealed class IssueDocumentsJob(
             organization.Name, competition.Name, competition.Season,
             snapshot.CompetitionLogoKey, snapshot.AccentColorHex, snapshot.LegalText, snapshot.BackgroundKey);
 
-        var roster = await database.RosterEntries
-            .AsNoTracking()
-            .Where(entry => entry.WithdrawnAt == null)
-            .Where(entry => entry.Team!.Category!.CompetitionId == batch.CompetitionId)
-            .Where(entry => batch.CategoryId == null
-                || entry.Team!.CategoryId == batch.CategoryId)
-            .Where(entry => batch.TeamId == null || entry.TeamId == batch.TeamId)
-            .OrderBy(entry => entry.Team!.Name)
-            .ThenBy(entry => entry.Athlete!.LastName)
-            .ThenBy(entry => entry.Athlete!.FirstName)
-            .Select(entry => new
-            {
-                entry.AthleteId,
-                entry.TeamId,
-                entry.Athlete!.FirstName,
-                entry.Athlete.LastName,
-                entry.Athlete.PhotoKey,
-                entry.Athlete.DocumentId,
-                ClubName = entry.Team!.Club!.Name,
-                ClubShortName = entry.Team.Club.ShortName,
-                ClubLogoKey = entry.Team.Club.LogoUrl,
-            })
-            .ToListAsync(cancellationToken);
+        // Players and staff, in one sequence. Ordered after the merge rather
+        // than by each read, so the batch comes out in a single coherent
+        // order instead of the roster's followed by the bench's.
+        var candidates = (await PlayerCandidatesAsync(database, batch, cancellationToken))
+            .Concat(await StaffCandidatesAsync(database, batch, cancellationToken))
+            .OrderBy(candidate => candidate.TeamName)
+            .ThenBy(candidate => candidate.LastName)
+            .ThenBy(candidate => candidate.FirstName)
+            .ToList();
 
-        var athleteIds = roster.Select(entry => entry.AthleteId).ToList();
+        var athleteIds = candidates.Select(candidate => candidate.AthleteId).ToList();
 
         var accreditations = await database.AthleteAccreditations
             .AsNoTracking()
@@ -355,11 +367,11 @@ public sealed class IssueDocumentsJob(
         var sourcesByAccreditation = await resolver.ResolveManyAsync(
             accreditations.Select(accreditation => accreditation.Id).ToList(), cancellationToken);
 
-        var subjects = roster
-            .Select(entry => BuildCredentialSubject(entry.AthleteId, entry.TeamId, entry.FirstName, entry.LastName,
-                entry.PhotoKey, entry.DocumentId, entry.ClubName, entry.ClubShortName, entry.ClubLogoKey,
-                accreditationByAthlete.GetValueOrDefault(entry.AthleteId)?.Id,
-                accreditationByAthlete.TryGetValue(entry.AthleteId, out var accreditation) ? accreditation.CategoryId : null,
+        var subjects = candidates
+            .Select(candidate => BuildCredentialSubject(
+                candidate,
+                accreditationByAthlete.GetValueOrDefault(candidate.AthleteId)?.Id,
+                accreditationByAthlete.TryGetValue(candidate.AthleteId, out var accreditation) ? accreditation.CategoryId : null,
                 snapshot, sourcesByAccreditation))
             .ToList();
 
@@ -369,21 +381,84 @@ public sealed class IssueDocumentsJob(
             batch.CompetitionId, organization.Slug, context, batch.ValidFrom, batch.ValidTo, subjects, held);
     }
 
+    /// <summary>
+    /// Everybody registered to play, under whatever the batch asked for.
+    /// </summary>
+    /// <remarks>
+    /// Withdrawn registrations are left out: somebody who left the team
+    /// mid-season should not be issued a card that says they play for it.
+    /// </remarks>
+    private static async Task<List<CredentialCandidate>> PlayerCandidatesAsync(
+        SportFrogDbContext database, DocumentBatch batch, CancellationToken cancellationToken) =>
+        await database.RosterEntries
+            .AsNoTracking()
+            .Where(entry => entry.WithdrawnAt == null)
+            .Where(entry => entry.Team!.Category!.CompetitionId == batch.CompetitionId)
+            .Where(entry => batch.CategoryId == null
+                || entry.Team!.CategoryId == batch.CategoryId)
+            .Where(entry => batch.TeamId == null || entry.TeamId == batch.TeamId)
+            .Select(entry => new CredentialCandidate(
+                entry.AthleteId,
+                entry.TeamId,
+                entry.Team!.Name,
+                entry.Athlete!.FirstName,
+                entry.Athlete.LastName,
+                entry.Athlete.PhotoKey,
+                entry.Athlete.DocumentId,
+                entry.Team.Club!.Name,
+                entry.Team.Club.ShortName,
+                entry.Team.Club.LogoUrl))
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Everybody on a team's bench or board, under the same filters.
+    /// </summary>
+    /// <remarks>
+    /// Included in every credential batch rather than behind a switch of its
+    /// own, and that is safe because the batch already refuses to print for
+    /// anybody who holds no accreditation: a staff member nobody has assigned
+    /// a category to is recorded as <see cref="SkipReason.NotAccredited"/> and
+    /// skipped, exactly as an unaccredited player is. Assigning the category
+    /// is therefore what decides who gets a card, which is one decision in one
+    /// place instead of two that could disagree.
+    ///
+    /// A person who is both a player and a staff member of the same
+    /// competition appears twice here and is printed once: the already-held
+    /// check is by person, so the second card is skipped as
+    /// <see cref="SkipReason.AlreadyIssued"/> — one person, one credential.
+    /// </remarks>
+    private static async Task<List<CredentialCandidate>> StaffCandidatesAsync(
+        SportFrogDbContext database, DocumentBatch batch, CancellationToken cancellationToken) =>
+        await database.TeamStaff
+            .AsNoTracking()
+            .Where(staff => staff.WithdrawnAt == null)
+            .Where(staff => staff.Team!.Category!.CompetitionId == batch.CompetitionId)
+            .Where(staff => batch.CategoryId == null
+                || staff.Team!.CategoryId == batch.CategoryId)
+            .Where(staff => batch.TeamId == null || staff.TeamId == batch.TeamId)
+            .Select(staff => new CredentialCandidate(
+                staff.AthleteId,
+                staff.TeamId,
+                staff.Team!.Name,
+                staff.Athlete!.FirstName,
+                staff.Athlete.LastName,
+                staff.Athlete.PhotoKey,
+                staff.Athlete.DocumentId,
+                staff.Team.Club!.Name,
+                staff.Team.Club.ShortName,
+                staff.Team.Club.LogoUrl))
+            .ToListAsync(cancellationToken);
+
     private static CredentialSubjectWork BuildCredentialSubject(
-        Guid athleteId,
-        Guid teamId,
-        string firstName,
-        string lastName,
-        string? photoKey,
-        string? documentId,
-        string clubName,
-        string? clubShortName,
-        string? clubLogoKey,
+        CredentialCandidate candidate,
         Guid? accreditationId,
         Guid? categoryId,
         CredentialSnapshot snapshot,
         IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, AccreditationItemSource>> sourcesByAccreditation)
     {
+        var (athleteId, teamId, _, firstName, lastName, photoKey, documentId,
+            clubName, clubShortName, clubLogoKey) = candidate;
+
         var label = $"{lastName} {firstName}";
         var fullName = $"{firstName} {lastName}";
 

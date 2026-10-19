@@ -52,6 +52,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<RosterEntry> RosterEntries => Set<RosterEntry>();
 
+    public DbSet<TeamStaff> TeamStaff => Set<TeamStaff>();
+
     public DbSet<Venue> Venues => Set<Venue>();
 
     public DbSet<VenueSpace> VenueSpaces => Set<VenueSpace>();
@@ -102,6 +104,10 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<TuitionPayment> TuitionPayments => Set<TuitionPayment>();
 
+    public DbSet<Sanction> Sanctions => Set<Sanction>();
+
+    public DbSet<SanctionPayment> SanctionPayments => Set<SanctionPayment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -118,6 +124,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
         modelBuilder.HasPostgresEnum<DocumentBatchState>("public", "document_batch_state");
         modelBuilder.HasPostgresEnum<PerformanceStatus>("public", "performance_status");
         modelBuilder.HasPostgresEnum<ScopeType>("public", "membership_scope_type");
+        modelBuilder.HasPostgresEnum<StaffRole>("public", "staff_role");
+        modelBuilder.HasPostgresEnum<SanctionCompletionRule>("public", "sanction_completion_rule");
 
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }

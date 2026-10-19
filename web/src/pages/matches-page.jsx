@@ -45,6 +45,7 @@ import { WalkoverDialog } from 'src/pages/matches/walkover-dialog';
 import { PenaltiesDialog } from 'src/pages/matches/penalties-dialog';
 import { EventsDialog } from 'src/pages/matches/events-dialog';
 import { BulkRescheduleDialog } from 'src/pages/matches/bulk-reschedule-dialog';
+import { FinishAlertsDialog } from 'src/pages/matches/finish-alerts-dialog';
 import { buildLiveActions } from 'src/pages/matches/live-actions';
 import { buildFixtureActions } from 'src/pages/matches/fixture-actions';
 
@@ -274,11 +275,27 @@ export default function MatchesPage() {
   // kyorugi): sin eso no hay nada que sumar, y ahi sigue haciendo falta
   // cargar el resultado a mano — ver tieneEventoDeMarcador() en
   // live-actions.js, que es lo que condiciona el boton mas abajo.
+  // Lo que RecordResult.cs devuelve además del marcador: una tarjeta roja
+  // sin sanción todavía, o alguien de cualquiera de los dos planteles con
+  // una sanción activa. Ninguna de las dos cosas detiene el guardado del
+  // resultado -- esto solo decide si hay algo que mostrar después.
+  const [finishAlerts, setFinishAlerts] = useState(null);
+
+  const reportarFinalizacion = (response) => {
+    if (response?.suggestedSanctions?.length || response?.suspendedPlayerWarnings?.length) {
+      setFinishAlerts(response);
+    }
+  };
+
   const doFinishFromEvents = async (m) => {
     const marcador = `${m.liveHomeTotal ?? 0} - ${m.liveAwayTotal ?? 0}`;
     const ok = await confirm(`Finalizar el partido ${marcador}, segun los eventos cargados?`, { confirmLabel: 'Finalizar' });
     if (!ok) return;
-    try { await apiPost(endpoints.matchResultFromEvents(m.id)); mutate(); toast.success('Partido finalizado.'); }
+    try {
+      const response = await apiPost(endpoints.matchResultFromEvents(m.id));
+      mutate(); toast.success('Partido finalizado.');
+      reportarFinalizacion(response);
+    }
     catch (err) { toast.error(err.message); }
   };
 
@@ -462,7 +479,12 @@ export default function MatchesPage() {
 
       <ResultDialog
         open={resOpen} onClose={() => setResOpen(false)} selMatch={selMatch} sportInfo={sportInfoDelPartido} mutate={mutate}
+        onFinished={reportarFinalizacion}
         loading={loading} setLoading={setLoading} error={error} setError={setError}
+      />
+
+      <FinishAlertsDialog
+        open={!!finishAlerts} onClose={() => setFinishAlerts(null)} competitionId={cascade.compId} result={finishAlerts}
       />
 
       <WalkoverDialog

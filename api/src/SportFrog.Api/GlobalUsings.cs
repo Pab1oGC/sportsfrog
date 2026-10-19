@@ -9,6 +9,7 @@
 
 global using SportFrog.Domain.Accreditation;
 global using SportFrog.Domain.Competitions;
+global using SportFrog.Domain.Discipline;
 global using SportFrog.Domain.Documents;
 global using SportFrog.Domain.Matches;
 global using SportFrog.Domain.Performances;

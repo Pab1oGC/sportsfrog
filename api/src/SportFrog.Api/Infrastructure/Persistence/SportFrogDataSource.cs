@@ -38,6 +38,8 @@ public static class SportFrogDataSource
         builder.MapEnum<AttendanceState>("attendance_state");
         builder.MapEnum<PaymentMethod>("payment_method");
         builder.MapEnum<ReceiptReviewState>("receipt_review_state");
+        builder.MapEnum<StaffRole>("staff_role");
+        builder.MapEnum<SanctionCompletionRule>("sanction_completion_rule");
 
         return builder.Build();
     }
@@ -64,5 +66,7 @@ public static class SportFrogDataSource
         builder.MapEnum<AttendanceState>("attendance_state");
         builder.MapEnum<PaymentMethod>("payment_method");
         builder.MapEnum<ReceiptReviewState>("receipt_review_state");
+        builder.MapEnum<StaffRole>("staff_role");
+        builder.MapEnum<SanctionCompletionRule>("sanction_completion_rule");
     }
 }

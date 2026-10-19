@@ -197,6 +197,39 @@ export const endpoints = {
   rosterTemplate: (teamId) => `${api}/teams/${teamId}/roster/import/template`,
   rosterImportPreview: (teamId) => `${api}/teams/${teamId}/roster/import/preview`,
   rosterImportApply: (teamId) => `${api}/teams/${teamId}/roster/import`,
+  // Cuerpo tecnico y dirigentes del equipo: las personas que no juegan. Son
+  // la misma gente de /athletes (la tabla de personas de la organizacion),
+  // vinculadas al equipo con un cargo en vez de un dorsal.
+  teamStaff: (teamId) => `${api}/teams/${teamId}/staff`,
+  staffMember: (id) => `${api}/staff/${id}`,
+  staffRole: (id) => `${api}/staff/${id}/role`,
+  staffWithdrawal: (id) => `${api}/staff/${id}/withdrawal`,
+  // Sanciones disciplinarias de una competencia: se cumplen con partidos,
+  // con una multa, o con las dos -- ver SanctionLedger del lado del API,
+  // que resuelve el estado (activa/cumplida/levantada/anulada) cada vez,
+  // nunca guardado en la fila.
+  sanctions: (competitionId) => `${api}/competitions/${competitionId}/sanctions`,
+  sanction: (competitionId, id) => `${api}/competitions/${competitionId}/sanctions/${id}`,
+  sanctionLift: (competitionId, id) => `${api}/competitions/${competitionId}/sanctions/${id}/lift`,
+  sanctionVoid: (competitionId, id) => `${api}/competitions/${competitionId}/sanctions/${id}/void`,
+  sanctionFineWaiver: (competitionId, id) => `${api}/competitions/${competitionId}/sanctions/${id}/fine-waiver`,
+  sanctionCredentialWithholding: (competitionId, id) =>
+    `${api}/competitions/${competitionId}/sanctions/${id}/credential-withholding`,
+  // Pagos contra la multa de una sanción -- misma mecánica que las
+  // pensiones (method/receipt/review_state), sin bifurcar esos enums.
+  sanctionPayments: (competitionId, sanctionId) =>
+    `${api}/competitions/${competitionId}/sanctions/${sanctionId}/payments`,
+  sanctionPaymentReview: (competitionId, id) =>
+    `${api}/competitions/${competitionId}/sanction-payments/${id}/review`,
+  sanctionPaymentVoid: (competitionId, id) =>
+    `${api}/competitions/${competitionId}/sanction-payments/${id}/void`,
+  sanctionPendingReceipts: (competitionId) =>
+    `${api}/competitions/${competitionId}/sanctions/pending-receipts`,
+  // El otro lado del mismo QR: lo que un steward logueado en la organización
+  // ve al escanear una credencial -- foto, motivo de una revocación, el
+  // detalle de una sanción activa -- que VerifyDocument (anónimo) nunca
+  // dice. Ver ScanCredential del lado del API.
+  scanCredential: (serial) => `${api}/documents/verify/${serial}`,
   // Hermano del de arriba, pero para deportes individuales: no hay un
   // equipo al que apuntar el archivo (cada fila crea el suyo), asi que se
   // pide por competencia + club en vez de por equipo.
