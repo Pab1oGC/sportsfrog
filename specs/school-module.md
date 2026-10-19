@@ -12,6 +12,8 @@ inscripción/equipo donde participa.
 - La página `Gestión escolar` debe explicar la equivalencia de los conceptos
   y enlazar a los flujos ya respaldados por el servidor.
 - El alta y edición de alumnos abre el padrón de deportistas.
+- Al abrir el padrón desde el módulo escolar, la interfaz debe usar la palabra
+  "alumno" sin cambiar el contrato ni duplicar los registros.
 - La asignación a curso abre categorías e inscripciones, donde se selecciona
   al alumno para la categoría correspondiente.
 - La página también ofrece accesos directos a competencias, credenciales,

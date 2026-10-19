@@ -4,7 +4,7 @@ import { schoolModuleLinks } from 'src/pages/school-module-page';
 describe('school module navigation', () => {
   it('keeps every school workflow connected to an existing dashboard route', () => {
     expect(schoolModuleLinks.map(({ path }) => path)).toEqual([
-      '/dashboard/athletes',
+      '/dashboard/athletes?context=school',
       '/dashboard/categories',
       '/dashboard/teams',
       '/dashboard/competitions',

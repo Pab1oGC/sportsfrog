@@ -18,7 +18,7 @@ export const schoolModuleLinks = [
   {
     title: 'Registro de alumnos',
     description: 'Alta, datos personales, tutor y fotografía de cada alumno.',
-    path: '/dashboard/athletes',
+    path: '/dashboard/athletes?context=school',
     icon: 'mdi:school-outline',
     badge: 'Alumno = deportista',
   },

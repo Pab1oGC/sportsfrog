@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box';
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -39,6 +40,10 @@ const emptyForm = () => ({ firstName: '', lastName: '', documentId: '', birthDat
 
 export default function AthletesPage() {
   const confirm = useConfirm();
+  const { search: locationSearch } = useLocation();
+  const schoolContext = new URLSearchParams(locationSearch).get('context') === 'school';
+  const personName = schoolContext ? 'alumno' : 'deportista';
+  const personTitle = schoolContext ? 'Alumnos' : 'Deportistas';
 
   // Busca por nombre o documento -- ReadAthletes.ListAsync ya acepta este
   // parametro (ILIKE parcial contra las tres columnas por igual), asi que la
@@ -125,8 +130,8 @@ export default function AthletesPage() {
     // dos es innecesario y confunde a quien lea esto despues.
     createUrl: endpoints.athletes,
     emptyForm,
-    entityName: 'deportista',
-    savedMessage: 'Deportista guardado.',
+    entityName: personName,
+    savedMessage: `${schoolContext ? 'Alumno' : 'Deportista'} guardado.`,
     buildUrl: (base, id) => endpoints.athlete(id),
     mapToForm: (row) => ({ firstName: row.firstName, lastName: row.lastName, documentId: row.documentId, birthDate: row.birthDate || '', gender: row.gender || '', guardianName: row.guardianName || '', guardianPhone: row.guardianPhone || '', weightKg: row.weightKg ?? '', isActive: row.isActive !== false }),
     // Los opcionales viajan en null, no en '': el backend acepta "sin
@@ -263,7 +268,7 @@ export default function AthletesPage() {
 
   return (
     <div>
-      <PageHeader title="Deportistas" actionLabel="Nuevo" onAction={openCreateForm}>
+      <PageHeader title={personTitle} actionLabel={schoolContext ? 'Nuevo alumno' : 'Nuevo'} onAction={openCreateForm}>
         <Button variant="outlined" startIcon={<Iconify icon="eva:image-outline" />} onClick={() => { setPhotoFile(null); setPhotoResult(null); setPhotoOpen(true); }}>Importar fotos</Button>
       </PageHeader>
       <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
@@ -349,7 +354,7 @@ export default function AthletesPage() {
         pageSizeOptions={[25, 50, 100]}
       />
 
-      <CrudDialog open={open} editId={editId} entityName="Deportista" error={error} onClose={close} onSave={guardar}>
+      <CrudDialog open={open} editId={editId} entityName={schoolContext ? 'Alumno' : 'Deportista'} error={error} onClose={close} onSave={guardar}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar src={photoPreview || undefined} sx={{ width: 64, height: 64 }}>
             <Iconify icon="eva:person-fill" width={32} />
