@@ -55,6 +55,7 @@ public static class CorrectEvent
         Request request,
         SportFrogDbContext database,
         EventPolicy policy,
+        EventDrivenResult resync,
         CancellationToken cancellationToken)
     {
         var recorded = await database.PlayerEvents.SingleOrDefaultAsync(
@@ -106,6 +107,10 @@ public static class CorrectEvent
                         "Volvé a leer los eventos del partido antes de corregirlo de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // Best-effort, and after the correction is already saved — see
+        // EventDrivenResult's own remarks for when it does nothing instead.
+        await resync.ResyncAsync(recorded.MatchId, database, cancellationToken);
 
         return Results.NoContent();
     }

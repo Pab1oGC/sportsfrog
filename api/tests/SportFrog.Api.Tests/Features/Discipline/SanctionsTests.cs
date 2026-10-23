@@ -2,8 +2,11 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using SportFrog.Api.Features.Discipline;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Storage;
 using SportFrog.Api.Infrastructure.Tenancy;
 using SportFrog.Api.Tests.Infrastructure.Persistence;
 using SportFrog.Domain.Competitions;
@@ -44,6 +47,14 @@ public sealed class SanctionsTests(SportFrogDatabaseFixture fixture)
         organization.Establish(orgId, MembershipRole.Operator, userId, ipAddress: null);
         return organization;
     }
+
+    // This file never seeds a payment with a receipt key, so ReadAsync's
+    // own LinkAsync call always short-circuits on a null key before ever
+    // reaching the client -- same reasoning SanctionPaymentsTests' own
+    // UnreachableReceipts follows.
+    private static SanctionReceipt UnreachableReceipts(OrganizationContext organization) =>
+        new(new ObjectStore(null!, Options.Create(new StorageOptions()), NullLogger<ObjectStore>.Instance),
+            organization);
 
     /// <summary>
     /// One organization, one competition, a sanctioned team and an
@@ -192,7 +203,8 @@ public sealed class SanctionsTests(SportFrogDatabaseFixture fixture)
         await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
 
         var result = await ReadSanctions.ReadAsync(
-            fx.CompetitionId, sanctionId, context, new SanctionProgress(context), CancellationToken.None);
+            fx.CompetitionId, sanctionId, context, new SanctionProgress(context),
+            UnreachableReceipts(OrganizationFor(fx.OrgId, fx.UserId)), CancellationToken.None);
 
         return Assert.IsType<Ok<ReadSanctions.Response>>(result).Value!;
     }

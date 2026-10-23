@@ -95,10 +95,16 @@ public sealed class ScheduleCalendarTests(SportFrogDatabaseFixture fixture)
             Slug = $"comp-{competitionId:N}",
             Season = "2026",
             Format = "league",
-            Settings = new CompetitionSettings
-            {
-                Schedule = new ScheduleSettings { BufferMinutes = bufferMinutes },
-            },
+            Settings = new CompetitionSettings(),
+        });
+
+        setup.CompetitionStages.Add(new CompetitionStage
+        {
+            Id = Guid.NewGuid(),
+            OrgId = orgId,
+            CompetitionId = competitionId,
+            Kind = StageKind.League,
+            BufferMinutes = bufferMinutes,
         });
 
         setup.Categories.Add(new Category
@@ -246,9 +252,9 @@ public sealed class ScheduleCalendarTests(SportFrogDatabaseFixture fixture)
         await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, orgId);
 
         var resolved = await ScheduleCalendar.ResolveDurationsAsync(
-            context, [seeded.EarlyCategoryId], CancellationToken.None);
+            context, [(seeded.EarlyCategoryId, StageKind.League)], CancellationToken.None);
 
-        resolved[seeded.EarlyCategoryId].Should().Be(
+        resolved[(seeded.EarlyCategoryId, StageKind.League)].Should().Be(
             new ScheduleCalendar.ResolvedDuration(105, ScheduleCalendar.DefaultBufferMinutes)); // 45+45+15
     }
 
@@ -263,9 +269,9 @@ public sealed class ScheduleCalendarTests(SportFrogDatabaseFixture fixture)
         await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, orgId);
 
         var resolved = await ScheduleCalendar.ResolveDurationsAsync(
-            context, [seeded.EarlyCategoryId], CancellationToken.None);
+            context, [(seeded.EarlyCategoryId, StageKind.League)], CancellationToken.None);
 
-        resolved[seeded.EarlyCategoryId].Should().Be(new ScheduleCalendar.ResolvedDuration(105, 5));
+        resolved[(seeded.EarlyCategoryId, StageKind.League)].Should().Be(new ScheduleCalendar.ResolvedDuration(105, 5));
     }
 
     [Fact]
@@ -284,9 +290,9 @@ public sealed class ScheduleCalendarTests(SportFrogDatabaseFixture fixture)
             .ExecuteUpdateAsync(update => update.SetProperty(category => category.RulesetId, seeded.ClocklessRulesetId));
 
         var resolved = await ScheduleCalendar.ResolveDurationsAsync(
-            context, [seeded.EarlyCategoryId], CancellationToken.None);
+            context, [(seeded.EarlyCategoryId, StageKind.League)], CancellationToken.None);
 
-        resolved[seeded.EarlyCategoryId].Should().BeNull();
+        resolved[(seeded.EarlyCategoryId, StageKind.League)].Should().BeNull();
     }
 
     [Fact]
@@ -304,12 +310,12 @@ public sealed class ScheduleCalendarTests(SportFrogDatabaseFixture fixture)
             .ExecuteUpdateAsync(update => update.SetProperty(category => category.RulesetId, seeded.ClocklessRulesetId));
 
         var resolved = await ScheduleCalendar.ResolveDurationsAsync(
-            context, [seeded.EarlyCategoryId], CancellationToken.None);
+            context, [(seeded.EarlyCategoryId, StageKind.League)], CancellationToken.None);
 
         // Buffer applies exactly the same way it does for a clocked sport —
         // duration and buffer are cleanly separate concerns regardless of
         // where the duration itself came from.
-        resolved[seeded.EarlyCategoryId].Should().Be(
+        resolved[(seeded.EarlyCategoryId, StageKind.League)].Should().Be(
             new ScheduleCalendar.ResolvedDuration(40, ScheduleCalendar.DefaultBufferMinutes));
     }
 
@@ -328,9 +334,101 @@ public sealed class ScheduleCalendarTests(SportFrogDatabaseFixture fixture)
             .ExecuteUpdateAsync(update => update.SetProperty(category => category.RulesetId, seeded.ClocklessRulesetId));
 
         var resolved = await ScheduleCalendar.ResolveDurationsAsync(
-            context, [seeded.EarlyCategoryId, seeded.LateCategoryId], CancellationToken.None);
+            context, [(seeded.EarlyCategoryId, StageKind.League), (seeded.LateCategoryId, StageKind.League)], CancellationToken.None);
 
-        resolved[seeded.EarlyCategoryId].Should().Be(new ScheduleCalendar.ResolvedDuration(105, ScheduleCalendar.DefaultBufferMinutes));
-        resolved[seeded.LateCategoryId].Should().BeNull(); // clockless, and its reglamento never declared an estimate
+        resolved[(seeded.EarlyCategoryId, StageKind.League)].Should().Be(new ScheduleCalendar.ResolvedDuration(105, ScheduleCalendar.DefaultBufferMinutes));
+        resolved[(seeded.LateCategoryId, StageKind.League)].Should().BeNull(); // clockless, and its reglamento never declared an estimate
+    }
+
+    // ---- LatestScheduledInstantAsync -------------------------------------
+
+    [Fact]
+    public async Task LatestScheduledInstant_NothingDatedYet_IsNull()
+    {
+        var seeded = await SeedAsync();
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, seeded.OrgId);
+
+        var latest = await ScheduleCalendar.LatestScheduledInstantAsync(
+            context, seeded.EarlyCategoryId, CancellationToken.None);
+
+        latest.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LatestScheduledInstant_SeveralDatedFixtures_PicksTheLatestOne()
+    {
+        var seeded = await SeedAsync();
+        var earlier = new DateTimeOffset(2026, 3, 7, 10, 0, 0, TimeSpan.Zero);
+        var later = new DateTimeOffset(2026, 3, 14, 10, 0, 0, TimeSpan.Zero);
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, seeded.OrgId);
+
+        await context.Matches
+            .Where(match => match.CategoryId == seeded.EarlyCategoryId && match.RoundNumber == 1)
+            .ExecuteUpdateAsync(update => update.SetProperty(match => match.ScheduledAt, earlier));
+        await context.Matches
+            .Where(match => match.CategoryId == seeded.EarlyCategoryId && match.RoundNumber == 2)
+            .ExecuteUpdateAsync(update => update.SetProperty(match => match.ScheduledAt, later));
+
+        var latest = await ScheduleCalendar.LatestScheduledInstantAsync(
+            context, seeded.EarlyCategoryId, CancellationToken.None);
+
+        latest.Should().Be(later);
+    }
+
+    [Fact]
+    public async Task LatestScheduledInstant_LatestOneIsCancelledOrPostponed_FallsBackToTheLiveOne()
+    {
+        var seeded = await SeedAsync();
+        var live = new DateTimeOffset(2026, 3, 7, 10, 0, 0, TimeSpan.Zero);
+        var cancelledLater = new DateTimeOffset(2026, 3, 21, 10, 0, 0, TimeSpan.Zero);
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, seeded.OrgId);
+
+        await context.Matches
+            .Where(match => match.CategoryId == seeded.EarlyCategoryId && match.RoundNumber == 1)
+            .ExecuteUpdateAsync(update => update.SetProperty(match => match.ScheduledAt, live));
+
+        // Dated further ahead than the live one, but struck from the
+        // calendar — neither holds its slot, so it must not be picked up as
+        // "the latest" either.
+        await context.Matches
+            .Where(match => match.CategoryId == seeded.EarlyCategoryId && match.RoundNumber == 2)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(match => match.ScheduledAt, cancelledLater)
+                .SetProperty(match => match.Status, MatchState.Cancelled));
+
+        var latest = await ScheduleCalendar.LatestScheduledInstantAsync(
+            context, seeded.EarlyCategoryId, CancellationToken.None);
+
+        latest.Should().Be(live);
+    }
+
+    [Fact]
+    public async Task LatestScheduledInstant_ScopedToOneCategory_IgnoresTheOtherCategorysDates()
+    {
+        var seeded = await SeedAsync();
+        var lateCategoryDate = new DateTimeOffset(2026, 3, 28, 10, 0, 0, TimeSpan.Zero);
+
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, seeded.OrgId);
+
+        // Only the "Late" category has a dated fixture — "Early" has none.
+        await context.Matches
+            .Where(match => match.CategoryId == seeded.LateCategoryId && match.RoundNumber == 1)
+            .ExecuteUpdateAsync(update => update.SetProperty(match => match.ScheduledAt, lateCategoryDate));
+
+        var latest = await ScheduleCalendar.LatestScheduledInstantAsync(
+            context, seeded.EarlyCategoryId, CancellationToken.None);
+
+        latest.Should().BeNull();
     }
 }

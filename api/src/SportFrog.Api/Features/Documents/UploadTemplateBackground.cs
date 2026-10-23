@@ -1,10 +1,16 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Jobs;
+using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Documents;
 
 /// <summary>
-/// Takes the artwork a design will be laid out over.
+/// Takes the artwork a design will be laid out over, for the organization
+/// named in the route.
 /// </summary>
 /// <remarks>
 /// Separate from saving a template, because it happens first and on its own:
@@ -16,6 +22,13 @@ namespace SportFrog.Api.Features.Documents;
 /// right trade — the alternative is refusing to show anybody their artwork
 /// until they have committed to a template — and the cost is a few unused
 /// images, not a broken reference.
+///
+/// Platform-only, like <see cref="CreateTemplate"/>, and for the same reason
+/// the organization has to be named explicitly rather than taken from
+/// <see cref="OrganizationContext"/>: there is no design yet for
+/// <see cref="PlatformTemplateReader"/> to resolve one from, so the caller
+/// names the organization it is designing for, the same way
+/// <see cref="CreateTemplate.Request.OrganizationId"/> does.
 /// </remarks>
 public static class UploadTemplateBackground
 {
@@ -30,8 +43,8 @@ public static class UploadTemplateBackground
 
     public static IEndpointRouteBuilder MapUploadTemplateBackground(this IEndpointRouteBuilder routes)
     {
-        routes.MapPost("/documents/templates/backgrounds", HandleAsync)
-            .RequireRole(MembershipRole.Operator)
+        routes.MapPost("/documents/templates/backgrounds/{organizationId:guid}", HandleAsync)
+            .WithoutOrganizationContext()
             .DisableAntiforgery()
             .WithName(nameof(UploadTemplateBackground))
             .WithSummary("Stores the artwork a document design is laid out over.");
@@ -40,10 +53,27 @@ public static class UploadTemplateBackground
     }
 
     private static async Task<IResult> HandleAsync(
+        Guid organizationId,
         IFormFile file,
-        TemplateBackground backgrounds,
+        HttpContext context,
+        SportFrogDbContext database,
+        OrganizationJobScope scopes,
         CancellationToken cancellationToken)
     {
+        if (!await PlatformAuthority.ReachesAsync(
+                context.User, database, MembershipRole.Operator, cancellationToken))
+        {
+            return Results.Problem(
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        if (!await database.Organizations.AnyAsync(
+                candidate => candidate.Id == organizationId, cancellationToken))
+        {
+            return Refuse("No hay ninguna organización con ese identificador.");
+        }
+
         if (file.Length == 0)
         {
             return Refuse("El archivo está vacío.");
@@ -57,19 +87,32 @@ public static class UploadTemplateBackground
         using var contents = file.OpenReadStream();
         using var buffer = new MemoryStream();
         await contents.CopyToAsync(buffer, cancellationToken);
+        var uploaded = buffer.ToArray();
 
-        if (await backgrounds.StoreAsync(buffer.ToArray(), cancellationToken) is not { } artwork)
+        var callerId = JwtAccessTokenIssuer.CurrentUserId(context.User);
+
+        // No database write and nothing to roll back if it fails midway —
+        // decoding and normalizing the image is the slow part, and
+        // RunDetachedAsync is what OrganizationJobScope offers for exactly
+        // that shape: the organization established, with no transaction held
+        // open across it.
+        return await scopes.RunDetachedAsync(organizationId, callerId, async services =>
         {
-            return Refuse("No se pudo leer el archivo como imagen.");
-        }
+            var backgrounds = services.GetRequiredService<TemplateBackground>();
 
-        // The shape comes back with the key so the editor does not have to
-        // measure the image itself, and so the proportion that goes into the
-        // layout is the proportion of what was actually stored.
-        return Results.Ok(new Response(
-            artwork.Key,
-            await backgrounds.LinkAsync(artwork.Key, cancellationToken) ?? string.Empty,
-            artwork.AspectRatio));
+            if (await backgrounds.StoreAsync(uploaded, cancellationToken) is not { } artwork)
+            {
+                return Refuse("No se pudo leer el archivo como imagen.");
+            }
+
+            // The shape comes back with the key so the editor does not have
+            // to measure the image itself, and so the proportion that goes
+            // into the layout is the proportion of what was actually stored.
+            return Results.Ok(new Response(
+                artwork.Key,
+                await backgrounds.LinkAsync(artwork.Key, cancellationToken) ?? string.Empty,
+                artwork.AspectRatio));
+        });
     }
 
     private static IResult Refuse(string message) =>

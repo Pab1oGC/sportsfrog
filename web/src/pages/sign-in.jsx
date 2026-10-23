@@ -20,6 +20,10 @@ export default function SignInPage() {
   const { checkSession } = useAuthContext();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get('returnTo') || '/dashboard';
+  // A donde vuelve reset-password.jsx despues de cambiarla: la API revoca
+  // todas las sesiones al hacerlo, asi que no hay a donde ir sino aca, y sin
+  // este aviso la vuelta al login parece que algo fallo.
+  const contrasenaCambiada = searchParams.get('contrasenaCambiada') === '1';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,6 +61,12 @@ export default function SignInPage() {
             <Typography variant="body2" color="text.secondary">Inicia sesion en tu cuenta</Typography>
           </Box>
 
+          {contrasenaCambiada && !error && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Tu contraseña se cambió. Iniciá sesión con la nueva.
+            </Alert>
+          )}
+
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
           <form onSubmit={handleSubmit}>
@@ -76,6 +86,10 @@ export default function SignInPage() {
           </form>
 
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+            <Link component={RouterLink} to="/auth/jwt/forgot-password">¿Olvidaste tu contraseña?</Link>
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
             <Link component={RouterLink} to="/">Volver al inicio</Link>
           </Typography>
         </CardContent>

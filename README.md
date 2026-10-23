@@ -174,7 +174,8 @@ Se esperan `sportfrog-postgres` y `sportfrog-minio` en `healthy`,
 | **Calendario** | Sedes, canchas y horarios; reparto automático de los partidos entre los espacios disponibles |
 | **Resultados y eventos** | Marcador por período, goles, tarjetas, walkover, aplazamiento |
 | **Tablas y líderes** | Posiciones y goleadores, derivados en cada lectura — nunca almacenados |
-| **Credenciales y certificados** | Se acomodan los datos sobre el arte con el mouse, se emiten en lote en segundo plano, y salen en una hoja lista para imprimir |
+| **Credenciales** | Estructura fija por decreto, con el catálogo de acreditación y los datos de la persona; se emiten en lote en segundo plano y salen en una hoja lista para imprimir |
+| **Certificados** | Se acomodan los datos sobre el arte con el mouse; se emiten en lote en segundo plano y salen en una hoja lista para imprimir |
 | **Verificación pública** | Cada documento lleva un QR que abre una página diciendo si sigue vigente |
 | **Portal público** | Directorio de competencias, tabla, calendario y líderes, sin iniciar sesión |
 

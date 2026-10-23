@@ -29,6 +29,11 @@ export async function apiPut(url, body) {
   return res.data;
 }
 
+export async function apiPatch(url, body) {
+  const res = await axios.patch(url, body);
+  return res.data;
+}
+
 export async function apiDelete(url) {
   const res = await axios.delete(url);
   return res.data;

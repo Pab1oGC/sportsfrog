@@ -15,7 +15,7 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { CrudDialog } from 'src/components/crud-dialog';
-import { readInlineReceipt, INLINE_RECEIPT_REQUIREMENT } from 'src/lib/inline-photo';
+import { ReceiptAttachField } from 'src/components/receipt-attach-field';
 import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL } from 'src/lib/payment-labels';
 import { periodo } from 'src/lib/format-date';
@@ -98,17 +98,6 @@ export function TuitionAccountDialog({ enrollment, onClose }) {
     setPaymentFileName('');
     setPaymentError('');
     setPaymentDialog({ open: true, charge });
-  };
-
-  const onPickReceipt = async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const dataUrl = await readInlineReceipt(file);
-      setPaymentForm({ ...paymentForm, receiptDataUrl: dataUrl });
-      setPaymentFileName(file.name);
-    } catch (err) { toast.error(err.message); }
   };
 
   const savePayment = async () => {
@@ -266,14 +255,12 @@ export function TuitionAccountDialog({ enrollment, onClose }) {
           {PAYMENT_METHODS.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
         </TextField>
         {paymentForm.method !== 'cash' && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
-            <Button variant="outlined" size="small" component="label" startIcon={<Iconify icon="eva:attach-outline" width={16} />}>
-              {paymentFileName ? 'Cambiar comprobante' : 'Adjuntar comprobante'}
-              <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden onChange={onPickReceipt} />
-            </Button>
-            {paymentFileName && <Typography variant="caption">{paymentFileName}</Typography>}
-            <Typography variant="caption" color="text.secondary">{INLINE_RECEIPT_REQUIREMENT}</Typography>
-          </Box>
+          <ReceiptAttachField
+            dataUrl={paymentForm.receiptDataUrl}
+            fileName={paymentFileName}
+            onChange={(url, name) => { setPaymentForm({ ...paymentForm, receiptDataUrl: url }); setPaymentFileName(name); }}
+            onRemove={() => { setPaymentForm({ ...paymentForm, receiptDataUrl: '' }); setPaymentFileName(''); }}
+          />
         )}
       </CrudDialog>
 

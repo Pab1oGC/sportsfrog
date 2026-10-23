@@ -41,6 +41,23 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
         Tiebreakers = ["score_difference"],
     };
 
+    // Best of five: won at three. Volleyball's real catalog row, clockless
+    // like wally (AddSportPeriodHasClock), so this needs EstimatedMinutes
+    // for the same reason ValidWally does — and its own point/ace/
+    // block_point/error metrics, which AddVolleyballScoringMetrics made
+    // score-affecting, are what the tests below exercise.
+    private static RulesetConfiguration ValidVolleyball() => new()
+    {
+        Periods = new PeriodRules { Count = 5, Label = "set", Minutes = null, EstimatedMinutes = 25 },
+        Points = new Dictionary<string, int>
+        {
+            ["win_3_0"] = 3, ["loss_0_3"] = 0,
+            ["win_3_1"] = 3, ["loss_1_3"] = 0,
+            ["win_3_2"] = 3, ["loss_2_3"] = 1,
+        },
+        Tiebreakers = ["score_difference"],
+    };
+
     // Best of three asaltos: won at two. Kyorugi's real catalog row, seeded
     // by AddTaekwondoCatalogFoundations — unlike ValidWally, which exercises
     // the sets mechanism against a hand-built shape, this proves that row's
@@ -148,15 +165,59 @@ public sealed class RulesetPolicyTests(SportFrogDatabaseFixture fixture)
     [Fact]
     public async Task InspectAsync_KyorugiExcludingAScoringMetric_IsRejected()
     {
-        // Unlike wally or volleyball, kyorugi's point and gam-jeom do
-        // decide the asalto being fought (AddTaekwondoKyorugiScoringEvents)
-        // — same rule InspectAsync_AScoringMetricLeftOutOfACumulativeSport_
-        // IsRejected already covers for football's goal, exercised here for
-        // the one sets-mode sport it actually applies to.
+        // Unlike wally, kyorugi's point and gam-jeom do decide the asalto
+        // being fought (AddTaekwondoKyorugiScoringEvents) — same rule
+        // InspectAsync_AScoringMetricLeftOutOfACumulativeSport_IsRejected
+        // already covers for football's goal, exercised here for a
+        // sets-mode sport. Volleyball joined the same rule afterwards
+        // (AddVolleyballScoringMetrics) — see the volleyball tests below.
         var missingScoringMetric = ValidKyorugi() with { Metrics = ["point"] };
 
         var violations = await Policy().InspectAsync(
             "taekwondo_kyorugi", missingScoringMetric, CancellationToken.None);
+
+        violations.Should().Contain(violation => violation.Property == "Config.Metrics");
+    }
+
+    // ---- Volleyball (real catalog sport, best of five) -------------------
+
+    [Fact]
+    public async Task InspectAsync_ValidVolleyballRuleset_IsAccepted()
+    {
+        var violations = await Policy().InspectAsync("volleyball", ValidVolleyball(), CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InspectAsync_VolleyballUnknownMetric_IsRejected()
+    {
+        // point, ace, block_point and error are all real, and all
+        // score-affecting since AddVolleyballScoringMetrics — left in so
+        // this is about the unknown one, not about leaving a scoring metric
+        // out (see InspectAsync_VolleyballExcludingAScoringMetric_IsRejected).
+        var unknownMetric = ValidVolleyball() with
+        {
+            Metrics = ["point", "ace", "block_point", "error", "not_a_real_metric"],
+        };
+
+        var violations = await Policy().InspectAsync("volleyball", unknownMetric, CancellationToken.None);
+
+        violations.Should().ContainSingle();
+        violations[0].Property.Should().Be("Config.Metrics");
+    }
+
+    [Fact]
+    public async Task InspectAsync_VolleyballExcludingAScoringMetric_IsRejected()
+    {
+        // block_touch is volleyball's one non-scoring metric; leaving it
+        // out is fine. Leaving out point, ace, block_point or error is not
+        // — AddVolleyballScoringMetrics made all four decide the set being
+        // played, the same way AddTaekwondoKyorugiScoringEvents already
+        // does for kyorugi's point and gam-jeom.
+        var missingScoringMetric = ValidVolleyball() with { Metrics = ["point", "block_touch"] };
+
+        var violations = await Policy().InspectAsync("volleyball", missingScoringMetric, CancellationToken.None);
 
         violations.Should().Contain(violation => violation.Property == "Config.Metrics");
     }

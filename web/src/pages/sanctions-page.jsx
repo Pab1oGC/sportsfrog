@@ -1,24 +1,29 @@
-import { useState } from 'react';
 import { useLocation } from 'react-router';
 import { useApi } from 'src/hooks/use-api';
 import { useLastCompetition } from 'src/hooks/use-last-competition';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import { endpoints } from 'src/lib/axios';
 import { PageHeader } from 'src/components/page-header';
 import { SelectionCompetition } from 'src/components/selectors';
 import { SanctionsPanel } from 'src/pages/sanctions/sanctions-panel';
-import { PendingSanctionReceiptsTab } from 'src/pages/sanctions/pending-sanction-receipts-tab';
 
 /**
  * Sanciones disciplinarias: elegí una competencia (o dejá que
- * useLastCompetition elija por vos) y administrá las suyas, en dos
- * pestañas -- mismo patrón que Cobranza separa "En mora" de "Comprobantes
- * pendientes", porque imponer una sanción y revisar el comprobante de una
- * multa ya impuesta son dos tareas distintas que no hace falta mezclar en
- * una sola grilla.
+ * useLastCompetition elija por vos) y administrá las suyas.
+ *
+ * Ya no separa "Sanciones" de "Comprobantes pendientes" en dos pestañas --
+ * la tabla de pagos, adentro de cada sanción (ver SanctionsPanel), ya
+ * muestra el comprobante de una (miniatura clickeable) y deja
+ * Verificar/Rechazar ahí mismo cuando corresponde. Una pestaña aparte para
+ * eso, a nivel de toda la competencia, estaba casi siempre vacía: una
+ * multa en efectivo nace verificada, y la mayoría de las sanciones no
+ * llevan multa en absoluto.
+ *
+ * El alta/edición en sí vive en SanctionsPanel, compartido con la pestaña
+ * "Sanciones" del resumen de una competencia (CompetitionOverviewPage) --
+ * mismo reparto que CategoriesPanel ya tiene con CategoriesPage. Ahí no
+ * hace falta este selector porque la competencia ya está fija en la URL.
  *
  * `state.prefill` llega desde la sugerencia de "Imponer sanción" al
  * finalizar un partido (ver matches-page.jsx) -- gana sobre la competencia
@@ -31,7 +36,6 @@ export default function SanctionsPage() {
   const prefill = state?.prefill || null;
   const { data: comps } = useApi(endpoints.competitions);
   const [compId, setCompId] = useLastCompetition(comps, prefill?.competitionId);
-  const [tab, setTab] = useState('sanctions');
 
   return (
     <Box>
@@ -40,12 +44,7 @@ export default function SanctionsPage() {
         <Box sx={{ flex: 1, minWidth: 200 }}><SelectionCompetition value={compId} onChange={(e) => setCompId(e.target.value)} required /></Box>
       </Box>
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-          <Tab value="sanctions" label="Sanciones" />
-          <Tab value="receipts" label="Comprobantes pendientes" />
-        </Tabs>
-        {tab === 'sanctions' && <SanctionsPanel competitionId={compId} prefill={compId === prefill?.competitionId ? prefill : null} />}
-        {tab === 'receipts' && <PendingSanctionReceiptsTab competitionId={compId} />}
+        <SanctionsPanel competitionId={compId} prefill={compId === prefill?.competitionId ? prefill : null} />
       </Paper>
     </Box>
   );

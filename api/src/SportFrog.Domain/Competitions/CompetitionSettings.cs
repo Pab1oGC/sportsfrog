@@ -6,58 +6,22 @@ namespace SportFrog.Domain.Competitions;
 /// <remarks>
 /// One section per concern, each optional: a competition that never touches
 /// one gets whatever that section's own defaults mean by absence.
-/// <see cref="Public"/> decides what a visitor is shown; <see cref="Schedule"/>
-/// says when and where the competition can be played, which is what turns a
-/// draw into a calendar; <see cref="Bulletin"/> and <see cref="Credential"/>
-/// are each the organizer's own prose for one printed document.
+/// <see cref="Public"/> decides what a visitor is shown; <see cref="Bulletin"/>
+/// is the organizer's own prose for one printed document.
+///
+/// Where and how a competition's matches are scheduled used to live here as
+/// a single <c>Schedule</c> section — one pitch list and one margin for the
+/// whole competition. It is gone: a tournament's group stage rarely plays on
+/// the same pitches as its final, and that is now
+/// <c>SportFrog.Api.Infrastructure.Persistence.Entities.CompetitionStage</c>'s
+/// question, one row per stage the competition's own draw already gives it
+/// (see <see cref="CompetitionStages"/>), not the competition's as a whole.
 /// </remarks>
 public sealed record CompetitionSettings
 {
     public PublicSettings? Public { get; init; }
 
-    public ScheduleSettings? Schedule { get; init; }
-
     public BulletinSettings? Bulletin { get; init; }
-}
-
-/// <summary>
-/// Where this competition can put a fixture.
-/// </summary>
-/// <remarks>
-/// Which pitches, not when they are free: reserving one is a real-world
-/// arrangement an organizer settles with whoever owns it — a phone call, not
-/// a fact this software could know on its own — so this stops at naming
-/// them. <see cref="ScheduleCalendar.Request"/>'s own date and start time say
-/// when a given run should begin; the placement works out what fits from
-/// there.
-/// </remarks>
-public sealed record ScheduleSettings
-{
-    /// <summary>
-    /// Minutes left on a pitch after one match before the next may start.
-    /// </summary>
-    /// <remarks>
-    /// Organization logistics — cleaning, the next team warming up — never a
-    /// rule of the sport, which is why it lives here and not on the
-    /// reglamento: how long the match itself takes is
-    /// <see cref="Rules.MatchDuration"/>'s question, computed or declared
-    /// from the jornada's own reglamento, never this competition's. Null
-    /// uses a sensible default rather than zero, so a competition that never
-    /// touches this still gets some breathing room between matches instead
-    /// of none.
-    /// </remarks>
-    public short? BufferMinutes { get; init; }
-
-    /// <summary>
-    /// Which of the organization's pitches this competition may use.
-    /// </summary>
-    /// <remarks>
-    /// Just which ones — nothing about when. A pitch this names is either
-    /// free at the moment the placement tries it or it already carries a
-    /// booking, and either way that is a fact the database already has;
-    /// there is no separate notion of "open hours" left to configure.
-    /// </remarks>
-    public IReadOnlyList<Guid>? SpaceIds { get; init; }
 }
 
 /// <summary>

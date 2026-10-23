@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
-using SportFrog.Api.Infrastructure.Validation;
 
 namespace SportFrog.Api.Features.Documents;
 
@@ -84,32 +83,13 @@ public static class ReadTemplates
     /// </remarks>
     private static async Task<IResult> ListAsync(
         SportFrogDbContext database,
-        CancellationToken cancellationToken,
-        string? kind = null)
+        CancellationToken cancellationToken)
     {
-        var wanted = QueryFilter.OrAbsent(kind);
-        DocumentKind? only = null;
-
-        if (wanted is not null)
-        {
-            if (!WireEnum.TryParse<DocumentKind>(wanted, out var parsed))
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["kind"] =
-                        [$"Tipo desconocido. Disponibles: {WireEnum.Options<DocumentKind>()}."],
-                });
-            }
-
-            only = parsed;
-        }
-
         return Results.Ok(await database.Set<DocumentTemplate>()
             .AsNoTracking()
             // Credentials were designed here before they had their own; those
             // old rows are not listed, since nothing prints from them any more.
             .Where(template => template.Kind == DocumentKind.Certificate)
-            .Where(template => only == null || template.Kind == only)
             .OrderBy(template => template.Kind)
             .ThenByDescending(template => template.IsDefault)
             .ThenBy(template => template.Name)
@@ -144,7 +124,7 @@ public static class ReadTemplates
                 template.IsDefault,
                 template.Version,
                 template.Layout,
-                await LinkAsync(template.Layout, backgrounds, cancellationToken),
+                await LinkAsync(template.OrgId, template.Layout, backgrounds, cancellationToken),
                 template.CreatedAt,
                 template.UpdatedAt));
     }
@@ -188,19 +168,29 @@ public static class ReadTemplates
                 template.IsDefault,
                 stored.Version,
                 stored.Layout,
-                await LinkAsync(stored.Layout, backgrounds, cancellationToken),
+                await LinkAsync(template.OrgId, stored.Layout, backgrounds, cancellationToken),
                 stored.CreatedAt,
                 stored.CreatedAt));
     }
 
-    /// <summary>Turns the stored keys into links somebody can load.</summary>
+    /// <summary>
+    /// Turns the stored keys into links somebody can load.
+    /// </summary>
+    /// <remarks>
+    /// Linked as <paramref name="organizationId"/>'s own artwork — the
+    /// design's own organization, not necessarily the one reading it. A
+    /// catalog design is read by every organization but owned by one; see
+    /// <see cref="TemplateBackground.LinkAsync(Guid, string?, CancellationToken)"/>'s
+    /// own remarks for what goes wrong using the ambient one instead.
+    /// </remarks>
     private static async Task<Backgrounds> LinkAsync(
+        Guid organizationId,
         TemplateLayout layout,
         TemplateBackground backgrounds,
         CancellationToken cancellationToken) =>
         new(
-            await backgrounds.LinkAsync(layout.Front.BackgroundKey, cancellationToken),
+            await backgrounds.LinkAsync(organizationId, layout.Front.BackgroundKey, cancellationToken),
             layout.Back is { } back
-                ? await backgrounds.LinkAsync(back.BackgroundKey, cancellationToken)
+                ? await backgrounds.LinkAsync(organizationId, back.BackgroundKey, cancellationToken)
                 : null);
 }

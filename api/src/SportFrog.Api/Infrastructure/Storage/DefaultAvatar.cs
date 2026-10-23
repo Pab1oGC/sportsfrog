@@ -29,7 +29,11 @@ namespace SportFrog.Api.Infrastructure.Storage;
 /// </remarks>
 internal static class DefaultAvatar
 {
-    private const int Size = 480;
+    // 4 wide by 5 tall -- the same crop a credential's own photo slot asks
+    // for, so the placeholder sits in it without being letterboxed or
+    // stretched the way the old square one was.
+    private const int Width = 480;
+    private const int Height = 600;
 
     private static readonly SKColor FieldColor = new(0xCF, 0xD8, 0xDC);
     private static readonly SKColor SilhouetteColor = new(0xB0, 0xBE, 0xC5);
@@ -42,23 +46,23 @@ internal static class DefaultAvatar
     private static byte[] Draw()
     {
         using var bitmap = new SKBitmap(
-            new SKImageInfo(Size, Size, SKColorType.Rgba8888, SKAlphaType.Opaque));
+            new SKImageInfo(Width, Height, SKColorType.Rgba8888, SKAlphaType.Opaque));
         using var canvas = new SKCanvas(bitmap);
 
         canvas.Clear(FieldColor);
 
         using var silhouette = new SKPaint { Color = SilhouetteColor, IsAntialias = true };
-        var center = Size / 2f;
+        var centerX = Width / 2f;
 
-        // The head, sat in the upper third of the square.
-        canvas.DrawCircle(center, Size * 0.38f, Size * 0.16f, silhouette);
+        // The head, sat in the upper third of the frame.
+        canvas.DrawCircle(centerX, Height * 0.34f, Width * 0.16f, silhouette);
 
         // The shoulders: the top of a much wider circle, clipped so only its
         // upper curve shows — otherwise it reads as a second, bigger head
         // rather than shoulders.
         canvas.Save();
-        canvas.ClipRect(new SKRect(0, Size * 0.62f, Size, Size));
-        canvas.DrawCircle(center, Size * 0.95f, Size * 0.42f, silhouette);
+        canvas.ClipRect(new SKRect(0, Height * 0.64f, Width, Height));
+        canvas.DrawCircle(centerX, Height * 0.98f, Width * 0.42f, silhouette);
         canvas.Restore();
 
         using var image = SKImage.FromBitmap(bitmap);

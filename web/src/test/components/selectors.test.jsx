@@ -160,3 +160,54 @@ describe("SelectionAthletes -- selección simple vs múltiple", () => {
     expect(() => render(<SelectionAthletes value={["id-borrado"]} onChange={vi.fn()} />)).not.toThrow();
   });
 });
+
+describe("SelectionAthletes -- acotada a un equipo (teamId)", () => {
+  const nomina = [
+    { athleteId: "1", firstName: "Juan", lastName: "Perez" },
+    { athleteId: "2", firstName: "Pedro", lastName: "Lopez" },
+  ];
+  const cuerpoTecnico = [{ athleteId: "3", firstName: "Carlos", lastName: "Gomez" }];
+  const todaLaOrganizacion = [
+    { id: "1", firstName: "Juan", lastName: "Perez" },
+    { id: "2", firstName: "Pedro", lastName: "Lopez" },
+    { id: "3", firstName: "Carlos", lastName: "Gomez" },
+    { id: "9", firstName: "Nadie", lastName: "DeEsteEquipo" },
+  ];
+
+  beforeEach(() => {
+    // Un mock por URL en vez de un mockReturnValue unico: el componente ahora
+    // llama a useApi tres veces (toda la organizacion, nomina del equipo,
+    // cuerpo tecnico del equipo) y cada llamado tiene que responder lo suyo
+    // -- no lo mismo que las otras dos.
+    useApi.mockImplementation((url) => {
+      if (url == null) return { data: undefined, isLoading: false };
+      if (url.includes("/roster")) return { data: nomina, isLoading: false };
+      if (url.includes("/staff")) return { data: cuerpoTecnico, isLoading: false };
+      return { data: todaLaOrganizacion, isLoading: false };
+    });
+  });
+
+  it("sin teamId (el uso de siempre, ver NominaPage) sigue mostrando toda la organizacion", async () => {
+    const user = userEvent.setup();
+    render(<SelectionAthletes value={[]} onChange={vi.fn()} />);
+    await user.click(screen.getByRole("combobox"));
+    expect(screen.getByRole("option", { name: /DeEsteEquipo Nadie/ })).toBeInTheDocument();
+  });
+
+  it('teamId="" (equipo aun no elegido) deshabilita el campo en vez de mostrar toda la organizacion', () => {
+    render(<SelectionAthletes teamId="" value="" onChange={vi.fn()} multiple={false} />);
+    expect(screen.getByRole("combobox")).toBeDisabled();
+  });
+
+  it("con teamId, solo ofrece a la nomina y al cuerpo tecnico de ESE equipo -- nunca a toda la organizacion", async () => {
+    const user = userEvent.setup();
+    render(<SelectionAthletes teamId="equipo-1" value="" onChange={vi.fn()} multiple={false} />);
+    const input = screen.getByRole("combobox");
+    await user.click(input);
+    const opciones = within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+
+    expect(opciones).toEqual(expect.arrayContaining(["Perez Juan", "Lopez Pedro", "Gomez Carlos"]));
+    expect(opciones).not.toContain("DeEsteEquipo Nadie");
+    expect(opciones).toHaveLength(3);
+  });
+});

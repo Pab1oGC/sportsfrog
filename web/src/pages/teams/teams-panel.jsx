@@ -12,7 +12,8 @@ import { Iconify } from 'src/components/iconify';
 import { useApi, apiPut } from 'src/hooks/use-api';
 import { useRememberedChild } from 'src/hooks/use-remembered-child';
 import { useCrudDialog } from 'src/hooks/use-crud';
-import { endpoints } from 'src/lib/axios';
+import { endpoints, default as axios } from 'src/lib/axios';
+import { downloadBlob } from 'src/lib/download-blob';
 import { esIndividual } from 'src/lib/sport-shape';
 import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { CrudDialog } from 'src/components/crud-dialog';
@@ -90,6 +91,26 @@ export function TeamsPanel({ competitionId }) {
 
   const [importOpen, setImportOpen] = useState(false);
 
+  // El club cuya delegacion se baja/sube: mismo rol que `teamId` en
+  // RosterPanel (lo que habilita Plantilla e Importar Excel), salvo que acá
+  // no cuelga de la categoría -- una planilla de delegación cubre toda la
+  // competencia, cada fila elige su propia categoría (ver
+  // DelegationRosterImportGate). Una sola fuente de verdad para el selector
+  // de aca abajo y para el que vive dentro del dialogo, en vez de elegir el
+  // club dos veces.
+  const [delegationClubId, setDelegationClubId] = useState('');
+
+  const downloadDelegationTemplate = async () => {
+    if (!delegationClubId) return;
+    try {
+      const res = await axios.get(
+        endpoints.delegationRosterTemplate(competitionId, delegationClubId),
+        { responseType: 'blob' },
+      );
+      downloadBlob(res, 'planilla-delegacion.xlsx');
+    } catch (err) { toast.error(err.message); }
+  };
+
   const toggleTeamActive = async (row, event) => {
     event.stopPropagation();
     if (row.isActive) {
@@ -144,14 +165,31 @@ export function TeamsPanel({ competitionId }) {
           botones sale del mismo mecanismo (spacing) en vez de dos
           márgenes independientes que podrían no coincidir. */}
       <Stack spacing={2} sx={{ mb: 2 }}>
+        {/* Mismo orden y mismos tres botones que RosterPanel (Plantilla,
+            Importar Excel, alta): Plantilla e Importar Excel ya no viven
+            escondidos dentro de un dialogo combinado, son acciones propias
+            de la barra, habilitadas por el club elegido abajo -- igual que
+            en Nomina las habilita el equipo elegido. */}
         <Stack direction="row" justifyContent="flex-end" spacing={1} flexWrap="wrap">
-          {/* El Excel de delegacion se pide por competencia + club, no por
-              equipo, y cada fila crea su propio ingreso: es un alta masiva de
-              inscripciones, asi que vive donde viven las altas. */}
           {individual && (
-            <Button variant="outlined" startIcon={<Iconify icon="eva:upload-outline" />} onClick={() => setImportOpen(true)}>
-              Importar Excel (delegación)
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<Iconify icon="eva:download-outline" />}
+                onClick={downloadDelegationTemplate}
+                disabled={!delegationClubId}
+              >
+                Plantilla
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Iconify icon="eva:upload-outline" />}
+                onClick={() => setImportOpen(true)}
+                disabled={!delegationClubId}
+              >
+                Importar Excel
+              </Button>
+            </>
           )}
           <Button
             variant="contained"
@@ -162,9 +200,20 @@ export function TeamsPanel({ competitionId }) {
             {soloDeportista ? 'Inscribir deportista' : (individual ? 'Nueva inscripción' : 'Nuevo equipo')}
           </Button>
         </Stack>
-        <Box sx={{ minWidth: 220, maxWidth: 320 }}>
-          <SelectionCategory competitionId={competitionId} value={catId} onChange={(e) => setCatId(e.target.value)} required />
-        </Box>
+        <Stack direction="row" spacing={2} flexWrap="wrap">
+          <Box sx={{ minWidth: 220, maxWidth: 320 }}>
+            <SelectionCategory competitionId={competitionId} value={catId} onChange={(e) => setCatId(e.target.value)} required />
+          </Box>
+          {individual && (
+            <Box sx={{ minWidth: 220, maxWidth: 320 }}>
+              <SelectionClub
+                value={delegationClubId}
+                onChange={(e) => setDelegationClubId(e.target.value)}
+                helperText="Para bajar la plantilla o importar la delegación."
+              />
+            </Box>
+          )}
+        </Stack>
       </Stack>
 
       {individual && !soloDeportista ? (
@@ -233,6 +282,7 @@ export function TeamsPanel({ competitionId }) {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         competitionId={competitionId}
+        clubId={delegationClubId}
         onApplied={() => mutate()}
       />
     </Box>

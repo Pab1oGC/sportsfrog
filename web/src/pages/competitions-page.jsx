@@ -4,18 +4,13 @@ import { useCrudDialog } from 'src/hooks/use-crud';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
-import Switch from '@mui/material/Switch';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import Typography from '@mui/material/Typography';
-import Stack from '@mui/material/Stack';
-import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
@@ -23,12 +18,10 @@ import { useApi, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { EMPTY_PORTAL_FORM, readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
 import { aSlug, normalizarSlug, problemaDeSlug, slugDeOrganizacion, SLUG_MAX } from 'src/lib/slug';
-import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
 import { PageHeader } from 'src/components/page-header';
 import { CrudDialog } from 'src/components/crud-dialog';
 import { RowActionsMenu } from 'src/components/row-actions-menu';
 import { EstadoChip } from 'src/components/estado-chip';
-import { SelectionSpace } from 'src/components/selectors';
 import {
   STATUS_LABEL, STATUS_COLOR, STATUS_ICON, NEXT_STATUS, FORMAT_LABEL, motivoPublicacionInhabilitada,
 } from 'src/pages/competitions/competition-lifecycle';
@@ -86,7 +79,6 @@ const ACCORDION_SUMMARY_SX = {
 // los dos no se pisen.
 const emptyForm = () => ({
   name: '', slug: '', season: '', format: 'league', sportCode: '', rulesetId: '', captureLevel: 'basic', credentialDesignId: '',
-  bufferMinutes: '', scheduleSpaceIds: [],
   bulletinIntroduction: '', bulletinSanctions: '', bulletinGeneralProvisions: '', bulletinContactInfo: '',
   ...EMPTY_PORTAL_FORM,
 });
@@ -145,13 +137,10 @@ export default function CompetitionsPage() {
       if (!wasEdit) navigate(`/dashboard/competitions/${result.id}`);
     },
     mapToForm: (row) => {
-      const sched = (row.settings && row.settings.schedule) || {};
       const bulletin = (row.settings && row.settings.bulletin) || {};
       return {
         name: row.name, slug: row.slug, season: row.season, format: row.format, sportCode: row.sportCode,
         rulesetId: row.rulesetId || '', captureLevel: row.captureLevel, credentialDesignId: row.credentialDesignId || '',
-        bufferMinutes: sched.bufferMinutes ?? '',
-        scheduleSpaceIds: sched.spaceIds || [],
         bulletinIntroduction: bulletin.introduction || '',
         bulletinSanctions: bulletin.sanctions || '',
         bulletinGeneralProvisions: bulletin.generalProvisions || '',
@@ -166,18 +155,13 @@ export default function CompetitionsPage() {
       name: f.name, slug: normalizarSlug(f.slug), season: f.season,
       format: f.format, rulesetId: f.rulesetId, captureLevel: f.captureLevel, credentialDesignId: f.credentialDesignId || null,
       settings: {
-        // Vacio de margen y de canchas es "no configurado todavia": se manda
-        // null en vez de un objeto a medio llenar, para no perder el aviso
-        // propio de ScheduleCalendar ("esta competencia no tiene canchas
-        // habilitadas") por uno generico de validacion. La duracion del
-        // partido en si ya no vive aca -- sale entera del reglamento, con o
-        // sin reloj (ver rulesets-page.jsx).
-        schedule: (f.bufferMinutes !== '' || f.scheduleSpaceIds.length) ? {
-          bufferMinutes: f.bufferMinutes !== '' ? Number(f.bufferMinutes) : null,
-          spaceIds: f.scheduleSpaceIds.length ? f.scheduleSpaceIds : null,
-        } : null,
-        // Igual criterio que schedule: nada cargado todavia es null, no un
-        // objeto con las cuatro claves vacias.
+        // Canchas y margen ya no viven en la competencia -- son por fase,
+        // en CompetitionStage, y se editan desde la pantalla de Partidos
+        // junto a "Generar siguiente jornada" (ver matches-page.jsx y
+        // UpdateCompetitionStageSchedule del lado del servidor).
+        //
+        // Nada cargado todavia en el boletin es null, no un objeto con las
+        // cuatro claves vacias.
         bulletin: (f.bulletinIntroduction || f.bulletinSanctions || f.bulletinGeneralProvisions || f.bulletinContactInfo) ? {
           introduction: f.bulletinIntroduction || null,
           sanctions: f.bulletinSanctions || null,
@@ -246,14 +230,6 @@ export default function CompetitionsPage() {
 
     await saveBase(overrides);
   };
-
-  const agregarCancha = () => setForm((f) => ({ ...f, scheduleSpaceIds: [...f.scheduleSpaceIds, ''] }));
-
-  const quitarCancha = (i) => setForm((f) => ({ ...f, scheduleSpaceIds: f.scheduleSpaceIds.filter((_, idx) => idx !== i) }));
-
-  const cambiarCancha = (i, venueSpaceId) => setForm((f) => ({
-    ...f, scheduleSpaceIds: f.scheduleSpaceIds.map((id, idx) => (idx === i ? venueSpaceId : id)),
-  }));
 
   const handleNameChange = (e) => {
     const name = e.target.value;
@@ -459,51 +435,6 @@ export default function CompetitionsPage() {
 
         <Accordion disableGutters variant="outlined" sx={ACCORDION_SX}>
           <AccordionSummary sx={ACCORDION_SUMMARY_SX} expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
-            <Typography variant="subtitle2">Disponibilidad para programar el calendario</Typography>
-          </AccordionSummary>
-          <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* La duración del partido ya no se toca acá para ningún deporte
-                -- sale entera del reglamento de cada categoría, con reloj
-                (se calcula sola) o sin él (se declara ahí, ver
-                rulesets-page.jsx). Acá solo queda el margen, que es
-                logística de la organización y no del deporte. */}
-            <TextField
-              label="Minutos entre partidos"
-              type="number"
-              value={form.bufferMinutes}
-              onChange={(e) => setForm({ ...form, bufferMinutes: soloDigitos(e.target.value) })}
-              onKeyDown={bloquearNoEnteros}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }}
-              fullWidth
-              helperText="La duración del partido se calcula sola (o se declara, para un deporte sin reloj) desde el reglamento de cada categoría, esto es solo el margen entre el final de uno y el arranque del siguiente en la misma cancha (cambio de equipos, entrada en calor). Vacío usa un valor por defecto."
-            />
-
-            <Divider />
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="text.secondary">Canchas habilitadas</Typography>
-              <Button size="small" startIcon={<Iconify icon="eva:plus-fill" width={16} />} onClick={agregarCancha}>Agregar</Button>
-            </Box>
-            {form.scheduleSpaceIds.length === 0 && (
-              <Typography variant="caption" color="text.secondary">
-                Sin canchas cargadas, "Generar siguiente jornada" no va a poder colocar ningún partido.
-              </Typography>
-            )}
-            {form.scheduleSpaceIds.map((venueSpaceId, i) => (
-              <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                <Box sx={{ flex: 1 }}>
-                  <SelectionSpace value={venueSpaceId} onChange={(e) => cambiarCancha(i, e.target.value)} size="small" />
-                </Box>
-                <IconButton size="small" onClick={() => quitarCancha(i)} sx={{ mt: 0.5 }}>
-                  <Iconify icon="eva:trash-2-outline" width={18} sx={{ color: 'error.main' }} />
-                </IconButton>
-              </Box>
-            ))}
-          </AccordionDetails>
-        </Accordion>
-
-        <Accordion disableGutters variant="outlined" sx={ACCORDION_SX}>
-          <AccordionSummary sx={ACCORDION_SUMMARY_SX} expandIcon={<Iconify icon="eva:chevron-down-fill" />}>
             <Typography variant="subtitle2">Convocatoria</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -543,18 +474,13 @@ export default function CompetitionsPage() {
             <Typography variant="subtitle2">Portal público</Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-              <FormControlLabel control={<Switch checked={form.showStandings} onChange={(e) => setForm({ ...form, showStandings: e.target.checked })} />} label="Tabla de posiciones" />
-              <FormControlLabel control={<Switch checked={form.showLeaders} onChange={(e) => setForm({ ...form, showLeaders: e.target.checked })} />} label="Lideres" />
-              <FormControlLabel control={<Switch checked={form.showRosters} onChange={(e) => setForm({ ...form, showRosters: e.target.checked })} />} label="Nominas" />
-            </Stack>
-
-            <Divider />
-
-            {/* Colores, tipografia, portada, redes y auspiciantes se editan en
-                el estudio de portal, con vista previa en vivo. Solo tiene
-                sentido sobre una competencia ya creada -- de ahi que en el
-                alta se muestre el aviso y no el boton. */}
+            {/* Qué secciones se muestran, los colores, la portada, las redes
+                y los auspiciantes se editan todos en el estudio de portal,
+                con vista previa en vivo -- un switch acá y otro allá para lo
+                mismo es la forma más fácil de guardar uno y pisarlo con el
+                otro sin que nada avise. Solo tiene sentido sobre una
+                competencia ya creada -- de ahi que en el alta se muestre el
+                aviso y no el boton. */}
             {editId ? (
               <Box>
                 <Button

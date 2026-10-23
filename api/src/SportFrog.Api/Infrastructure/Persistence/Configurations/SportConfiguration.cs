@@ -40,6 +40,9 @@ internal sealed class SportConfiguration : IEntityTypeConfiguration<Sport>
             .HasConversion(ScoreModeConverter)
             .IsRequired();
 
+        builder.Property(x => x.TargetPointsPerSet).HasColumnName("target_points_per_set");
+        builder.Property(x => x.TargetPointsDecidingSet).HasColumnName("target_points_deciding_set");
+
         builder.Property(x => x.IsIndividual).HasColumnName("is_individual");
         builder.Property(x => x.MaxEntrySize).HasColumnName("max_entry_size");
 

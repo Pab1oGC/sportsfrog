@@ -4,7 +4,6 @@ using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.RateLimiting;
 using SportFrog.Api.Infrastructure.Tenancy;
-using SportFrog.Domain.ValueObjects;
 
 namespace SportFrog.Api.Features.Auth;
 
@@ -31,11 +30,9 @@ public static class ChangePassword
                 .NotEmpty()
                 .WithMessage("La contraseña actual es obligatoria.");
 
-            RuleFor(request => request.NewPassword)
-                .Must(password => Password.TryParse(password, out _))
-                .WithMessage(
-                    $"La contraseña debe tener al menos {Password.MinimumLength} caracteres e " +
-                    "incluir una mayúscula, una minúscula, un número y un carácter especial.");
+            // Shared with ResetPassword, which owes a caller the same
+            // explanation of the same policy — see PasswordPolicyRules.
+            RuleFor(request => request.NewPassword).MustSatisfyPasswordPolicy();
 
             // Cheap to check before ever touching the database, and the one
             // rule that is specific to changing a password rather than

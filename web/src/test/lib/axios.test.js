@@ -198,6 +198,27 @@ describe("interceptor de respuesta -- renovación automática en un 401", () => 
     expect(instancia.post).not.toHaveBeenCalled();
   });
 
+  it("un 401 al canjear un enlace de recuperación NO dispara una renovación ni manda al login", async () => {
+    // Quien está en esa pantalla no tiene sesión que renovar, y el 401 es la
+    // respuesta propia del endpoint cuando el enlace venció o ya se usó: sin
+    // la excepción, el único mensaje que explica por qué no sirvió se
+    // perdería en una redirección al login.
+    const location = reemplazarLocation();
+    try {
+      const error = errorDeRespuesta({
+        status: 401,
+        data: { detail: "El enlace de recuperación no es válido o ya venció. Pedí uno nuevo." },
+        url: endpoints.auth.resetPassword,
+      });
+
+      await expect(interceptorDeRespuesta.onRejected(error)).rejects.toThrow("no es válido o ya venció");
+      expect(instancia.post).not.toHaveBeenCalled();
+      expect(location.href).toBe("");
+    } finally {
+      location.restaurar();
+    }
+  });
+
   it("un pedido ya reintentado que vuelve a dar 401 no reintenta de nuevo (corta el bucle)", async () => {
     guardarRenovacion("refresh-1", false);
     const error = errorDeRespuesta({ status: 401, data: { detail: "sigue sin autorizar" }, url: "/api/athletes", retried: true });

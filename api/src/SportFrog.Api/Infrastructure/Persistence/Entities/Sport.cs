@@ -60,6 +60,37 @@ public sealed class Sport
     public ScoreMode ScoreMode { get; set; }
 
     /// <summary>
+    /// How many points decide one period under <see cref="Rules.ScoreMode.Sets"/>,
+    /// for a sport whose periods are a race to a point target rather than a
+    /// fixed stretch of a clock. Null for every other sport, including one
+    /// also decided in sets: a taekwondo asalto runs to the end of its two
+    /// minutes and whoever has more points at that moment wins it — there is
+    /// no number it races to.
+    /// </summary>
+    /// <remarks>
+    /// Not a margin by itself — a set won 25-24 has not actually been won.
+    /// FIVB's rule is this many points with at least a two-point lead,
+    /// continuing past it until one side has one, and
+    /// <see cref="Features.Matches.SetsResultShape"/> is where that margin is
+    /// read. It is not a second column here: every sport this one will ever
+    /// describe shares the same "win by two" shape, so stating it once as a
+    /// constant said more than a column only one value would ever go in.
+    /// </remarks>
+    public short? TargetPointsPerSet { get; set; }
+
+    /// <summary>
+    /// The target for the last period a match in sets can reach, where it
+    /// differs from every other one — 15 for volleyball's fifth set, where
+    /// <see cref="TargetPointsPerSet"/> is 25.
+    /// </summary>
+    /// <remarks>
+    /// Null means it does not differ, read as <see cref="TargetPointsPerSet"/>
+    /// for the deciding period too, rather than every sport with a single
+    /// target having to repeat it as both.
+    /// </remarks>
+    public short? TargetPointsDecidingSet { get; set; }
+
+    /// <summary>
     /// True for a sport whose entrant is one athlete rather than a squad — a
     /// team of one, still fielded through the same <see cref="Team"/>/
     /// <see cref="RosterEntry"/> tables, with its delegation carried by the

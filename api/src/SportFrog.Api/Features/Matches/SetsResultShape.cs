@@ -15,6 +15,16 @@ namespace SportFrog.Api.Features.Matches;
 /// </remarks>
 internal sealed class SetsResultShape(IMatchOutcomeRulesRegistry outcomeRules) : IResultShapeRules
 {
+    /// <summary>
+    /// How far ahead the side that reaches <see cref="SportFrog.Api.Infrastructure.Persistence.Entities.Sport.TargetPointsPerSet"/>
+    /// still has to pull before the period is actually decided — FIVB's
+    /// "win by two," the one shape every sport <c>TargetPointsPerSet</c>
+    /// will ever describe shares. Not catalog data: see that property's own
+    /// remarks on why a constant said this better than a second column only
+    /// one value would ever go in.
+    /// </summary>
+    private const short SetWinMargin = 2;
+
     public ScoreMode Mode => ScoreMode.Sets;
 
     public void Inspect(MatchRules rules, IReadOnlyList<PeriodScore> periods, List<ResultViolation> violations)
@@ -51,6 +61,59 @@ internal sealed class SetsResultShape(IMatchOutcomeRulesRegistry outcomeRules) :
         {
             violations.Add(new ResultViolation(
                 "PeriodScores", $"Los dos lados no pueden llegar a {PeriodLabel.Count(toWin, label)}."));
+        }
+
+        InspectPointTargets(rules, periods, toWin, label, violations);
+    }
+
+    /// <summary>
+    /// Whether each period actually reached the score it takes to decide
+    /// one, for a sport where that is a question at all.
+    /// </summary>
+    /// <remarks>
+    /// Everything above this reads the periods as a sequence of set wins —
+    /// which side took each one, and whether that adds up to the match
+    /// being over. None of it looks at the points inside a period, so a
+    /// volleyball set reported 20-18 passes every check above exactly as
+    /// well as a real 25-23 does. <see cref="SportFrog.Api.Infrastructure.Persistence.Entities.Sport.TargetPointsPerSet"/>
+    /// is null for a sport that is not a race to a point total — a
+    /// taekwondo asalto runs to the end of its clock, not to a score — so
+    /// this does nothing there, same as before it existed.
+    /// </remarks>
+    private static void InspectPointTargets(
+        MatchRules rules,
+        IReadOnlyList<PeriodScore> periods,
+        int toWin,
+        string label,
+        List<ResultViolation> violations)
+    {
+        if (rules.Sport.TargetPointsPerSet is not { } target)
+        {
+            return;
+        }
+
+        var decidingTarget = rules.Sport.TargetPointsDecidingSet ?? target;
+
+        // The last period a best-of-(toWin * 2 - 1) match can reach — best
+        // of five is won at three, so its fifth and last set is the one
+        // that races to the deciding target instead of the regular one.
+        var decidingPeriod = (short)(toWin * 2 - 1);
+
+        foreach (var period in periods)
+        {
+            var periodTarget = period.Period == decidingPeriod ? decidingTarget : target;
+            var winnerPoints = Math.Max(period.Home, period.Away);
+            var loserPoints = Math.Min(period.Home, period.Away);
+
+            if (winnerPoints >= periodTarget && winnerPoints - loserPoints >= SetWinMargin)
+            {
+                continue;
+            }
+
+            violations.Add(new ResultViolation(
+                "PeriodScores",
+                $"El {label} {period.Period} ({period.Home}-{period.Away}) no llega a {periodTarget} " +
+                $"puntos con una diferencia de al menos {SetWinMargin}."));
         }
     }
 }

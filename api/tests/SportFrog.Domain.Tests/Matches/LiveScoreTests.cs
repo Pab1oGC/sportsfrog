@@ -195,4 +195,29 @@ public sealed class LiveScoreTests
         periods.Select(period => period.Period).Should().BeEquivalentTo((short[])[1, 2, 3]);
         periods.Single(period => period.Period == 3).Home.Should().Be(1);
     }
+
+    [Fact]
+    public void ComputePlayedPeriods_EventWithNoPeriod_Throws()
+    {
+        // Unlike ComputePeriods, this never folds an unplaced event into the
+        // first period — which set an event belongs to is the question a
+        // derived result exists to answer, not one it can guess. Callers
+        // (EventPolicy.InspectPeriod, RecordResult.HandleFromEventsAsync)
+        // are expected to have refused this already.
+        var events = new[] { new ScoringEvent(Home, 1, false, 1, PeriodNumber: null) };
+
+        var act = () => LiveScore.ComputePlayedPeriods(events, maxPeriodCount: 3, Home, Away);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void ComputePlayedPeriods_EventWithAPeriodOutsideRange_Throws()
+    {
+        var events = new[] { new ScoringEvent(Home, 1, false, 1, PeriodNumber: 7) };
+
+        var act = () => LiveScore.ComputePlayedPeriods(events, maxPeriodCount: 3, Home, Away);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
 }

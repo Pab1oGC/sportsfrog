@@ -74,6 +74,7 @@ public static class RecordEvent
         Request request,
         SportFrogDbContext database,
         EventPolicy policy,
+        EventDrivenResult resync,
         OrganizationContext organization,
         CancellationToken cancellationToken)
     {
@@ -114,6 +115,12 @@ public static class RecordEvent
 
         database.PlayerEvents.Add(recorded);
         await database.SaveChangesAsync(cancellationToken);
+
+        // Best-effort, and after the event is already saved: a match this
+        // finishes is already finished, so this only ever corrects a score
+        // that was already there, never decides when a match is over. See
+        // EventDrivenResult's own remarks for when it does nothing instead.
+        await resync.ResyncAsync(matchId, database, cancellationToken);
 
         return Results.Created($"/events/{recorded.Id}", new Response(recorded.Id));
     }

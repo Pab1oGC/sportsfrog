@@ -26,8 +26,8 @@ public sealed class DocumentTemplate
 
     public required TemplateLayout Layout { get; set; }
 
-    /// <summary>The paper or card it is printed on, from the published set.</summary>
-    public string PageSize { get; set; } = "credential";
+    /// <summary>The paper it is printed on, from the published set.</summary>
+    public string PageSize { get; set; } = "a4";
 
     /// <summary>
     /// The one offered first for this kind. At most one per kind, which the
@@ -35,6 +35,21 @@ public sealed class DocumentTemplate
     /// mean no organization could ever have a moment with none.
     /// </summary>
     public bool IsDefault { get; set; }
+
+    /// <summary>
+    /// Whether every organization may name this design, not only the one
+    /// that owns the row.
+    /// </summary>
+    /// <remarks>
+    /// Row-level security still decides it, not this flag by itself: a
+    /// dedicated policy reads it to let every organization's connection see
+    /// a row it does not own, the one exception to <c>tenant_isolation</c>
+    /// this schema grants on purpose. Narrowed to the owning organization
+    /// setting it on its own row — never a cross-tenant write — because only
+    /// the platform organization's own rows are meant to carry it; see
+    /// <c>CreateTemplate</c>'s own gate for who that is.
+    /// </remarks>
+    public bool IsCatalog { get; set; }
 
     /// <summary>Which stored version the current layout is.</summary>
     public int Version { get; set; } = 1;

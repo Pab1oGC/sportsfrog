@@ -20,10 +20,15 @@ public sealed class IssuedDocument
 
     public Guid OrgId { get; set; }
 
-    /// <summary>The design it was printed from. Null for a credential, which has no design to point to.</summary>
+    /// <summary>
+    /// The design it was printed from. Null for a credential issued under the
+    /// decree, which has no design to point to; a credential issued before it
+    /// still carries a real value here, printed from a template the same way
+    /// a certificate still is.
+    /// </summary>
     public Guid? TemplateId { get; set; }
 
-    /// <summary>Which stored layout it was printed from. Null for a credential.</summary>
+    /// <summary>Which stored layout it was printed from. Null exactly when <see cref="TemplateId"/> is.</summary>
     public int? TemplateVersion { get; set; }
 
     public DocumentKind Kind { get; set; }

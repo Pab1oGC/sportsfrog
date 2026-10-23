@@ -2,6 +2,7 @@ using FluentValidation;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Matches;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -50,7 +51,10 @@ public static class ScheduleCalendar
     /// The first date to consider for this jornada. Left out, generation
     /// continues from the day of the competition's last scheduled match (or
     /// its own start date, or today) — so clicking again with nothing filled
-    /// in just keeps going from wherever the last one landed.
+    /// in just keeps going from wherever the last one landed. Either way,
+    /// combined with <paramref name="StartTime"/> it has to land on or after
+    /// right now, and on or after this category's own last dated fixture —
+    /// see <see cref="JornadaWindow"/>.
     /// </param>
     /// <param name="StartTime">
     /// The earliest this jornada may start on <paramref name="From"/> itself,
@@ -127,7 +131,7 @@ public static class ScheduleCalendar
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    internal static async Task<IResult> HandleAsync(
         Guid competitionId,
         Request request,
         HttpContext context,
@@ -137,20 +141,13 @@ public static class ScheduleCalendar
         IBackgroundJobClient jobs,
         CancellationToken cancellationToken)
     {
-        var competition = await database.Competitions.SingleOrDefaultAsync(
-            candidate => candidate.Id == competitionId, cancellationToken);
+        var competition = await database.Competitions
+            .Include(candidate => candidate.Sport)
+            .SingleOrDefaultAsync(candidate => candidate.Id == competitionId, cancellationToken);
 
-        if (competition is null)
+        if (competition?.Sport is not { } sport)
         {
             return Results.NotFound();
-        }
-
-        if (competition.Settings.Schedule is not { SpaceIds.Count: > 0 } schedule)
-        {
-            return Results.Problem(
-                detail: "Esta competencia no tiene canchas habilitadas. Elegí cuáles puede " +
-                        "usar antes de colocar sus partidos.",
-                statusCode: StatusCodes.Status409Conflict);
         }
 
         // The organizer's clock, for everything below that turns a wall-clock
@@ -176,12 +173,33 @@ public static class ScheduleCalendar
                 && match.HomeTeamId != null && match.AwayTeamId != null)
             .ToListAsync(cancellationToken);
 
-        // Every space this competition can use, and everything already
-        // booked on any of them — whoever put it there, whichever
-        // competition it belongs to. A space is shared by the whole
-        // organization, so a fixture of another competition occupies it just
-        // as firmly.
-        var spaceIds = schedule.SpaceIds!;
+        // Every match of one round shares one Phase (the draw assigns it per
+        // round, never per match), so any one of them says which of this
+        // category's own stages this jornada belongs to — see
+        // CompetitionStages.KindOfMatch, the same rule MatchRulesLookup and
+        // EventPolicy already resolve a single fixture's stage by.
+        var thisStage = CompetitionStages.KindOfMatch(
+            competition.Format, sport.ScoreMode, pending.FirstOrDefault()?.Phase);
+
+        var stageSchedule = await database.CompetitionStages
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                candidate => candidate.CompetitionId == competitionId && candidate.Kind == thisStage,
+                cancellationToken);
+
+        if (stageSchedule is not { SpaceIds.Length: > 0 })
+        {
+            return Results.Problem(
+                detail: "Esta fase no tiene canchas habilitadas. Elegí cuáles puede usar antes " +
+                        "de colocar sus partidos.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // Every space this stage can use, and everything already booked on
+        // any of them — whoever put it there, whichever competition or
+        // stage it belongs to. A space is shared by the whole organization,
+        // so a fixture of another competition occupies it just as firmly.
+        var spaceIds = stageSchedule.SpaceIds!;
 
         var takenMatches = await database.Matches
             .AsNoTracking()
@@ -189,17 +207,35 @@ public static class ScheduleCalendar
             .Where(match => spaceIds.Contains(match.VenueSpaceId!.Value))
             .Where(match => match.Status != MatchState.Cancelled
                 && match.Status != MatchState.Postponed)
-            .Select(match => new { match.CategoryId, match.VenueSpaceId, match.ScheduledAt })
+            .Select(match => new
+            {
+                match.CategoryId,
+                match.Competition!.Format,
+                match.Competition.Sport!.ScoreMode,
+                match.Phase,
+                match.VenueSpaceId,
+                match.ScheduledAt,
+            })
             .ToListAsync(cancellationToken);
 
-        // One resolution, shared by the jornada being placed and everything
-        // already on those pitches: how long a match of a given category
-        // actually takes, computed or declared from its own reglamento —
-        // never from anything the competition itself sets.
-        var durations = await ResolveDurationsAsync(
-            database, [proxima.CategoryId, .. takenMatches.Select(match => match.CategoryId)], cancellationToken);
+        // Each taken fixture's own stage, the same derivation as this
+        // jornada's — a pitch already booked by another category's bracket
+        // match takes however long *that* stage's reglamento says, not this
+        // jornada's.
+        var takenStages = takenMatches
+            .Select(match => (
+                match.CategoryId,
+                Kind: CompetitionStages.KindOfMatch(match.Format, match.ScoreMode, match.Phase)))
+            .ToList();
 
-        if (durations[proxima.CategoryId] is not { } thisJornada)
+        // One resolution, shared by the jornada being placed and everything
+        // already on those pitches: how long a match of a given category's
+        // stage actually takes, computed or declared from its own
+        // reglamento — never from anything the competition itself sets.
+        var durations = await ResolveDurationsAsync(
+            database, [(proxima.CategoryId, thisStage), .. takenStages], cancellationToken);
+
+        if (durations[(proxima.CategoryId, thisStage)] is not { } thisJornada)
         {
             return Results.Problem(
                 detail: "El reglamento de esta categoría no dice cuánto ocupa un partido en un " +
@@ -208,9 +244,9 @@ public static class ScheduleCalendar
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        var taken = takenMatches.Select(match =>
+        var taken = takenMatches.Zip(takenStages, (match, stage) =>
         {
-            var duration = durations[match.CategoryId] ?? new ResolvedDuration(FallbackMinimumMinutes, 0);
+            var duration = durations[(stage.CategoryId, stage.Kind)] ?? new ResolvedDuration(FallbackMinimumMinutes, 0);
             var at = match.ScheduledAt!.Value;
             return new Booking(match.VenueSpaceId!.Value, at, at.AddMinutes(duration.Total));
         }).ToList();
@@ -243,6 +279,28 @@ public static class ScheduleCalendar
             ?? LatestScheduledDay(engaged.Select(match => match.Day))
             ?? competition.StartsOn
             ?? DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(offset).DateTime);
+
+        // The same point in time CalendarPlacement.Place is about to search
+        // forward from, checked once before it runs rather than after it has
+        // already placed something. Applies whether that date came from the
+        // request or from the fallback above: a category whose last jornada
+        // was played weeks ago defaults "from" to that same day, which is
+        // exactly as behind-the-clock as if the organizer had typed it.
+        var requestedStart = new DateTimeOffset(from.ToDateTime(request.StartTime!.Value), offset);
+
+        var latestScheduled = await LatestScheduledInstantAsync(database, proxima.CategoryId, cancellationToken);
+
+        var violation = JornadaWindow.Inspect(requestedStart, clock.GetUtcNow(), latestScheduled);
+
+        if (violation != JornadaWindow.Violation.None)
+        {
+            return Results.Problem(
+                detail: violation == JornadaWindow.Violation.InThePast
+                    ? "No se puede generar una jornada en el pasado. Elegí una fecha y hora que todavía no pasaron."
+                    : "Esta categoría ya tiene partidos programados después de esa fecha. La próxima " +
+                      "jornada tiene que ir después de la última ya programada.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
 
         var placements = CalendarPlacement.Place(
             // The filter above already refused any of these a null side.
@@ -395,6 +453,31 @@ public static class ScheduleCalendar
     }
 
     /// <summary>
+    /// When this category's own last dated fixture is, if it has ever had
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to the one category a call is about to advance, not the whole
+    /// competition: categories play in blocks (see the class remarks), so
+    /// one category's jornada has nothing to say about where another's
+    /// calendar already stands. Cancelled and postponed fixtures are left
+    /// out — neither holds its slot the way a live one does, the same
+    /// exclusion <see cref="SportFrog.Api.Features.Matches.FixturePolicy"/>'s
+    /// own collision checks already apply — so neither should hold the line
+    /// for <see cref="JornadaWindow"/> either.
+    /// </remarks>
+    internal static Task<DateTimeOffset?> LatestScheduledInstantAsync(
+        SportFrogDbContext database,
+        Guid categoryId,
+        CancellationToken cancellationToken) =>
+        database.Matches
+            .AsNoTracking()
+            .Where(match => match.CategoryId == categoryId && match.ScheduledAt != null)
+            .Where(match => match.Status != MatchState.Cancelled && match.Status != MatchState.Postponed)
+            .Select(match => (DateTimeOffset?)match.ScheduledAt)
+            .MaxAsync(cancellationToken);
+
+    /// <summary>
     /// The day generation should resume from when the caller did not name
     /// one — the day of whatever is already the latest scheduled fixture in
     /// the competition, so a click with no date filled in continues right
@@ -427,51 +510,85 @@ public static class ScheduleCalendar
     }
 
     /// <summary>
-    /// Resolves, for each category asked about, how long one of its matches
-    /// takes — entirely from its own reglamento (see
+    /// Resolves, for each (category, stage) pair asked about, how long one
+    /// of its matches takes — entirely from its own reglamento (see
     /// <see cref="MatchDuration.From"/>, which itself computes a clocked
-    /// sport's duration or reads a clockless one's declared estimate), plus
-    /// whatever buffer its own competition leaves between matches. Shared
-    /// between the jornada being placed and every pitch already booked, which
-    /// can belong to other categories or other competitions entirely.
+    /// sport's duration or reads a clockless one's declared estimate), with
+    /// the stage's own override ahead of the category's and the
+    /// competition's (see <see cref="EffectiveRuleset"/>), plus whatever
+    /// buffer that stage leaves between matches. Shared between the jornada
+    /// being placed and every pitch already booked, which can belong to
+    /// other categories, other stages, or other competitions entirely.
     /// </summary>
-    internal static async Task<Dictionary<Guid, ResolvedDuration?>> ResolveDurationsAsync(
+    internal static async Task<Dictionary<(Guid CategoryId, StageKind Kind), ResolvedDuration?>> ResolveDurationsAsync(
         SportFrogDbContext database,
-        IReadOnlyCollection<Guid> categoryIds,
+        IReadOnlyCollection<(Guid CategoryId, StageKind Kind)> categoryStages,
         CancellationToken cancellationToken)
     {
-        // Settings is a single jsonb column behind a value converter, not a
-        // set of columns EF can decompose in SQL — the whole thing has to
-        // come back and be read in memory, so .Schedule is a plain property
-        // access below rather than part of the projection itself.
+        var categoryIds = categoryStages.Select(pair => pair.CategoryId).Distinct().ToList();
+
         var categories = await database.Categories
             .AsNoTracking()
             .Where(category => categoryIds.Contains(category.Id))
             .Select(category => new
             {
                 category.Id,
-                EffectiveRulesetId = category.RulesetId ?? category.Competition!.RulesetId,
-                category.Competition!.Settings,
+                category.CompetitionId,
+                category.RulesetId,
+                CompetitionRulesetId = category.Competition!.RulesetId,
             })
+            .ToDictionaryAsync(category => category.Id, cancellationToken);
+
+        var competitionIds = categories.Values.Select(category => category.CompetitionId).Distinct().ToList();
+
+        // A stage's own reglamento override, where one of these categories
+        // declared one — see EffectiveRuleset's third level.
+        var categoryStageRulesets = await database.CategoryStages
+            .AsNoTracking()
+            .Where(stage => categoryIds.Contains(stage.CategoryId))
+            .Select(stage => new { stage.CategoryId, stage.Kind, stage.RulesetId })
             .ToListAsync(cancellationToken);
 
-        var rulesetIds = categories.Select(category => category.EffectiveRulesetId).Distinct().ToList();
+        // A stage's own margin between matches — see CompetitionStage.BufferMinutes.
+        var competitionStageBuffers = await database.CompetitionStages
+            .AsNoTracking()
+            .Where(stage => competitionIds.Contains(stage.CompetitionId))
+            .Select(stage => new { stage.CompetitionId, stage.Kind, stage.BufferMinutes })
+            .ToListAsync(cancellationToken);
+
+        var effectiveRulesetIds = categoryStages
+            .Select(pair => EffectiveRuleset.Of(
+                categoryStageRulesets.Find(stage => stage.CategoryId == pair.CategoryId && stage.Kind == pair.Kind)?.RulesetId,
+                categories[pair.CategoryId].RulesetId,
+                categories[pair.CategoryId].CompetitionRulesetId))
+            .Distinct()
+            .ToList();
+
         var configs = await database.Rulesets
             .AsNoTracking()
-            .Where(ruleset => rulesetIds.Contains(ruleset.Id))
+            .Where(ruleset => effectiveRulesetIds.Contains(ruleset.Id))
             .ToDictionaryAsync(ruleset => ruleset.Id, ruleset => ruleset.Config, cancellationToken);
 
-        var resolved = new Dictionary<Guid, ResolvedDuration?>();
+        var resolved = new Dictionary<(Guid CategoryId, StageKind Kind), ResolvedDuration?>();
 
-        foreach (var category in categories)
+        foreach (var pair in categoryStages)
         {
-            var game = configs.TryGetValue(category.EffectiveRulesetId, out var config)
+            var category = categories[pair.CategoryId];
+
+            var effectiveRulesetId = EffectiveRuleset.Of(
+                categoryStageRulesets.Find(stage => stage.CategoryId == pair.CategoryId && stage.Kind == pair.Kind)?.RulesetId,
+                category.RulesetId,
+                category.CompetitionRulesetId);
+
+            var game = configs.TryGetValue(effectiveRulesetId, out var config)
                 ? MatchDuration.From(config.Periods)
                 : null;
 
-            resolved[category.Id] = game is { } minutes
-                ? new ResolvedDuration(minutes, category.Settings.Schedule?.BufferMinutes ?? DefaultBufferMinutes)
-                : null;
+            var bufferMinutes = competitionStageBuffers
+                .Find(stage => stage.CompetitionId == category.CompetitionId && stage.Kind == pair.Kind)
+                ?.BufferMinutes ?? DefaultBufferMinutes;
+
+            resolved[pair] = game is { } minutes ? new ResolvedDuration(minutes, bufferMinutes) : null;
         }
 
         return resolved;

@@ -116,7 +116,7 @@ internal interface IListProvider
     /// depends on the sport's own metric catalog rather than its score mode
     /// alone: <see cref="SportFrog.Api.Features.Lists.Providers.LeadersList"/>
     /// has nothing to rank for a sport whose metrics never affect the score
-    /// (volleyball's points are tallied by set, not summed), and
+    /// (wally's points are tallied by set, not summed), and
     /// <see cref="SportFrog.Api.Features.Lists.Providers.CardsList"/> has
     /// nothing to book for a sport with no card metric at all (basketball,
     /// volleyball) — both would otherwise show up in the catalog as an

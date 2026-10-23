@@ -65,6 +65,18 @@ public static class TemplateDesign
     /// in this system where those may be printed — the public view never sees
     /// them (RNF-16), and a certificate has no business carrying them either,
     /// which is why they are offered for one kind and not the other.
+    ///
+    /// The entries marked <see cref="Credentials"/> below no longer describe
+    /// anything a new template can be: <c>CreateTemplate</c> refuses
+    /// <see cref="DocumentKind.Credential"/> outright, since a credential's
+    /// structure is fixed by decree and has no template to design. They stay
+    /// because <c>document_templates</c> rows of that kind printed before the
+    /// decree still exist and are still read — <c>ReadTemplateDesign</c>
+    /// filters this list by the template's own <c>Kind</c> so its editor can
+    /// still be opened, and <c>LayoutPolicy</c> still validates its layout the
+    /// same way it always did. Removing these entries would not close a door
+    /// already closed by <c>CreateTemplate</c>; it would make that old
+    /// template's own save path refuse a field it has always carried.
     /// </remarks>
     public static readonly IReadOnlyList<FieldSource> Sources =
     [
@@ -130,6 +142,12 @@ public static class TemplateDesign
     /// The credential sizes are CR80, which is the bank-card size every badge
     /// printer and every lanyard holder is built for. The rest are the paper a
     /// certificate is printed on.
+    ///
+    /// Kept for the same reason the credential-only entries in
+    /// <see cref="Sources"/> are: no new template can be a credential, but an
+    /// old one printed before the decree still names one of these, and
+    /// <c>HasPageSize</c> is what lets saving that template's name or artwork
+    /// succeed without also relitigating its paper size.
     /// </remarks>
     public static readonly IReadOnlyList<PageSize> PageSizes =
     [

@@ -4,18 +4,18 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
-import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
-import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import { DataGrid } from '@mui/x-data-grid';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { useApi, apiPost } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { CrudDialog } from 'src/components/crud-dialog';
-import { readInlineReceipt, INLINE_RECEIPT_REQUIREMENT } from 'src/lib/inline-photo';
+import { RowActionsMenu } from 'src/components/row-actions-menu';
+import { ReceiptAttachField, ReceiptViewerDialog } from 'src/components/receipt-attach-field';
 import { bloquearNegativos, soloDecimales } from 'src/lib/entero-sin-signo';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL } from 'src/lib/payment-labels';
 
@@ -49,10 +49,20 @@ export function SanctionPaymentsDialog({ competitionId, sanction, onClose, onCha
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState('');
 
+  // El comprobante de un pago YA guardado -- ver abrirComprobante más
+  // abajo. El del archivo recién elegido en "Registrar pago", todavía sin
+  // subir, lo maneja ReceiptAttachField por su cuenta.
+  const [visor, setVisor] = useState({ open: false, url: '', isPdf: false, title: '' });
+
   const [voidDialog, setVoidDialog] = useState({ open: false, payment: null });
   const [voidReason, setVoidReason] = useState('');
   const [voidSaving, setVoidSaving] = useState(false);
   const [voidError, setVoidError] = useState('');
+
+  const [rejectDialog, setRejectDialog] = useState({ open: false, payment: null });
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectSaving, setRejectSaving] = useState(false);
+  const [rejectError, setRejectError] = useState('');
 
   const refresh = () => {
     mutate();
@@ -66,15 +76,41 @@ export function SanctionPaymentsDialog({ competitionId, sanction, onClose, onCha
     setPaymentOpen(true);
   };
 
-  const onPickReceipt = async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
+  // El comprobante de un pago YA guardado -- el link firmado llega junto
+  // con la sanción (ver ReadSanctions.ReadAsync del lado del API, que
+  // firma el de cada uno de sus propios pagos, a diferencia de la lista de
+  // sanciones, que solo trae HasReceipt): nada que pedir aparte, se abre
+  // directo.
+  const abrirComprobante = (payment) => setVisor({
+    open: true,
+    url: payment.receiptUrl,
+    isPdf: payment.receiptUrl.split('?')[0].toLowerCase().endsWith('.pdf'),
+    title: `Comprobante — Bs ${payment.amount}`,
+  });
+
+  const verificar = async (payment) => {
     try {
-      const dataUrl = await readInlineReceipt(file);
-      setPaymentForm({ ...paymentForm, receiptDataUrl: dataUrl });
-      setPaymentFileName(file.name);
+      await apiPost(endpoints.sanctionPaymentReview(competitionId, payment.id), { verified: true, reason: null });
+      toast.success('Comprobante verificado.');
+      refresh();
     } catch (err) { toast.error(err.message); }
+  };
+
+  const openReject = (payment) => {
+    setRejectReason('');
+    setRejectError('');
+    setRejectDialog({ open: true, payment });
+  };
+
+  const saveReject = async () => {
+    setRejectSaving(true);
+    setRejectError('');
+    try {
+      await apiPost(
+        endpoints.sanctionPaymentReview(competitionId, rejectDialog.payment.id), { verified: false, reason: rejectReason });
+      setRejectDialog({ open: false, payment: null });
+      refresh();
+    } catch (err) { setRejectError(err.message); } finally { setRejectSaving(false); }
   };
 
   const savePayment = async () => {
@@ -107,6 +143,35 @@ export function SanctionPaymentsDialog({ competitionId, sanction, onClose, onCha
     } catch (err) { setVoidError(err.message); } finally { setVoidSaving(false); }
   };
 
+  const paymentColumns = [
+    { field: 'amount', headerName: 'Monto', width: 80, renderCell: ({ row }) => `Bs ${row.amount}` },
+    { field: 'method', headerName: 'Método', width: 100, renderCell: ({ row }) => PAYMENT_METHOD_LABEL[row.method] || row.method },
+    { field: 'reviewState', headerName: 'Estado', width: 110, sortable: false, renderCell: ({ row }) => {
+      const revision = ESTADOS_REVISION[row.reviewState] || ESTADOS_REVISION.pending;
+      const anulado = !!row.voidedAt;
+      return <Chip size="small" label={anulado ? 'Anulado' : revision.label} color={anulado ? 'error' : revision.color} />;
+    }},
+    // El ojo y el visto son dos íconos sueltos, los dos al mismo nivel --
+    // ninguno de los dos detrás del "..." -- porque son las dos acciones
+    // que en verdad se usan seguido. Rechazar y Anular sí van detrás: son
+    // las menos comunes de las cuatro.
+    { field: 'actions', headerName: 'Acciones', width: 110, align: 'center', headerAlign: 'center', sortable: false, renderCell: ({ row }) => {
+      const pendiente = row.reviewState === 'pending' && !row.voidedAt;
+      return (
+        <RowActionsMenu
+          primary={[
+            row.hasReceipt && { icon: 'eva:eye-outline', label: 'Ver comprobante', onClick: () => abrirComprobante(row) },
+            pendiente && { icon: 'eva:checkmark-circle-2-outline', label: 'Verificar', color: 'success.main', onClick: () => verificar(row) },
+          ]}
+          actions={[
+            pendiente && { icon: 'eva:close-circle-outline', label: 'Rechazar', color: 'warning.main', onClick: () => openReject(row) },
+            { icon: 'eva:close-circle-outline', label: 'Anular', color: 'error.main', onClick: () => openVoid(row), hidden: !!row.voidedAt },
+          ]}
+        />
+      );
+    }},
+  ];
+
   return (
     <>
       <Dialog open={open} onClose={() => onClose()} maxWidth="sm" fullWidth>
@@ -120,28 +185,29 @@ export function SanctionPaymentsDialog({ competitionId, sanction, onClose, onCha
             </Typography>
           )}
 
-          {isLoading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress /></Box>
-          )}
           {!isLoading && payments.length === 0 && (
             <Typography color="text.secondary">Todavía no se registró ningún pago.</Typography>
           )}
 
-          {payments.map((payment) => {
-            const revision = ESTADOS_REVISION[payment.reviewState] || ESTADOS_REVISION.pending;
-            const anulado = !!payment.voidedAt;
-            return (
-              <Box key={payment.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                  Bs {payment.amount} — {PAYMENT_METHOD_LABEL[payment.method] || payment.method}
-                </Typography>
-                <Chip size="small" label={anulado ? 'Anulado' : revision.label} color={anulado ? 'error' : revision.color} />
-                {!anulado && (
-                  <Button size="small" color="error" onClick={() => openVoid(payment)}>Anular</Button>
-                )}
-              </Box>
-            );
-          })}
+          {/*
+            Una tabla de verdad, no una tarjeta por pago -- "Ver
+            comprobante" es un ícono de ojo suelto en la columna Acciones
+            (RowActionsMenu.primary), al mismo nivel que Verificar, nunca
+            detrás del "...": son las dos acciones que en verdad se usan
+            seguido. Un pago "Por revisar" muestra Verificar/Rechazar ahí
+            mismo -- antes esto vivía en una pestaña aparte (Comprobantes
+            pendientes) que, al ser por competencia entera y no por
+            sanción, la mayoría de las veces no tenía nada que mostrar.
+          */}
+          <DataGrid
+            rows={payments}
+            columns={paymentColumns}
+            loading={isLoading}
+            autoHeight
+            hideFooter
+            disableRowSelectionOnClick
+            getRowId={(row) => row.id}
+          />
 
           <Button
             variant="outlined" startIcon={<Iconify icon="mdi:cash-plus" width={16} />}
@@ -172,14 +238,12 @@ export function SanctionPaymentsDialog({ competitionId, sanction, onClose, onCha
           {PAYMENT_METHODS.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
         </TextField>
         {paymentForm.method !== 'cash' && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
-            <Button variant="outlined" size="small" component="label" startIcon={<Iconify icon="eva:attach-outline" width={16} />}>
-              {paymentFileName ? 'Cambiar comprobante' : 'Adjuntar comprobante'}
-              <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden onChange={onPickReceipt} />
-            </Button>
-            {paymentFileName && <Typography variant="caption">{paymentFileName}</Typography>}
-            <Typography variant="caption" color="text.secondary">{INLINE_RECEIPT_REQUIREMENT}</Typography>
-          </Box>
+          <ReceiptAttachField
+            dataUrl={paymentForm.receiptDataUrl}
+            fileName={paymentFileName}
+            onChange={(url, name) => { setPaymentForm({ ...paymentForm, receiptDataUrl: url }); setPaymentFileName(name); }}
+            onRemove={() => { setPaymentForm({ ...paymentForm, receiptDataUrl: '' }); setPaymentFileName(''); }}
+          />
         )}
       </CrudDialog>
 
@@ -198,6 +262,24 @@ export function SanctionPaymentsDialog({ competitionId, sanction, onClose, onCha
           fullWidth required multiline minRows={2}
         />
       </CrudDialog>
+
+      <CrudDialog
+        open={rejectDialog.open} editId={null} entityName="rechazo"
+        error={rejectError} saving={rejectSaving}
+        onClose={() => setRejectDialog({ open: false, payment: null })} onSave={saveReject}
+      >
+        <TextField
+          label="Motivo" value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          fullWidth required multiline minRows={2}
+        />
+      </CrudDialog>
+
+      {/* Visor del comprobante de un pago ya guardado -- ver abrirComprobante. */}
+      <ReceiptViewerDialog
+        open={visor.open} onClose={() => setVisor({ ...visor, open: false })}
+        url={visor.url} isPdf={visor.isPdf} title={visor.title}
+      />
     </>
   );
 }

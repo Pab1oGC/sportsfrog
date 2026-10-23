@@ -53,9 +53,17 @@ public sealed class IssueDocumentsJob(
     private abstract record Work(IReadOnlySet<Guid> AlreadyHeld);
 
     /// <summary>Everything drawing a batch of certificates needs, read in one go.</summary>
+    /// <param name="TemplateOrganizationId">
+    /// Who owns the design's own artwork — never assumed to be the
+    /// organization printing from it. A catalog design is the platform
+    /// organization's own row read by every organization that requests a
+    /// batch against it; see <see cref="DocumentTemplate.IsCatalog"/>'s own
+    /// remarks.
+    /// </param>
     private sealed record CertificateWork(
         TemplateLayout Layout,
         string PageSize,
+        Guid TemplateOrganizationId,
         DocumentContext Context,
         string? CertificateType,
         DateOnly? ValidFrom,
@@ -292,6 +300,7 @@ public sealed class IssueDocumentsJob(
         return new CertificateWork(
             version.Layout,
             version.PageSize,
+            version.OrgId,
             new DocumentContext(
                 organization.Name, organization.Slug, competition.Name, competition.Season),
             batch.CertificateType,
@@ -571,8 +580,16 @@ public sealed class IssueDocumentsJob(
         // The artwork, once. It is the same on every card of the batch, and
         // fetching it per subject would be four hundred round trips to object
         // storage for four hundred copies of one image.
-        var front = await ArtworkAsync(organizationId, work.Layout.Front.BackgroundKey, cancellationToken);
-        var back = await ArtworkAsync(organizationId, work.Layout.Back?.BackgroundKey, cancellationToken);
+        //
+        // Read as the DESIGN's own organization, not the one printing: a
+        // catalog design's artwork lives under the platform organization's
+        // prefix regardless of who requested this batch, and ObjectStore
+        // throws on a key that does not match the organization it is asked
+        // to read as (see TemplateOrganizationId's own remarks).
+        var front = await ArtworkAsync(
+            work.TemplateOrganizationId, work.Layout.Front.BackgroundKey, cancellationToken);
+        var back = await ArtworkAsync(
+            work.TemplateOrganizationId, work.Layout.Back?.BackgroundKey, cancellationToken);
 
         var printed = new List<Printed>(work.Subjects.Count);
         var problems = new List<DocumentProblem>();

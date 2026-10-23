@@ -77,6 +77,7 @@ internal sealed class DocumentTemplateConfiguration : IEntityTypeConfiguration<D
         builder.Property(x => x.Name).HasColumnName("name").IsRequired();
         builder.Property(x => x.PageSize).HasColumnName("page_size").IsRequired();
         builder.Property(x => x.IsDefault).HasColumnName("is_default");
+        builder.Property(x => x.IsCatalog).HasColumnName("is_catalog");
         builder.Property(x => x.Version).HasColumnName("version");
         builder.Property(x => x.DeletedAt).HasColumnName("deleted_at");
 
@@ -92,6 +93,12 @@ internal sealed class DocumentTemplateConfiguration : IEntityTypeConfiguration<D
             .ValueGeneratedOnAddOrUpdate();
 
         builder.HasIndex(x => new { x.OrgId, x.Kind }).HasFilter("deleted_at IS NULL");
+
+        // Backs the catalog RLS policy's own USING clause, which every
+        // organization's connection evaluates on every read of this table:
+        // without it, "is this a catalog row" is a sequential scan across
+        // every organization's designs on every single read.
+        builder.HasIndex(x => x.IsCatalog).HasFilter("is_catalog AND deleted_at IS NULL");
 
         builder.HasQueryFilter(x => x.DeletedAt == null);
     }

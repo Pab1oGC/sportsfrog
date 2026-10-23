@@ -105,10 +105,11 @@ public static class LiveScore
     /// played out in full regardless of what either side has scored — a
     /// football match plays both halves at 5-0 exactly as it would at 0-0.
     /// Most metrics under <see cref="ScoreMode.Sets"/> still affect nothing
-    /// (a volleyball point is a statistic, never summed into the match), but
-    /// where one does — a taekwondo kyorugi point or gam-jeom — a bout that
-    /// is already decided does not go on to a period nobody fought, which is
-    /// exactly what this method cannot tell from "nothing recorded" alone.
+    /// (a wally point is a statistic, never summed into the match), but
+    /// where one does — a taekwondo kyorugi point or gam-jeom, a volleyball
+    /// point, ace, block_point or error — a bout or set that is already
+    /// decided does not go on to a period nobody fought, which is exactly
+    /// what this method cannot tell from "nothing recorded" alone.
     /// <see cref="ComputePlayedPeriods"/> is the one sound for that case.
     ///
     /// An event with no period recorded, or one outside the range this sport
@@ -161,6 +162,16 @@ public static class LiveScore
     /// <see cref="ComputePeriods"/>, and deliberately so: a cumulative
     /// sport's unplayed period is a data gap, a sets-mode sport's is the
     /// bout being over.
+    ///
+    /// Unlike <see cref="ComputePeriods"/>, an event with no period, or one
+    /// outside the range this sport actually plays, is not folded into the
+    /// first one — it is refused. Which period an event belongs to is not a
+    /// detail here, it is which set it decided, so a caller is expected to
+    /// have already refused anything without one
+    /// (<see cref="SportFrog.Api.Features.MatchEvents.EventPolicy.InspectPeriod"/>
+    /// requires it at the moment the event is recorded or corrected); this
+    /// is the last line checking that it actually did, not a second way to
+    /// answer the same question a different way.
     /// </remarks>
     public static IReadOnlyList<PeriodScore> ComputePlayedPeriods(
         IEnumerable<ScoringEvent> events,
@@ -168,7 +179,7 @@ public static class LiveScore
         Guid homeTeamId,
         Guid awayTeamId)
     {
-        var byPeriod = events.ToLookup(recorded => Clamp(recorded.PeriodNumber, maxPeriodCount));
+        var byPeriod = events.ToLookup(recorded => RequirePeriod(recorded.PeriodNumber, maxPeriodCount));
         var playedCount = byPeriod.Count == 0 ? 0 : byPeriod.Max(group => group.Key);
         var periods = new List<PeriodScore>(playedCount);
 
@@ -183,4 +194,26 @@ public static class LiveScore
 
     private static short Clamp(short? periodNumber, int periodCount) =>
         periodNumber is { } number && number >= 1 && number <= periodCount ? number : (short)1;
+
+    /// <summary>
+    /// The period an event happened in, for a sport where guessing one
+    /// would be guessing the result.
+    /// </summary>
+    /// <remarks>
+    /// Throws rather than defaulting to the first period the way
+    /// <see cref="Clamp"/> does for <see cref="ComputePeriods"/>: there, a
+    /// wrong guess changes which period a goal is filed under and nothing
+    /// else, because a cumulative total sums every period regardless. Here
+    /// a wrong guess changes which set is recorded as won, which is the
+    /// match result itself — RecordResult.HandleFromEventsAsync is expected
+    /// to have refused any such event before it ever reaches this method,
+    /// so reaching this exception means that did not happen.
+    /// </remarks>
+    private static short RequirePeriod(short? periodNumber, int periodCount) =>
+        periodNumber is { } number && number >= 1 && number <= periodCount
+            ? number
+            : throw new InvalidOperationException(
+                "An event with no period, or one outside the sport's configured range, cannot be placed " +
+                "in a set-by-set result. The caller must refuse it before calling ComputePlayedPeriods — " +
+                "see EventPolicy.InspectPeriod and RecordResult.HandleFromEventsAsync.");
 }

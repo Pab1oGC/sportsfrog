@@ -15,7 +15,7 @@ import DialogActions from '@mui/material/DialogActions';
 import Divider from '@mui/material/Divider';
 import { DataGrid } from '@mui/x-data-grid';
 import { Iconify } from 'src/components/iconify';
-import { useApi, apiPost, apiPut, apiDelete } from 'src/hooks/use-api';
+import { useApi, apiPost, apiPut, apiPatch, apiDelete } from 'src/hooks/use-api';
 import { useCascade } from 'src/hooks/use-cascade';
 import { endpoints, default as axios } from 'src/lib/axios';
 import { downloadBlob } from 'src/lib/download-blob';
@@ -46,6 +46,7 @@ import { PenaltiesDialog } from 'src/pages/matches/penalties-dialog';
 import { EventsDialog } from 'src/pages/matches/events-dialog';
 import { BulkRescheduleDialog } from 'src/pages/matches/bulk-reschedule-dialog';
 import { FinishAlertsDialog } from 'src/pages/matches/finish-alerts-dialog';
+import { StageScheduleDialog } from 'src/pages/matches/stage-schedule-dialog';
 import { buildLiveActions } from 'src/pages/matches/live-actions';
 import { buildFixtureActions } from 'src/pages/matches/fixture-actions';
 
@@ -120,6 +121,7 @@ export default function MatchesPage() {
   // se puede usar la cancha es algo que el organizador ya acordo con quien
   // la administra, no algo que el sistema deba suponer.
   const [jornadaOpen, setJornadaOpen] = useState(false);
+  const [stageScheduleOpen, setStageScheduleOpen] = useState(false);
   const [jornadaForm, setJornadaForm] = useState({ from: '', startTime: '' });
   const [jornadaSaving, setJornadaSaving] = useState(false);
   const [jornadaError, setJornadaError] = useState('');
@@ -197,22 +199,15 @@ export default function MatchesPage() {
 
     const a = rows[index];
     const b = rows[otherIndex];
-    const payloadFor = (row, displayOrder) => ({
-      name: row.name,
-      gender: row.gender || null,
-      birthDateFrom: row.birthDateFrom || null,
-      birthDateTo: row.birthDateTo || null,
-      maxRosterSize: row.maxRosterSize ?? null,
-      displayOrder,
-      rulesetId: row.rulesetId || null,
-      qualifiersPerGroup: row.qualifiersPerGroup ?? null,
-      minWeightKg: row.minWeightKg ?? null,
-      maxWeightKg: row.maxWeightKg ?? null,
-    });
 
+    // Solo el orden, no la categoría entera: un PUT acá reenviaría a quién
+    // admite (sexo, edad, cupo, reglamento) tal como esta pantalla la leyó,
+    // y pisaría sin avisar cualquier edición hecha en Categorías mientras
+    // este diálogo estaba abierto. Ver UpdateCategoryDisplayOrder del lado
+    // del servidor.
     try {
-      await apiPut(endpoints.category(cascade.compId, a.id), payloadFor(a, b.displayOrder));
-      await apiPut(endpoints.category(cascade.compId, b.id), payloadFor(b, a.displayOrder));
+      await apiPatch(endpoints.categoryDisplayOrder(cascade.compId, a.id), { displayOrder: b.displayOrder });
+      await apiPatch(endpoints.categoryDisplayOrder(cascade.compId, b.id), { displayOrder: a.displayOrder });
       mutateJornadaCategorias();
     } catch (err) { toast.error(err.message); }
   };
@@ -288,8 +283,16 @@ export default function MatchesPage() {
   };
 
   const doFinishFromEvents = async (m) => {
-    const marcador = `${m.liveHomeTotal ?? 0} - ${m.liveAwayTotal ?? 0}`;
-    const ok = await confirm(`Finalizar el partido ${marcador}, segun los eventos cargados?`, { confirmLabel: 'Finalizar' });
+    // liveHomeTotal/liveAwayTotal solo existen para un deporte de suma
+    // (ReadMatches.WithLiveScoresAsync, espejo de LiveScore.AppliesTo): para
+    // uno por sets con eventos que puntuan (kyorugi, voley desde
+    // AddVolleyballScoringMetrics) son siempre null, y "?? 0" los mostraria
+    // como un falso 0-0 en vez del marcador real que el servidor va a
+    // derivar. Mejor no prometer un numero que todavia no se calculo.
+    const marcador = m.liveHomeTotal != null && m.liveAwayTotal != null
+      ? ` ${m.liveHomeTotal} - ${m.liveAwayTotal}`
+      : '';
+    const ok = await confirm(`Finalizar el partido${marcador}, segun los eventos cargados?`, { confirmLabel: 'Finalizar' });
     if (!ok) return;
     try {
       const response = await apiPost(endpoints.matchResultFromEvents(m.id));
@@ -409,6 +412,11 @@ export default function MatchesPage() {
         {cascade.compId && comp && !['finished', 'cancelled'].includes(comp.status) && (
           <Button variant="outlined" startIcon={<Iconify icon="eva:clock-outline" />} onClick={abrirGenerarJornada} disabled={loading}>
             Generar siguiente jornada
+          </Button>
+        )}
+        {cascade.compId && comp && (
+          <Button variant="outlined" startIcon={<Iconify icon="eva:pin-outline" />} onClick={() => setStageScheduleOpen(true)} disabled={loading}>
+            Canchas y margen
           </Button>
         )}
         {cascade.catId && formato === 'groups' && (
@@ -547,6 +555,12 @@ export default function MatchesPage() {
           <Button variant="contained" onClick={generarJornada} disabled={jornadaSaving || !jornadaForm.startTime}>Generar</Button>
         </DialogActions>
       </Dialog>
+
+      <StageScheduleDialog
+        open={stageScheduleOpen}
+        onClose={() => setStageScheduleOpen(false)}
+        competitionId={cascade.compId}
+      />
     </Box>
   );
 }

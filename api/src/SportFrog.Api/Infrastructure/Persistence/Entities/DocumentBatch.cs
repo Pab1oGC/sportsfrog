@@ -21,7 +21,12 @@ public sealed class DocumentBatch
 
     public DocumentKind Kind { get; set; }
 
-    /// <summary>The design this batch prints from. Null for a credential, which has no design to point to.</summary>
+    /// <summary>
+    /// The design this batch prints from. Null for a credential batch raised
+    /// under the decree, which has no design to point to; a credential batch
+    /// raised before it still carries a real value here, the same as a
+    /// certificate batch always does.
+    /// </summary>
     public Guid? TemplateId { get; set; }
 
     public int? TemplateVersion { get; set; }

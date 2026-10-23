@@ -24,7 +24,7 @@ import { portalBaseTheme } from 'src/theme/portal-base';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
 import { ColorField } from 'src/components/color-field';
-import { useApi, apiPut } from 'src/hooks/use-api';
+import { useApi, apiPatch } from 'src/hooks/use-api';
 import { endpoints } from 'src/lib/axios';
 import { leerComoDataUrl } from 'src/lib/data-url';
 import { slugDeOrganizacion } from 'src/lib/slug';
@@ -34,10 +34,9 @@ import {
   PORTAL_STANDINGS_VARIANTS, PORTAL_MATCH_CARD_VARIANTS, PORTAL_BRACKET_VARIANTS,
   buildPortalTheme, portalFontHref, portalFontStack, contrastRatio, readableTextOn, darken,
 } from 'src/lib/portal-theme';
-import { readPortalForm } from 'src/pages/competitions/portal-payload';
+import { readPortalForm, buildPortalPayload } from 'src/pages/competitions/portal-payload';
 import { seccionesVisibles, ordenTrasMover } from 'src/pages/competitions/portal-studio-sections';
 import { previewImg, fakeComp, formToPreviewPortal, defaultSectionLabel } from 'src/pages/competitions/portal-studio-preview';
-import { buildCompetitionUpdatePayload } from 'src/pages/competitions/portal-studio-save';
 import { puntoFocalDesdeClic } from 'src/pages/competitions/focal-point';
 import { PortalHero } from 'src/pages/public/portal-hero';
 import { ContentFigureBackground } from 'src/pages/public/content-figure';
@@ -124,9 +123,11 @@ export default function PortalStudioPage() {
     setSaving(true);
     setSaveError('');
     try {
-      // Ver portal-studio-save.js: el PUT es la competencia entera, así que
-      // schedule/bulletin se reenvían intactos junto con settings.public.
-      await apiPut(endpoints.competition(id), buildCompetitionUpdatePayload(row, form));
+      // Un PATCH a la sola sección pública: no hay forma de que este guardado
+      // toque el calendario o el boletín, así que no hace falta releerlos de
+      // `row` ni reenviarlos para no perderlos (ver UpdateCompetitionPublicSettings
+      // del lado del servidor).
+      await apiPatch(endpoints.competitionPublicSettings(id), buildPortalPayload(form));
       toast.success('Portal actualizado.');
       navigate('/dashboard/competitions');
     } catch (e) {

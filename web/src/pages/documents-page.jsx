@@ -26,6 +26,7 @@ import { useLastCompetition } from 'src/hooks/use-last-competition';
 import { DateField } from 'src/components/date-field';
 import { SelectionCompetition, SelectionCategory, SelectionTeam } from 'src/components/selectors';
 import { toast } from 'sonner';
+import { useAuthContext } from 'src/auth/hooks';
 import { EN_VUELO, hayLoteEnVuelo, intervaloDeListaDeLotes, intervaloDeDetalleDeLote } from 'src/pages/documents/batch-polling';
 
 // Los cuatro estados de DocumentBatchState. El mapa anterior decia
@@ -58,6 +59,12 @@ function emptyForm(compId, catId, teamId) {
 }
 
 export default function DocumentsPage() {
+  var { user } = useAuthContext();
+  // Solo SportFrog (frogtech-solutions) puede emitir credenciales -- ver
+  // PlatformAuthority del lado del servidor. El resto pide en su lugar, en
+  // Documentos > Solicitudes de credenciales.
+  var esPlataforma = Boolean(user?.organizations?.some(function(o) { return o.slug === 'frogtech-solutions'; }));
+
   var { data: comps } = useApi(endpoints.competitions);
   var { data: designs } = useApi(endpoints.credentialDesigns);
   var [compId, setCompId] = useLastCompetition(comps);
@@ -116,6 +123,24 @@ export default function DocumentsPage() {
     setError('');
     setEnviando(true);
     try {
+      // Una credencial la emite SportFrog, nunca la organizacion que la pide
+      // -- ver PlatformAuthority del lado del servidor. Si esta organizacion
+      // no es la plataforma, esto no es un lote todavia: es una solicitud
+      // que la plataforma va a revisar, en Documentos > Solicitudes de
+      // credenciales.
+      if (form.kind === 'credential' && !esPlataforma) {
+        await apiPost(endpoints.credentialRequests, {
+          competitionId: form.competitionId,
+          categoryId: form.categoryId || null,
+          teamId: form.teamId || null,
+          validFrom: form.validFrom || null,
+          validTo: form.validTo || null
+        });
+        setRequestOpen(false);
+        toast.success('Solicitud enviada. Vas a ver su estado en Documentos > Solicitudes de credenciales.');
+        return;
+      }
+
       var resp = await apiPost(endpoints.documentBatches, {
         kind: form.kind,
         // Una credencial no tiene plantilla -- RequestDocumentBatch del lado
@@ -370,6 +395,7 @@ export default function DocumentsPage() {
               La credencial se imprime con la estructura fija y el catalogo de acreditacion de la competencia.
               Diseño: <strong>{nombreDisenoDe(form.competitionId)}</strong>.
               Verifica antes que cada deportista tenga una categoria asignada, en Documentos &gt; Acreditaciones.
+              {!esPlataforma && ' Esto queda como una solicitud: SportFrog la revisa antes de imprimir.'}
             </Alert>
           )}
           <SelectionCompetition value={form.competitionId} onChange={function(e) { setForm(Object.assign({}, form, { competitionId: e.target.value, categoryId: '', teamId: '' })); }} required />

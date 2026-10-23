@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Caching;
 using SportFrog.Api.Infrastructure.Persistence;
@@ -52,6 +53,12 @@ public static class CreateCategory
             return Results.NotFound();
         }
 
+        var scoreMode = await database.Sports
+            .AsNoTracking()
+            .Where(candidate => candidate.Code == competition.SportCode)
+            .Select(candidate => candidate.ScoreMode)
+            .SingleAsync(cancellationToken);
+
         if (await policy.InspectRulesetOverrideAsync(
                 competition, contract.RulesetId, cancellationToken) is { } violation)
         {
@@ -91,6 +98,13 @@ public static class CreateCategory
         };
 
         database.Categories.Add(category);
+
+        // See CompetitionStageSeeding: the stages its competition's own
+        // format and sport already imply, written now so a stage
+        // reglamento override has something to attach to from the moment
+        // the category exists.
+        database.CategoryStages.AddRange(
+            CompetitionStageSeeding.BuildCategoryStages(category, competition.Format, scoreMode));
 
         try
         {

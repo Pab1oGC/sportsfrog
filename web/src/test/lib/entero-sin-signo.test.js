@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { bloquearNoEnteros, soloDigitos, bloquearNegativos, soloDecimales } from "src/lib/entero-sin-signo";
+import { bloquearNoEnteros, soloDigitos, bloquearNegativos, soloDecimales, limpiarEntero } from "src/lib/entero-sin-signo";
 
 function eventoDeTecla(key) {
   return { key, preventDefault: vi.fn() };
+}
+
+function eventoDeInput(value) {
+  return { target: { value } };
 }
 
 describe("bloquearNoEnteros", () => {
@@ -62,6 +66,44 @@ describe("bloquearNegativos", () => {
     const e = eventoDeTecla("7");
     bloquearNegativos(e);
     expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe("limpiarEntero", () => {
+  it("saca un cero inicial pegado tras un dígito -- el bug que escribe '01'", () => {
+    const e = eventoDeInput("05");
+    expect(limpiarEntero(e)).toBe("5");
+    // Mutado a mano: así se ve "5" de inmediato en vez de esperar a que
+    // React resincronice el campo al perder el foco.
+    expect(e.target.value).toBe("5");
+  });
+
+  it("un cero solo no se toca -- sigue siendo un valor válido", () => {
+    const e = eventoDeInput("0");
+    expect(limpiarEntero(e)).toBe("0");
+    expect(e.target.value).toBe("0");
+  });
+
+  it("también quita el signo negativo, igual que soloDigitos", () => {
+    const e = eventoDeInput("-5");
+    expect(limpiarEntero(e)).toBe("5");
+  });
+
+  it("un número sin ceros de más queda igual y no toca el DOM", () => {
+    const e = eventoDeInput("42");
+    expect(limpiarEntero(e)).toBe("42");
+    expect(e.target.value).toBe("42");
+  });
+
+  it("varios ceros iniciales -- todos se van, no solo el primero", () => {
+    const e = eventoDeInput("007");
+    expect(limpiarEntero(e)).toBe("7");
+    expect(e.target.value).toBe("7");
+  });
+
+  it("cadena vacía da cadena vacía", () => {
+    const e = eventoDeInput("");
+    expect(limpiarEntero(e)).toBe("");
   });
 });
 

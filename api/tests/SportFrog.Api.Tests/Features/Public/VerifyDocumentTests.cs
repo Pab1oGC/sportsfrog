@@ -156,7 +156,8 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
         int? matchesRequired = 3,
         decimal? fineAmount = null,
         bool voided = false,
-        bool lifted = false)
+        bool lifted = false,
+        bool credentialWithheld = false)
     {
         var sanctionId = Guid.NewGuid();
 
@@ -179,6 +180,7 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
             VoidReason = voided ? "Anulación de prueba" : null,
             LiftedAt = lifted ? Clock.GetUtcNow() : null,
             LiftReason = lifted ? "Apelación de prueba" : null,
+            CredentialWithheldAt = credentialWithheld ? Clock.GetUtcNow() : null,
             ImposedBy = fx.UserId,
             ImposedAt = Clock.GetUtcNow(),
         });
@@ -214,6 +216,7 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
 
         var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
         response.Status.Should().Be(VerificationState.Valid);
+        response.ActiveSanctions.Should().BeEmpty();
     }
 
     [Fact]
@@ -229,6 +232,54 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
         response.Status.Should().Be(VerificationState.Blocked);
     }
 
+    /// <summary>
+    /// What <see cref="VerifyDocument.Response.ActiveSanctions"/> is for:
+    /// anybody holding the card now learns it is a suspension by matches,
+    /// how many remain, and whether the credential itself is withheld --
+    /// never the <see cref="Sanction.Reason"/> behind it (see
+    /// <see cref="VerifyDocument.PublicActiveSanction"/>'s own remarks,
+    /// and <see cref="SportFrog.Api.Tests.Features.Documents.ScanCredentialTests"/>
+    /// for the authenticated counterpart that still says why).
+    /// </summary>
+    [Fact]
+    public async Task Verify_WithAnUnresolvedMatchesSanction_NamesTheKindNeverTheReason()
+    {
+        var fx = await SeedAsync();
+        var serial = await SeedCredentialAsync(fx);
+        await SeedSanctionAsync(fx, matchesRequired: 3, credentialWithheld: true);
+
+        var result = await VerifyAsync(fx, serial);
+
+        var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
+        response.Status.Should().Be(VerificationState.Blocked);
+        var sanction = response.ActiveSanctions.Should().ContainSingle().Subject;
+        sanction.CompletionRule.Should().Be(SanctionCompletionRule.Matches);
+        sanction.MatchesRemaining.Should().Be(3);
+        sanction.FineBalance.Should().BeNull();
+        sanction.CredentialWithheld.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The other half of <see cref="SanctionCompletionRule"/> this endpoint
+    /// now names -- a balance still owed, with no matches term to speak of.
+    /// </summary>
+    [Fact]
+    public async Task Verify_WithAnUnresolvedFineSanction_NamesTheBalance()
+    {
+        var fx = await SeedAsync();
+        var serial = await SeedCredentialAsync(fx);
+        await SeedSanctionAsync(fx, SanctionCompletionRule.Fine, matchesRequired: null, fineAmount: 500m);
+
+        var result = await VerifyAsync(fx, serial);
+
+        var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
+        response.Status.Should().Be(VerificationState.Blocked);
+        var sanction = response.ActiveSanctions.Should().ContainSingle().Subject;
+        sanction.CompletionRule.Should().Be(SanctionCompletionRule.Fine);
+        sanction.MatchesRemaining.Should().BeNull();
+        sanction.FineBalance.Should().Be(500m);
+    }
+
     [Fact]
     public async Task Verify_WithAVoidedSanction_StaysValid()
     {
@@ -240,6 +291,7 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
 
         var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
         response.Status.Should().Be(VerificationState.Valid);
+        response.ActiveSanctions.Should().BeEmpty();
     }
 
     [Fact]
@@ -253,6 +305,7 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
 
         var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
         response.Status.Should().Be(VerificationState.Valid);
+        response.ActiveSanctions.Should().BeEmpty();
     }
 
     [Fact]
@@ -275,6 +328,7 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
 
         var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
         response.Status.Should().Be(VerificationState.Valid);
+        response.ActiveSanctions.Should().BeEmpty();
     }
 
     /// <summary>
@@ -294,6 +348,7 @@ public sealed class VerifyDocumentTests(SportFrogDatabaseFixture fixture)
 
         var response = Assert.IsType<Ok<VerifyDocument.Response>>(result).Value!;
         response.Status.Should().Be(VerificationState.Revoked);
+        response.ActiveSanctions.Should().BeEmpty();
     }
 
     [Fact]

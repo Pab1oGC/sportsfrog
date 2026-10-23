@@ -32,7 +32,17 @@ internal static class EmailTemplate
     private const string CeladesteFondo = "#E7F5FD";
     private const string Tinta = "#111315";
 
-    public static string Render(string etiquetaSuperior, string mensaje, IReadOnlyList<(string Etiqueta, string Valor)> filas)
+    /// <param name="accion">
+    /// An optional call to action, rendered as a button. A notice has nothing
+    /// for the reader to do and passes none; a password reset is the whole
+    /// point of its own mail, and a bare URL in a table cell is not something
+    /// every client turns into a link.
+    /// </param>
+    public static string Render(
+        string etiquetaSuperior,
+        string mensaje,
+        IReadOnlyList<(string Etiqueta, string Valor)> filas,
+        (string Etiqueta, string Url)? accion = null)
     {
         var sb = new StringBuilder();
 
@@ -89,7 +99,33 @@ internal static class EmailTemplate
               .Append(WebUtility.HtmlEncode(valor))
               .Append("</span></td></tr>");
         }
-        sb.Append("</table></td></tr>");
+        sb.Append("</table>");
+
+        // Table-wrapped rather than a styled <a> on its own: Outlook ignores
+        // padding on an anchor, which leaves the "button" as underlined text.
+        // The href is encoded like every other untrusted string here — the
+        // same Render that builds it is the one that escapes it, so no caller
+        // can forget to.
+        if (accion is { } destino)
+        {
+            sb.Append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:20px 0 4px;\"><tr>")
+              .Append("<td style=\"background-color:")
+              .Append(AzulOscuro)
+              .Append(";border-radius:8px;\"><a href=\"")
+              .Append(WebUtility.HtmlEncode(destino.Url))
+              .Append("\" style=\"display:inline-block;padding:12px 22px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;\">")
+              .Append(WebUtility.HtmlEncode(destino.Etiqueta))
+              .Append("</a></td></tr></table>");
+
+            // Spelled out underneath as well: a client that strips the link,
+            // or a reader who wants to see where it goes before following it,
+            // still has the address.
+            sb.Append("<p style=\"margin:12px 0 0;color:#8a9aa5;font-size:11px;word-break:break-all;\">")
+              .Append(WebUtility.HtmlEncode(destino.Url))
+              .Append("</p>");
+        }
+
+        sb.Append("</td></tr>");
 
         sb.Append("<tr><td style=\"padding:16px 24px;border-top:2px solid ")
           .Append(CeladesteFondo)

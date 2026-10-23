@@ -33,6 +33,24 @@ public static class PlatformAuthority
     public const string OrganizationSlug = "frogtech-solutions";
 
     /// <summary>
+    /// The platform organization's own id, or <c>null</c> when the seed
+    /// migration never reached a database that has one.
+    /// </summary>
+    /// <remarks>
+    /// Reads <c>organizations</c>, which carries no row-level security (see
+    /// <c>ScopePublicReadsToPublishedCompetitions</c>'s own remarks on why),
+    /// so this resolves correctly regardless of which organization's
+    /// isolation context the caller is acting under — including none at all,
+    /// which is exactly the case for every endpoint this type gates.
+    /// </remarks>
+    public static Task<Guid?> OrganizationIdAsync(
+        SportFrogDbContext database, CancellationToken cancellationToken) =>
+        database.Organizations
+            .Where(organization => organization.Slug == OrganizationSlug)
+            .Select(organization => (Guid?)organization.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    /// <summary>
     /// The role the token grants in the platform organization, or
     /// <c>null</c> when it grants none there — including when the platform
     /// organization itself does not exist yet, which a database the seed
@@ -42,15 +60,22 @@ public static class PlatformAuthority
     public static async Task<MembershipRole?> RoleForAsync(
         ClaimsPrincipal principal,
         SportFrogDbContext database,
-        CancellationToken cancellationToken)
-    {
-        var platformOrganizationId = await database.Organizations
-            .Where(organization => organization.Slug == OrganizationSlug)
-            .Select(organization => (Guid?)organization.Id)
-            .SingleOrDefaultAsync(cancellationToken);
-
-        return platformOrganizationId is { } organizationId
+        CancellationToken cancellationToken) =>
+        await OrganizationIdAsync(database, cancellationToken) is { } organizationId
             ? JwtAccessTokenIssuer.FindRole(principal, organizationId)
             : null;
-    }
+
+    /// <summary>
+    /// Whether the token's role in the platform organization reaches
+    /// <paramref name="minimum"/> — the one check every platform-only
+    /// operation gates on, so each caller states what it requires without
+    /// re-deriving how "reaches" is decided.
+    /// </summary>
+    public static async Task<bool> ReachesAsync(
+        ClaimsPrincipal principal,
+        SportFrogDbContext database,
+        MembershipRole minimum,
+        CancellationToken cancellationToken) =>
+        await RoleForAsync(principal, database, cancellationToken) is { } role
+            && role.Reaches(minimum);
 }

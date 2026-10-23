@@ -29,9 +29,11 @@ internal sealed class LeadersList : IListProvider
     /// <summary>
     /// LeadersQuery tallies events logged against a Match — a judged
     /// category logs none, so it never has a board to show. Narrower still:
-    /// a sport whose own metrics never affect the score (volleyball's point
-    /// is tallied by set, not summed into a total) has nothing for the
-    /// "only the boards that move the score" filter below to keep either —
+    /// a sport whose own metrics never affect the score (wally's point is
+    /// tallied by set, not summed into a total — volleyball's own point,
+    /// ace, block_point and error now do, see
+    /// <c>AddVolleyballScoringMetrics</c>) has nothing for the "only the
+    /// boards that move the score" filter below to keep either —
     /// <see cref="LoadAsync"/> would resolve the category and still hand
     /// back an empty table, which is honest but not worth cataloging.
     /// </summary>

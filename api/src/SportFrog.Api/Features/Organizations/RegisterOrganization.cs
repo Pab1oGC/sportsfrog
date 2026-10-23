@@ -109,10 +109,8 @@ public static class RegisterOrganization
                 statusCode: StatusCodes.Status401Unauthorized);
         }
 
-        var platformRole = await PlatformAuthority.RoleForAsync(
-            httpContext.User, database, cancellationToken);
-
-        if (platformRole is not { } role || !role.Reaches(MembershipRole.Admin))
+        if (!await PlatformAuthority.ReachesAsync(
+                httpContext.User, database, MembershipRole.Admin, cancellationToken))
         {
             // Same wording .RequireRole() uses for the equivalent refusal —
             // nothing about which role would have been enough.

@@ -35,6 +35,7 @@ public static class DeleteEvent
     private static async Task<IResult> HandleAsync(
         Guid id,
         SportFrogDbContext database,
+        EventDrivenResult resync,
         CancellationToken cancellationToken)
     {
         var recorded = await database.PlayerEvents.SingleOrDefaultAsync(
@@ -44,6 +45,8 @@ public static class DeleteEvent
         {
             return Results.NotFound();
         }
+
+        var matchId = recorded.MatchId;
 
         database.PlayerEvents.Remove(recorded);
 
@@ -61,6 +64,10 @@ public static class DeleteEvent
                         "Volvé a leer los eventos del partido antes de eliminarlo de nuevo.",
                 statusCode: StatusCodes.Status409Conflict);
         }
+
+        // Best-effort, and after the delete is already saved — see
+        // EventDrivenResult's own remarks for when it does nothing instead.
+        await resync.ResyncAsync(matchId, database, cancellationToken);
 
         return Results.NoContent();
     }

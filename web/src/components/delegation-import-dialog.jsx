@@ -8,21 +8,26 @@ import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
 import { toast } from 'sonner';
 import { Iconify } from 'src/components/iconify';
-import { SelectionClub } from 'src/components/selectors';
 import { ImportPreviewGrid, dialogoDeImportacion } from 'src/components/import-preview-grid';
+import { useApi } from 'src/hooks/use-api';
 import { endpoints, default as axios } from 'src/lib/axios';
-import { downloadBlob } from 'src/lib/download-blob';
 
 /**
  * El alta masiva de una delegacion en un deporte individual, de punta a
- * punta: elegir club, bajar la plantilla, subirla, ver que haria y aplicarla.
+ * punta: subir la planilla del club ya elegido afuera, ver que haria y
+ * aplicarla.
  *
- * Se lleva su propio estado y sus propias llamadas adentro en vez de
- * recibirlas por props. La version anterior vivia dentro de NominaPage con
- * once props colgando del padre; al mudarse a Inscripciones habria que
- * haberlas copiado todas de nuevo. Lo que el padre necesita saber de este
- * flujo es una sola cosa -- que se aplico algo, para revalidar su propia
- * lista -- y eso es `onApplied`.
+ * El club es una prop controlada (`clubId`), no un estado propio ni algo que
+ * este dialogo vuelva a preguntar: TeamsPanel ya tiene su propio selector de
+ * club en la barra -- el mismo que habilita el boton "Plantilla" -- y
+ * pedirlo otra vez aca adentro (en un paso "Club y archivo") era justamente
+ * el problema a resolver. RosterPanel tampoco vuelve a preguntar el equipo
+ * que ya se elige afuera; esto hace lo mismo con el club.
+ *
+ * Se lleva el resto de su estado y sus llamadas adentro en vez de recibirlas
+ * por props. Lo que el padre necesita saber de este flujo es una sola cosa
+ * -- que se aplico algo, para revalidar su propia lista -- y eso es
+ * `onApplied`.
  *
  * Es el hermano de ExcelImportDialog, no una variante: aquel se pide para un
  * equipo puntual y su planilla trae dorsal y posicion; este se pide para una
@@ -30,18 +35,21 @@ import { downloadBlob } from 'src/lib/download-blob';
  * que ella misma nombra, y no tiene columnas de dorsal ni posicion porque
  * nunca las tuvo (ver DelegationRosterImportGate del lado del backend).
  */
-export function DelegationImportDialog({ open, onClose, competitionId, onApplied }) {
-  const [clubId, setClubId] = useState('');
+export function DelegationImportDialog({ open, onClose, competitionId, clubId, onApplied }) {
   const [step, setStep] = useState(0);
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Cada apertura arranca limpia: el club y el archivo de la vez anterior no
-  // tienen nada que ver con esta, y dejarlos puestos es la forma mas rapida
-  // de subir el archivo de una delegacion contra otra.
+  // Solo para mostrar a que club corresponde este archivo -- la eleccion en
+  // si ya se hizo afuera, en la barra de TeamsPanel.
+  const { data: clubs } = useApi(endpoints.clubs);
+  const club = (clubs || []).find((c) => c.id === clubId);
+
+  // El archivo y el resultado de la vez anterior no tienen nada que ver con
+  // esta apertura.
   const close = () => {
-    setClubId(''); setFile(null); setResult(null); setStep(0);
+    setFile(null); setResult(null); setStep(0);
     onClose();
   };
 
@@ -52,14 +60,6 @@ export function DelegationImportDialog({ open, onClose, competitionId, onApplied
     return axios.post(url, form, {
       headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` },
     });
-  };
-
-  const downloadTemplate = async () => {
-    if (!clubId) return;
-    try {
-      const res = await axios.get(endpoints.delegationRosterTemplate(competitionId, clubId), { responseType: 'blob' });
-      downloadBlob(res, 'planilla-delegacion.xlsx');
-    } catch (err) { toast.error(err.message); }
   };
 
   const preview = async () => {
@@ -86,31 +86,29 @@ export function DelegationImportDialog({ open, onClose, competitionId, onApplied
   return (
     <Box component="div" sx={{ position: 'fixed', inset: 0, bgcolor: 'overlay.scrim', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }} onClick={close}>
       <Box component="div" sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 3, ...dialogoDeImportacion(step === 1), maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Importar delegación desde Excel</Typography>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+          Importar delegación desde Excel{club ? ` — ${club.name}` : ''}
+        </Typography>
         <Stepper activeStep={step} sx={{ mb: 3 }}>
-          <Step><StepLabel>Club y archivo</StepLabel></Step>
+          <Step><StepLabel>Archivo</StepLabel></Step>
           <Step><StepLabel>Vista previa</StepLabel></Step>
           <Step><StepLabel>Aplicar</StepLabel></Step>
         </Stepper>
 
         {step === 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <SelectionClub value={clubId} onChange={(e) => setClubId(e.target.value)} required
-              helperText="Todos los deportistas del archivo entran bajo este club." />
-            <Box>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Descargá la plantilla, completala y subila. Cada fila elige su propia categoría, así que
-                una sola planilla cubre toda la competencia.
-              </Alert>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button variant="outlined" startIcon={<Iconify icon="eva:download-outline" />} onClick={downloadTemplate} disabled={!clubId}>Plantilla</Button>
-                <Button variant="outlined" component="label" startIcon={<Iconify icon="eva:upload-outline" />} disabled={!clubId}>
-                  Seleccionar archivo
-                  <input type="file" accept=".xlsx,.xls" hidden onChange={(e) => setFile(e.target.files[0])} />
-                </Button>
-              </Box>
-              {file && <Typography variant="body2" sx={{ mt: 1 }}>Archivo: {file.name}</Typography>}
-            </Box>
+          <Box>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {club
+                ? `Todos los deportistas del archivo entran bajo ${club.name}. `
+                : ''}
+              Bajá la plantilla con el botón "Plantilla" de la barra, completala y subila acá. Cada fila
+              elige su propia categoría, así que una sola planilla cubre toda la competencia.
+            </Alert>
+            <Button variant="outlined" component="label" startIcon={<Iconify icon="eva:upload-outline" />}>
+              Seleccionar archivo
+              <input type="file" accept=".xlsx,.xls" hidden onChange={(e) => setFile(e.target.files[0])} />
+            </Button>
+            {file && <Typography variant="body2" sx={{ mt: 1 }}>Archivo: {file.name}</Typography>}
           </Box>
         )}
 

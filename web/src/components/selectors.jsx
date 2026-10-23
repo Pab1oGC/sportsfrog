@@ -53,6 +53,21 @@ function SelectionCourse({ value, onChange, ...props }) {
   return <SelectionField label="Curso" value={value} onChange={onChange} options={options} isLoading={isLoading} {...props} />;
 }
 
+// Nomina (RosterEntry) y cuerpo tecnico/dirigencia (TeamStaff) de un equipo,
+// combinados y achatados a la misma forma que /athletes (un `id` de
+// deportista, no un id de inscripcion) -- una sancion puede recaer sobre
+// cualquiera de los dos por igual, ver las remarks de Sanction.cs. Solo
+// quienes estan hoy en el equipo (`available`/`active` en true): elegir a
+// quien sancionar es una pregunta sobre el plantel actual, no sobre todo
+// el historico.
+const athletesOfTeam = (roster, staff) => {
+  const porId = new Map();
+  for (const entry of [...(roster || []), ...(staff || [])]) {
+    porId.set(entry.athleteId, { id: entry.athleteId, firstName: entry.firstName, lastName: entry.lastName });
+  }
+  return [...porId.values()];
+};
+
 // Un Autocomplete, no un SelectionField mas: elegir una persona entre una
 // lista que puede ser larga se hace buscando por nombre a medida que se
 // tipea, no scrolleando un <Select> -- mismo problema que ya resuelve el
@@ -69,13 +84,33 @@ function SelectionCourse({ value, onChange, ...props }) {
 // buscador -- localizar a alguien en una lista larga escribiendo el nombre
 // no era posible ahi, a diferencia de aca.
 //
-// Igual que SelectionClub, no filtra por activo: RosterPolicy ya rechaza un
-// deportista inactivo con su propio mensaje (ver EnrollIndividual /
-// RegisterPlayer), y esconderlo aca duplicaria esa regla en dos lugares que
-// podrian desalinearse.
-function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText, disabled, multiple = true, required }) {
-  const { data, isLoading } = useApi(endpoints.athletes);
-  const athletes = data || [];
+// `teamId` (opcional) acota la lista a un equipo en vez de toda la
+// organizacion -- Sanciones lo usa asi: una vez elegido el equipo, solo
+// tiene sentido ofrecer a quien ya esta en el (ver athletesOfTeam arriba).
+// Sin este prop el comportamiento es el de siempre, toda la organizacion --
+// NominaPage lo sigue usando para eso, porque inscribir a alguien es elegir
+// a alguien que *todavia no* esta en el equipo. Pasar `teamId=""` (el
+// equipo aun no elegido) deshabilita el campo en vez de mostrar la lista
+// completa como reemplazo, para que nunca se vea una persona ajena al
+// equipo mientras se espera que se elija uno.
+//
+// Igual que SelectionClub, no filtra por activo cuando no hay `teamId`: ver
+// la nota de mas abajo para lo que pasa cuando si lo hay.
+function SelectionAthletes({ teamId, value, onChange, label = 'Deportistas', helperText, disabled, multiple = true, required }) {
+  const porEquipo = teamId !== undefined;
+  // RosterPolicy / StaffPolicy ya rechazan a alguien inactivo con su propio
+  // mensaje (ver EnrollIndividual / RegisterPlayer / RegisterStaff), y
+  // esconderlo aca duplicaria esa regla en dos lugares que podrian
+  // desalinearse -- por eso la lista de toda la organizacion no filtra por
+  // activo. Acotada a un equipo si filtra a quien esta hoy en el (ver el
+  // comentario de arriba): ahi la regla no es "esta inactivo", es "no esta
+  // en este equipo", y esa la pone esta misma lista, no una policy aparte.
+  const { data: todos, isLoading: cargandoTodos } = useApi(porEquipo ? null : endpoints.athletes);
+  const { data: roster, isLoading: cargandoRoster } = useApi(porEquipo && teamId ? `${endpoints.roster(teamId)}?available=true` : null);
+  const { data: staff, isLoading: cargandoStaff } = useApi(porEquipo && teamId ? `${endpoints.teamStaff(teamId)}?active=true` : null);
+
+  const athletes = porEquipo ? athletesOfTeam(roster, staff) : (todos || []);
+  const isLoading = porEquipo ? (cargandoRoster || cargandoStaff) : cargandoTodos;
   const ids = multiple ? value : (value ? [value] : []);
   const seleccionados = ids.map((id) => athletes.find((a) => a.id === id)).filter(Boolean);
 
@@ -84,7 +119,7 @@ function SelectionAthletes({ value, onChange, label = 'Deportistas', helperText,
       multiple={multiple}
       options={athletes}
       loading={isLoading}
-      disabled={disabled}
+      disabled={disabled || (porEquipo && !teamId)}
       getOptionLabel={(a) => `${a.lastName} ${a.firstName}`}
       // Sin esto MUI usa la etiqueta como key de React, y dos deportistas con
       // el mismo nombre repiten key: al filtrar, React deja filas viejas en

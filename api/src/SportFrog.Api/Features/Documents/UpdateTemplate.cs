@@ -2,7 +2,9 @@ using SportFrog.Api.Infrastructure.Storage;
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Jobs;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Configurations;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -24,6 +26,13 @@ namespace SportFrog.Api.Features.Documents;
 /// not: the number is about the design, and bumping it because somebody fixed
 /// a typo in the name would fill the archive with copies of an identical
 /// card and make "printed under version 4" mean nothing.
+///
+/// Platform-only, like <see cref="CreateTemplate"/>, and for the same reason
+/// a credential is never redrawn as a certificate: the template's own id
+/// does not say which organization it belongs to, so that has to be resolved
+/// — via <see cref="PlatformTemplateReader"/>, the same cross-tenant lookup
+/// <c>ApproveDocumentRequest</c> needs for a request it did not raise —
+/// before anything about it can be read or written.
 /// </remarks>
 public static class UpdateTemplate
 {
@@ -55,7 +64,7 @@ public static class UpdateTemplate
     public static IEndpointRouteBuilder MapUpdateTemplate(this IEndpointRouteBuilder routes)
     {
         routes.MapPut("/documents/templates/{id:guid}", HandleAsync)
-            .RequireRole(MembershipRole.Operator)
+            .WithoutOrganizationContext()
             .WithName(nameof(UpdateTemplate))
             .WithSummary("Changes a design, keeping what it looked like before.");
 
@@ -65,54 +74,73 @@ public static class UpdateTemplate
     private static async Task<IResult> HandleAsync(
         Guid id,
         Request request,
+        HttpContext context,
         SportFrogDbContext database,
-        TemplateWriter writer,
-        OrganizationContext organization,
+        OrganizationJobScope scopes,
         CancellationToken cancellationToken)
     {
-        var template = await database.Set<DocumentTemplate>()
-            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (!await PlatformAuthority.ReachesAsync(
+                context.User, database, MembershipRole.Operator, cancellationToken))
+        {
+            return Results.Problem(
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
 
-        if (template is null)
+        if (await PlatformTemplateReader.ResolveOrganizationAsync(database, id, cancellationToken)
+            is not { } organizationId)
         {
             return Results.NotFound();
         }
 
-        var organizationId = organization.RequireOrganizationId();
+        var callerId = JwtAccessTokenIssuer.CurrentUserId(context.User);
 
-        if (!LayoutReader.TryRead(request.Layout, out var layout, out var unreadable))
+        return await scopes.RunAsync(organizationId, callerId, async (services, tenantDb) =>
         {
-            return TemplateFaults.Refuse([unreadable]);
-        }
+            var writer = services.GetRequiredService<TemplateWriter>();
 
-        if (LayoutPolicy.Inspect(layout, template.Kind, key => StorageKeys.Belongs(organizationId, key))
-            is { Count: > 0 } faults)
-        {
-            return TemplateFaults.Refuse(faults);
-        }
+            var template = await tenantDb.Set<DocumentTemplate>()
+                .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
 
-        // Whether the card itself changed, decided by comparing what would be
-        // stored rather than the objects — two layouts built from the same
-        // request are never the same instance, and every save would otherwise
-        // look like a redesign.
-        var redesigned = !LayoutStorage.Comparer.Equals(template.Layout, layout)
-            || template.PageSize != request.PageSize;
+            if (template is null)
+            {
+                return Results.NotFound();
+            }
 
-        template.Name = request.Name.Trim();
-        template.PageSize = request.PageSize;
-        template.Layout = layout;
-        template.IsDefault = request.IsDefault;
+            if (!LayoutReader.TryRead(request.Layout, out var layout, out var unreadable))
+            {
+                return TemplateFaults.Refuse([unreadable]);
+            }
 
-        if (redesigned)
-        {
-            template.Version++;
-            writer.Record(template);
-        }
+            if (LayoutPolicy.Inspect(layout, template.Kind, key => StorageKeys.Belongs(organizationId, key))
+                is { Count: > 0 } faults)
+            {
+                return TemplateFaults.Refuse(faults);
+            }
 
-        await writer.ClearOtherDefaultsAsync(template, cancellationToken);
+            // Whether the card itself changed, decided by comparing what would
+            // be stored rather than the objects — two layouts built from the
+            // same request are never the same instance, and every save would
+            // otherwise look like a redesign.
+            var redesigned = !LayoutStorage.Comparer.Equals(template.Layout, layout)
+                || template.PageSize != request.PageSize;
 
-        await database.SaveChangesAsync(cancellationToken);
+            template.Name = request.Name.Trim();
+            template.PageSize = request.PageSize;
+            template.Layout = layout;
+            template.IsDefault = request.IsDefault;
 
-        return Results.Ok(new Response(template.Version, redesigned));
+            if (redesigned)
+            {
+                template.Version++;
+                writer.Record(template);
+            }
+
+            await writer.ClearOtherDefaultsAsync(template, cancellationToken);
+
+            await tenantDb.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok(new Response(template.Version, redesigned));
+        }, cancellationToken);
     }
 }

@@ -106,6 +106,12 @@ public static class UpdateCategory
         category.MaxWeightKg = contract.MaxWeightKg;
         category.UsesRepechage = contract.UsesRepechage;
 
+        // Not kept in step with CategoryStage's own mirrored copy of
+        // QualifiersPerGroup/UsesRepechage — see CompetitionStageSeeding's
+        // remarks on why that copy exists at all. Nothing reads it from
+        // there yet, so a correction here leaving it stale has no effect
+        // today; it is a real gap the day something starts to.
+
         try
         {
             await database.SaveChangesAsync(cancellationToken);

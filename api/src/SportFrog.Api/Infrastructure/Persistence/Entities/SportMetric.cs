@@ -23,10 +23,14 @@ public sealed class SportMetric
     /// Whether recording this event moves the score.
     /// </summary>
     /// <remarks>
-    /// True for a goal, false for an assist. Under
-    /// <see cref="ScoreMode.Sets"/> no metric carries it: the score comes from
-    /// the periods won, so a volleyball point is counted as a statistic and
-    /// never added to the match result.
+    /// True for a goal, false for an assist. Not a property of
+    /// <see cref="ScoreMode.Sets"/> itself: under it the match result always
+    /// comes from the periods won, never from an event summed directly, but
+    /// an event can still decide which side takes the period being played
+    /// right now — a taekwondo kyorugi point or gam-jeom, a volleyball
+    /// point, ace, block_point or error, all carry this. A wally point does
+    /// not: it is counted as a statistic and never added to the match
+    /// result.
     /// </remarks>
     public bool AffectsScore { get; set; }
 

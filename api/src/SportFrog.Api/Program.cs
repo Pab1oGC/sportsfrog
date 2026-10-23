@@ -32,6 +32,7 @@ using SportFrog.Api.Features.Reports;
 using SportFrog.Api.Features.Lists;
 using SportFrog.Api.Features.Standings;
 using SportFrog.Api.Features.Staff;
+using SportFrog.Api.Features.Staff.Import;
 using SportFrog.Api.Features.Statistics;
 using SportFrog.Api.Features.Teams;
 using SportFrog.Api.Features.Venues;
@@ -216,6 +217,8 @@ builder.Services.AddScoped<PublicDocumentReader>();
 builder.Services.AddSingleton<BCryptPasswordHasher>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionIssuer>();
+builder.Services.AddScoped<PasswordResetTokens>();
+builder.Services.AddScoped<SportFrog.Api.Features.Auth.SendPasswordResetJob>();
 
 builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.CumulativeRulesetShape>();
 builder.Services.AddSingleton<SportFrog.Api.Features.Rulebook.IRulesetShapeRules, SportFrog.Api.Features.Rulebook.SetsRulesetShape>();
@@ -247,6 +250,7 @@ builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListProvider, SportF
 builder.Services.AddSingleton<SportFrog.Api.Features.Lists.IListRegistry, SportFrog.Api.Features.Lists.ListRegistry>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.RulesetUsage>();
+builder.Services.AddScoped<SportFrog.Api.Features.Rulebook.CategoryStagePolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.Categories.CategoryUsage>();
 builder.Services.AddScoped<SportFrog.Api.Features.Competitions.CompetitionActivity>();
@@ -300,12 +304,14 @@ builder.Services.AddSingleton<SportFrog.Api.Features.Matches.IResultShapeRulesRe
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.MatchRulesLookup>();
 builder.Services.AddScoped<SportFrog.Api.Features.Matches.ResultPolicy>();
 builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventPolicy>();
+builder.Services.AddScoped<SportFrog.Api.Features.MatchEvents.EventDrivenResult>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.PhotoAssessor>();
 builder.Services.AddScoped<SportFrog.Api.Features.Athletes.AthletePhoto>();
 builder.Services.AddScoped<SportFrog.Api.Features.Clubs.ClubPhoto>();
 builder.Services.AddScoped<SportFrog.Api.Infrastructure.Storage.PortalPicture>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.RosterImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Rosters.Import.DelegationRosterImportReview>();
+builder.Services.AddScoped<SportFrog.Api.Features.Staff.Import.StaffImportReview>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateBackground>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.TemplateWriter>();
 builder.Services.AddScoped<SportFrog.Api.Features.Documents.CredentialNumbering>();
@@ -322,6 +328,14 @@ builder.Services
     .Bind(builder.Configuration.GetSection(SportFrog.Api.Features.Documents.DocumentOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+
+// Bound, but never ValidateOnStart: an installation that has not set up
+// password recovery still has to run, the same stance SmtpOptions takes — see
+// PasswordResetOptions for why a blank base address is a supported state.
+builder.Services
+    .AddOptions<SportFrog.Api.Features.Auth.PasswordResetOptions>()
+    .Bind(builder.Configuration.GetSection(
+        SportFrog.Api.Features.Auth.PasswordResetOptions.SectionName));
 
 // A validator exists, so its contract is validated. Nothing is wired per
 // endpoint (DD-07).
@@ -407,10 +421,13 @@ api.MapCreateRuleset();
 api.MapReadRulesets();
 api.MapUpdateRuleset();
 api.MapDeleteRuleset();
+api.MapUpdateCategoryStageRuleset();
 
 api.MapCreateCompetition();
 api.MapReadCompetitions();
 api.MapUpdateCompetition();
+api.MapUpdateCompetitionPublicSettings();
+api.MapUpdateCompetitionBulletinSettings();
 api.MapDeleteCompetition();
 api.MapChangeCompetitionStatus();
 api.MapPublishCompetition();
@@ -419,6 +436,7 @@ api.MapReadCompetitionBulletin();
 api.MapCreateCategory();
 api.MapReadCategories();
 api.MapUpdateCategory();
+api.MapUpdateCategoryDisplayOrder();
 api.MapDeleteCategory();
 
 api.MapCreateTeam();
@@ -439,6 +457,9 @@ api.MapReadTeamStaff();
 api.MapUpdateStaffRole();
 api.MapWithdrawStaff();
 api.MapStrikeStaff();
+api.MapBuildStaffTemplate();
+api.MapPreviewStaffImport();
+api.MapApplyStaffImport();
 
 api.MapImposeSanction();
 api.MapReadSanctions();
@@ -449,7 +470,7 @@ api.MapWithholdCredential();
 api.MapRecordSanctionPayment();
 api.MapReviewSanctionPayment();
 api.MapVoidSanctionPayment();
-api.MapReadPendingSanctionReceipts();
+api.MapReadSanctionPayment();
 api.MapScanCredential();
 api.MapBuildRosterTemplate();
 api.MapPreviewRosterImport();
@@ -488,6 +509,12 @@ api.MapRequestDocumentBatch();
 api.MapReadDocuments();
 api.MapRevokeDocument();
 api.MapPreviewCredential();
+api.MapRequestDocumentRequest();
+api.MapReadDocumentRequests();
+api.MapCancelDocumentRequest();
+api.MapReadPendingDocumentRequests();
+api.MapApproveDocumentRequest();
+api.MapRejectDocumentRequest();
 
 api.MapVenues();
 api.MapVenueSpaces();
@@ -548,6 +575,8 @@ api.MapReadLists();
 api.MapDrawGroups();
 api.MapDrawCalendar();
 api.MapScheduleCalendar();
+api.MapReadCompetitionStages();
+api.MapUpdateCompetitionStageSchedule();
 api.MapAdvanceBracket();
 api.MapDrawRepechage();
 api.MapPromoteGroupStage();
@@ -573,6 +602,8 @@ api.MapSignIn();
 api.MapRenewSession();
 api.MapSignOut();
 api.MapChangePassword();
+api.MapRequestPasswordReset();
+api.MapResetPassword();
 
 app.MapGet("/health", () => Results.Ok())
     .AllowAnonymous()

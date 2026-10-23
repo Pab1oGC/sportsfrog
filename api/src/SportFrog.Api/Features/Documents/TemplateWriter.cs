@@ -57,8 +57,14 @@ internal sealed class TemplateWriter(SportFrogDbContext database, OrganizationCo
             return;
         }
 
+        // OrgId is explicit here and not left to tenant_isolation to narrow:
+        // since the catalog policy, a connection can see another
+        // organization's row (the platform's own, marked shared) alongside
+        // its own, and writing that row back would violate tenant_isolation's
+        // own WITH CHECK rather than silently reach it.
         var others = await database.Set<DocumentTemplate>()
-            .Where(candidate => candidate.Kind == template.Kind
+            .Where(candidate => candidate.OrgId == template.OrgId
+                && candidate.Kind == template.Kind
                 && candidate.Id != template.Id
                 && candidate.IsDefault)
             .ToListAsync(cancellationToken);

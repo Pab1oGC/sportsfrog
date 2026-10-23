@@ -275,7 +275,7 @@ export function SanctionsPanel({ competitionId, prefill }) {
                 <SelectionCategory
                   competitionId={competitionId}
                   value={form.categoryId}
-                  onChange={(e) => setForm({ ...form, categoryId: e.target.value, teamId: '' })}
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value, teamId: '', athleteId: '' })}
                   required
                 />
               </Box>
@@ -283,7 +283,7 @@ export function SanctionsPanel({ competitionId, prefill }) {
                 <SelectionTeam
                   categoryId={form.categoryId}
                   value={form.teamId}
-                  onChange={(e) => setForm({ ...form, teamId: e.target.value })}
+                  onChange={(e) => setForm({ ...form, teamId: e.target.value, athleteId: '' })}
                   required
                 />
               </Box>
@@ -291,9 +291,10 @@ export function SanctionsPanel({ competitionId, prefill }) {
             <SelectionAthletes
               label="Persona sancionada"
               multiple={false}
+              teamId={form.teamId}
               value={form.athleteId}
               onChange={(athleteId) => setForm({ ...form, athleteId })}
-              helperText="Deportista o integrante del cuerpo técnico/dirigencia -- se busca por nombre."
+              helperText="Deportista o integrante del cuerpo técnico/dirigencia del equipo elegido -- se busca por nombre."
               required
             />
           </>

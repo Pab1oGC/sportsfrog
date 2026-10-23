@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Infrastructure.Auth;
+using SportFrog.Api.Infrastructure.Jobs;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
+using SportFrog.Api.Infrastructure.Tenancy;
 
 namespace SportFrog.Api.Features.Documents;
 
@@ -18,13 +20,17 @@ namespace SportFrog.Api.Features.Documents;
 /// So this is "stop offering it", not "undo it". The design disappears from
 /// the listings and from anything about to print, and every card already
 /// issued under it still resolves.
+///
+/// Platform-only, like <see cref="CreateTemplate"/> and
+/// <see cref="UpdateTemplate"/>, and resolved the same cross-tenant way —
+/// see <see cref="UpdateTemplate"/>'s own remarks.
 /// </remarks>
 public static class DeleteTemplate
 {
     public static IEndpointRouteBuilder MapDeleteTemplate(this IEndpointRouteBuilder routes)
     {
         routes.MapDelete("/documents/templates/{id:guid}", HandleAsync)
-            .RequireRole(MembershipRole.Operator)
+            .WithoutOrganizationContext()
             .WithName(nameof(DeleteTemplate))
             .WithSummary("Retires a design, keeping everything issued from it.");
 
@@ -33,26 +39,48 @@ public static class DeleteTemplate
 
     private static async Task<IResult> HandleAsync(
         Guid id,
+        HttpContext context,
         SportFrogDbContext database,
+        OrganizationJobScope scopes,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
-        var template = await database.Set<DocumentTemplate>()
-            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (!await PlatformAuthority.ReachesAsync(
+                context.User, database, MembershipRole.Operator, cancellationToken))
+        {
+            return Results.Problem(
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
 
-        if (template is null)
+        if (await PlatformTemplateReader.ResolveOrganizationAsync(database, id, cancellationToken)
+            is not { } organizationId)
         {
             return Results.NotFound();
         }
 
-        template.DeletedAt = clock.GetUtcNow();
+        var callerId = JwtAccessTokenIssuer.CurrentUserId(context.User);
 
-        // A retired design cannot go on being the one offered first. Left set,
-        // it would be a default that no listing shows and nothing can pick.
-        template.IsDefault = false;
+        return await scopes.RunAsync(organizationId, callerId, async (_, tenantDb) =>
+        {
+            var template = await tenantDb.Set<DocumentTemplate>()
+                .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
 
-        await database.SaveChangesAsync(cancellationToken);
+            if (template is null)
+            {
+                return Results.NotFound();
+            }
 
-        return Results.NoContent();
+            template.DeletedAt = clock.GetUtcNow();
+
+            // A retired design cannot go on being the one offered first. Left
+            // set, it would be a default that no listing shows and nothing
+            // can pick.
+            template.IsDefault = false;
+
+            await tenantDb.SaveChangesAsync(cancellationToken);
+
+            return Results.NoContent();
+        }, cancellationToken);
     }
 }

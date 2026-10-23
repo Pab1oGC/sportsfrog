@@ -46,11 +46,28 @@ public sealed class TemplateBackground(ObjectStore store, OrganizationContext or
     }
 
     /// <summary>A temporary link the editor can draw the artwork from.</summary>
-    public async Task<string?> LinkAsync(string? key, CancellationToken cancellationToken) =>
+    public Task<string?> LinkAsync(string? key, CancellationToken cancellationToken) =>
+        LinkAsync(organization.RequireOrganizationId(), key, cancellationToken);
+
+    /// <summary>
+    /// A temporary link to artwork owned by a specific organization, rather
+    /// than whichever one is acting now.
+    /// </summary>
+    /// <remarks>
+    /// A catalog design's artwork belongs to the platform organization, not
+    /// to whichever organization is reading the design to print or preview
+    /// it — see <see cref="DocumentTemplate.IsCatalog"/>'s own remarks. The
+    /// ambient overload above would ask <see cref="ObjectStore"/> for a key
+    /// under the wrong organization's prefix and get a silent refusal back
+    /// (<see cref="ObjectStore.ReadLinkAsync"/> logs and returns null rather
+    /// than throw, exactly because a missing picture should not take the
+    /// whole page down); this is the caller naming the right one instead.
+    /// </remarks>
+    public async Task<string?> LinkAsync(
+        Guid organizationId, string? key, CancellationToken cancellationToken) =>
         string.IsNullOrEmpty(key)
             ? null
-            : await store.ReadLinkAsync(
-                organization.RequireOrganizationId(), key, cancellationToken);
+            : await store.ReadLinkAsync(organizationId, key, cancellationToken);
 
     /// <summary>
     /// Wide enough to print a card at 300 dots per inch with room to spare.

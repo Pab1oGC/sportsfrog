@@ -67,7 +67,7 @@ describe("buildLiveActions -- Finalizar (con eventos) vs Resultado (manual)", ()
     expect(labels).not.toContain("Resultado");
   });
 
-  it("con sportInfo cargado pero sin ninguna métrica que sume (voley): pide el resultado a mano", () => {
+  it("con sportInfo cargado pero sin ninguna métrica que sume (wally): pide el resultado a mano", () => {
     const labels = etiquetas(partido({ status: "in_progress" }), callbacks({ sportInfo: sportSinMetricaDeMarcador }));
     expect(labels).toContain("Resultado");
     expect(labels).not.toContain("Finalizar con el marcador de los eventos");

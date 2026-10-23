@@ -278,13 +278,27 @@ public sealed class SanctionPaymentsTests(SportFrogDatabaseFixture fixture)
         await using var transaction = await context.Database.BeginTransactionAsync();
         await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
 
+        var organization = OrganizationFor(fx.OrgId, fx.UserId);
+
         var result = await ReadSanctions.ReadAsync(
-            fx.CompetitionId, fx.SanctionId, context, new SanctionProgress(context), CancellationToken.None);
+            fx.CompetitionId, fx.SanctionId, context, new SanctionProgress(context), SigningReceipts(organization),
+            CancellationToken.None);
 
         return Assert.IsType<Ok<ReadSanctions.Response>>(result).Value!;
     }
 
-    private async Task<List<ReadPendingSanctionReceipts.PendingReceipt>> ReadPendingAsync(Fixture fx)
+    private async Task<List<ReadSanctions.Response>> ListAsync(Fixture fx)
+    {
+        await using var context = fixture.CreateAppContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await SportFrogDatabaseFixture.SetCurrentOrganizationAsync(context, fx.OrgId);
+
+        var result = await ReadSanctions.ListAsync(fx.CompetitionId, context, new SanctionProgress(context), CancellationToken.None);
+
+        return Assert.IsType<Ok<List<ReadSanctions.Response>>>(result).Value!;
+    }
+
+    private async Task<IResult> ReadPaymentAsync(Fixture fx, Guid paymentId)
     {
         await using var context = fixture.CreateAppContext();
         await using var transaction = await context.Database.BeginTransactionAsync();
@@ -292,10 +306,11 @@ public sealed class SanctionPaymentsTests(SportFrogDatabaseFixture fixture)
 
         var organization = OrganizationFor(fx.OrgId, fx.UserId);
 
-        var result = await ReadPendingSanctionReceipts.ListAsync(
-            fx.CompetitionId, context, SigningReceipts(organization), CancellationToken.None);
+        var result = await ReadSanctionPayment.HandleAsync(
+            fx.CompetitionId, paymentId, context, SigningReceipts(organization), CancellationToken.None);
+        await transaction.CommitAsync();
 
-        return Assert.IsType<Ok<List<ReadPendingSanctionReceipts.PendingReceipt>>>(result).Value!;
+        return result;
     }
 
     // ---- Recording ---------------------------------------------------
@@ -490,21 +505,99 @@ public sealed class SanctionPaymentsTests(SportFrogDatabaseFixture fixture)
         response.FineBalance.Should().Be(0m);
     }
 
-    // ---- The pending receipts tray -----------------------------------------
+    // ---- Un comprobante en la propia lista de pagos de la sanción ----------
+
+    /// <summary>
+    /// Lo que reemplazó a la pestaña "Comprobantes pendientes": la propia
+    /// lista de pagos de una sanción ya trae el link firmado de cada uno,
+    /// para que la tabla de pagos lo muestre de una (miniatura clickeable),
+    /// sin un segundo pedido por fila.
+    /// </summary>
+    [Fact]
+    public async Task Read_OneSanction_SignsAReceiptLinkForEachOfItsPayments()
+    {
+        var fx = await SeedSanctionAsync(fineAmount: 500m);
+        await SeedPaymentAsync(
+            fx, 500m, PaymentMethod.Transfer, ReceiptReviewState.Pending,
+            receiptKey: StorageKeys.PaymentReceipt(fx.OrgId, fx.SanctionId, "pdf"));
+
+        var sanction = await ReadAsync(fx);
+
+        var payment = sanction.Payments.Should().ContainSingle().Subject;
+        payment.HasReceipt.Should().BeTrue();
+        payment.ReceiptUrl.Should().NotBeNullOrEmpty();
+    }
+
+    /// <summary>
+    /// A diferencia de <see cref="Read_OneSanction_SignsAReceiptLinkForEachOfItsPayments"/>:
+    /// la lista entera de la competencia no firma nada por fila -- firmar un
+    /// link por cada pago de cada sanción en cada carga de página sería
+    /// trabajo de más casi siempre, ver <see cref="ReadSanctions.Payment.ReceiptUrl"/>
+    /// propio.
+    /// </summary>
+    [Fact]
+    public async Task List_NeverSignsAReceiptLink_EvenWhenThePaymentHasOne()
+    {
+        var fx = await SeedSanctionAsync(fineAmount: 500m);
+        await SeedPaymentAsync(
+            fx, 500m, PaymentMethod.Transfer, ReceiptReviewState.Pending,
+            receiptKey: StorageKeys.PaymentReceipt(fx.OrgId, fx.SanctionId, "pdf"));
+
+        var sanctions = await ListAsync(fx);
+
+        var payment = sanctions.Should().ContainSingle().Which.Payments.Should().ContainSingle().Subject;
+        payment.HasReceipt.Should().BeTrue();
+        payment.ReceiptUrl.Should().BeNull();
+    }
+
+    // ---- Reading one payment back, after the fact --------------------------
+
+    /// <summary>
+    /// The whole point of this endpoint: a payment already reviewed (or a
+    /// sanction already lifted or served around it) drops off
+    /// <see cref="ReadPendingSanctionReceipts"/> for good, and
+    /// <see cref="ReadSanctions"/> only ever carries <c>HasReceipt</c>, a
+    /// bare flag -- this is the only path left back to the receipt itself.
+    /// </summary>
+    [Fact]
+    public async Task ReadPayment_AlreadyVerified_StillSignsALinkToItsReceipt()
+    {
+        var fx = await SeedSanctionAsync(fineAmount: 500m);
+        var paymentId = await SeedPaymentAsync(
+            fx, 500m, PaymentMethod.Transfer, ReceiptReviewState.Verified,
+            receiptKey: StorageKeys.PaymentReceipt(fx.OrgId, fx.SanctionId, "pdf"));
+
+        var result = await ReadPaymentAsync(fx, paymentId);
+
+        var response = Assert.IsType<Ok<ReadSanctionPayment.Response>>(result).Value!;
+        response.ReceiptUrl.Should().NotBeNullOrEmpty();
+        response.ReviewState.Should().Be(ReceiptReviewState.Verified);
+    }
 
     [Fact]
-    public async Task ReadPendingReceipts_ListsAPendingTransferButNotACashOrAVoidedOne()
+    public async Task ReadPayment_InCash_HasNoReceiptToLinkTo()
     {
-        var fx = await SeedSanctionAsync(fineAmount: 900m);
-        var pendingId = await SeedPaymentAsync(
-            fx, 300m, PaymentMethod.Transfer, ReceiptReviewState.Pending, receiptKey: "receipts/x/pending.pdf");
-        await SeedPaymentAsync(fx, 300m, PaymentMethod.Cash, ReceiptReviewState.Verified);
-        var voidedPaymentId = await SeedPaymentAsync(
-            fx, 300m, PaymentMethod.Transfer, ReceiptReviewState.Pending, receiptKey: "receipts/x/voided.pdf");
-        await VoidAsync(fx, voidedPaymentId, "Anulado de prueba");
+        var fx = await SeedSanctionAsync(fineAmount: 500m);
+        var result = await RecordAsync(fx, 500m, PaymentMethod.Cash, receiptDataUrl: null);
+        var paymentId = Assert.IsType<Created<RecordSanctionPayment.Response>>(result).Value!.Id;
 
-        var pending = await ReadPendingAsync(fx);
+        var read = await ReadPaymentAsync(fx, paymentId);
 
-        pending.Should().ContainSingle(receipt => receipt.Id == pendingId);
+        var response = Assert.IsType<Ok<ReadSanctionPayment.Response>>(read).Value!;
+        response.ReceiptUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ReadPayment_FromAnotherCompetition_ReturnsNotFound()
+    {
+        var fx = await SeedSanctionAsync(fineAmount: 500m);
+        var otherFx = await SeedSanctionAsync(fineAmount: 500m);
+        var paymentId = await SeedPaymentAsync(
+            fx, 500m, PaymentMethod.Transfer, ReceiptReviewState.Verified,
+            receiptKey: StorageKeys.PaymentReceipt(fx.OrgId, fx.SanctionId, "pdf"));
+
+        var result = await ReadPaymentAsync(otherFx, paymentId);
+
+        Assert.IsType<NotFound>(result);
     }
 }

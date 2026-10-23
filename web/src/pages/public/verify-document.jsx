@@ -54,12 +54,16 @@ function formatearFecha(valor) {
  * misma dirección, según quien lo escanea:
  *
  * - Sin sesión: VerifyDocument.cs, anónimo, acotado a lo que la propia
- *   tarjeta ya dice (RNF-16) -- "no habilitada" cuando hay una sanción sin
- *   resolver, nunca por qué.
+ *   tarjeta ya dice (RNF-16) -- salvo por el tipo de sanción sin resolver
+ *   (por partidos, por multa o por ambas, cuánto falta de cada una): eso sí
+ *   se cuenta, a propósito, porque de otro modo "no habilitada" no le sirve
+ *   a nadie para decidir nada. El motivo libre detrás de la sanción, y el
+ *   de una revocación, siguen siendo internos -- esos sí son el detalle
+ *   disciplinario de una persona, no la forma de lo que hoy la bloquea.
  * - Con sesión de la organización: ScanCredential.cs, con la foto, el
- *   motivo de una revocación y el detalle completo de la sanción -- lo que
- *   un steward en la puerta necesita para decidir algo, no solo para
- *   confirmarlo.
+ *   motivo de una revocación y el motivo propio de la sanción además del
+ *   mismo detalle -- lo que un steward en la puerta necesita para decidir
+ *   algo, no solo para confirmarlo.
  *
  * `authLoading` decide cuál de las dos pedir recién cuando se sabe si hay
  * sesión o no -- pedir la pública de entrada y cambiar después haría
@@ -159,6 +163,21 @@ function ResultadoPublico({ data }) {
         )}
       </Stack>
 
+      {/* Lo que sí se cuenta de una sanción sin resolver -- VerifyDocument.cs
+          ya lo trae como PublicActiveSanction, reducido a eso a propósito:
+          nunca el motivo libre que cargó quien la impuso (ver SancionActiva,
+          más abajo, que simplemente no tiene `reason` para mostrar acá). */}
+      {data.activeSanctions?.length > 0 && (
+        <Box sx={{ mt: 2.5 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+            Sanciones sin resolver
+          </Typography>
+          <Stack spacing={1}>
+            {data.activeSanctions.map((sancion, i) => <SancionActiva key={i} sancion={sancion} />)}
+          </Stack>
+        </Box>
+      )}
+
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
         Serie {data.serialNumber}
       </Typography>
@@ -244,12 +263,23 @@ function ResultadoStaff({ data }) {
   );
 }
 
+// Compartida entre las dos respuestas -- la pública (VerifyDocument.cs,
+// PublicActiveSanction: nunca trae `reason`) y la de sesión
+// (ScanCredential.cs, ActiveSanction: sí lo trae). El título es el tipo de
+// sanción (por partidos, por multa o por ambas), el "porqué" que cualquiera
+// de las dos necesita para decidir algo con esto; el motivo (el texto libre
+// que cargó quien la impuso) se agrega debajo solo cuando el dato llega --
+// nunca inventado, nunca pedido de más al público.
 function SancionActiva({ sancion }) {
+  const regla = COMPLETION_RULE_LABEL[sancion.completionRule] || sancion.completionRule;
+
   return (
     <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'error.main', borderRadius: 1, bgcolor: (t) => alpha(t.palette.error.main, 0.06) }}>
-      <Typography variant="body2" fontWeight={600}>{sancion.reason}</Typography>
+      <Typography variant="body2" fontWeight={600}>Sanción por {regla.toLowerCase()}</Typography>
+      {sancion.reason && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{sancion.reason}</Typography>
+      )}
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.75 }}>
-        <Chip size="small" variant="outlined" label={COMPLETION_RULE_LABEL[sancion.completionRule] || sancion.completionRule} />
         {sancion.matchesRemaining != null && (
           <Chip size="small" color="warning" label={`Faltan ${sancion.matchesRemaining} partido(s)`} />
         )}

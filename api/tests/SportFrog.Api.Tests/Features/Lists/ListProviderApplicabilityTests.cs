@@ -109,8 +109,8 @@ public sealed class ListProviderApplicabilityTests(SportFrogDatabaseFixture fixt
         (await provider.AppliesToAsync("football", ScoreMode.Cumulative, database, CancellationToken.None)).Should().BeTrue();
         // basketball: 'free_throw', 'field_goal' and 'three_point' all affect the score.
         (await provider.AppliesToAsync("basketball", ScoreMode.Cumulative, database, CancellationToken.None)).Should().BeTrue();
-        // volleyball: its only scoring-shaped metric ('point') is tallied by set, not summed — affects_score is false.
-        (await provider.AppliesToAsync("volleyball", ScoreMode.Sets, database, CancellationToken.None)).Should().BeFalse();
+        // volleyball: 'point', 'ace', 'block_point' and 'error' all affect the score (AddVolleyballScoringMetrics).
+        (await provider.AppliesToAsync("volleyball", ScoreMode.Sets, database, CancellationToken.None)).Should().BeTrue();
         (await provider.AppliesToAsync("taekwondo_poomsae", ScoreMode.Judged, database, CancellationToken.None)).Should().BeFalse();
     }
 

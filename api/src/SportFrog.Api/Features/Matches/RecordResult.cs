@@ -133,9 +133,122 @@ public static class RecordResult
             return Refuse(violations);
         }
 
+        if (RefuseUnpriceableTie(match!, rules!, request.PeriodScores) is { } unpriceable)
+        {
+            return unpriceable;
+        }
+
+        if (await RefuseIfContradictsEventsAsync(match!, rules!, request.PeriodScores, database, cancellationToken)
+            is { } contradiction)
+        {
+            return contradiction;
+        }
+
         return await FinishAsync(
             match!, rules!, request.PeriodScores, request.Notes, database, outcomeRules, activeSanctions,
             organization, clock, cancellationToken);
+    }
+
+    /// <summary>
+    /// Whether a tied cumulative result is one this competition can
+    /// actually do anything with.
+    /// </summary>
+    /// <remarks>
+    /// A league match is allowed to end level — <see cref="MatchOutcomes.Draw"/>
+    /// is a real outcome, priced however <see cref="RulesetConfiguration.Points"/>
+    /// says to. Nothing before this checked, at the moment a result is
+    /// recorded, whether a particular tie is one the ruleset actually prices
+    /// or one a shootout can still resolve — a knockout match
+    /// (<see cref="Match.Phase"/> is not null) always has
+    /// <see cref="RecordPenalties"/> waiting for it afterwards, the same
+    /// draw <see cref="SportFrog.Api.Features.Draw.AdvanceBracket"/> already
+    /// refuses to carry a next round out of. A league match that ties
+    /// without the ruleset pricing a draw has neither: <c>StandingsCalculator</c>
+    /// silently credits it zero points for both sides, with nothing anywhere
+    /// telling anyone why the table does not add up.
+    ///
+    /// Only <see cref="ScoreMode.Cumulative"/> ever reaches this with
+    /// anything to check: <see cref="SetsResultShape"/> already refuses any
+    /// tied period on its own, and a sets-mode match's own outcome
+    /// (<c>win_3_1</c>, never a bare "draw") is exactly the set of keys
+    /// <see cref="Rulebook.RulesetPolicy"/> already required the ruleset to
+    /// price before it could be saved.
+    /// </remarks>
+    internal static IResult? RefuseUnpriceableTie(
+        Match match, MatchRules rules, IReadOnlyList<PeriodScore> periods)
+    {
+        if (rules.Sport.ScoreMode != ScoreMode.Cumulative
+            || match.Phase is not null
+            || rules.Configuration.Points.ContainsKey(MatchOutcomes.Draw)
+            || periods.Sum(period => period.Home) != periods.Sum(period => period.Away))
+        {
+            return null;
+        }
+
+        return Results.Problem(
+            detail: "Este reglamento no admite empates, y este partido no es de una eliminatoria " +
+                    "que lo pueda desempatar por penales. Si se jugó una prórroga, cargá el " +
+                    "resultado con ella incluida; si no, el reglamento necesita admitir el empate.",
+            statusCode: StatusCodes.Status409Conflict);
+    }
+
+    /// <summary>
+    /// Whether a result typed in by hand says something this match's own
+    /// events already disagree with.
+    /// </summary>
+    /// <remarks>
+    /// Only once there is something to disagree with. A sport with no
+    /// scoring metric at all (wally), or a match nobody logged a single
+    /// qualifying event for — the recorder who skips live entry and types
+    /// the final score straight in, exactly the case
+    /// <see cref="HandleFromEventsAsync"/>'s own remarks describe as the
+    /// only way in for those — has nothing here for the typed score to
+    /// contradict, and is let through unchecked, same as before this
+    /// existed.
+    ///
+    /// Once events exist, though, letting them and the typed score each say
+    /// something different is the exact inconsistency this whole feature
+    /// closes: a 2-1 half nobody's goals add up to is not a different
+    /// opinion about the match, it is one of the two numbers being wrong.
+    /// </remarks>
+    private static async Task<IResult?> RefuseIfContradictsEventsAsync(
+        Match match,
+        MatchRules rules,
+        IReadOnlyList<PeriodScore> submitted,
+        SportFrogDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var (fromEvents, hasEvents, refusal) =
+            await TryDerivePeriodsFromEventsAsync(match, rules, database, cancellationToken);
+
+        if (refusal is not null || !hasEvents || fromEvents is null)
+        {
+            return null;
+        }
+
+        var byPeriod = submitted.ToDictionary(period => period.Period);
+
+        foreach (var derived in fromEvents)
+        {
+            if (byPeriod.TryGetValue(derived.Period, out var typed)
+                && typed.Home == derived.Home && typed.Away == derived.Away)
+            {
+                continue;
+            }
+
+            var typedLabel = byPeriod.TryGetValue(derived.Period, out var mismatched)
+                ? $"{mismatched.Home}-{mismatched.Away}"
+                : "sin cargar";
+
+            return Results.Problem(
+                detail: $"El {rules.Configuration.Periods.Label} {derived.Period} que cargaste a mano " +
+                        $"({typedLabel}) no coincide con lo que dicen los eventos de este partido " +
+                        $"({derived.Home}-{derived.Away}). Corregí los eventos o el marcador, pero no " +
+                        "pueden contradecirse.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -146,12 +259,14 @@ public static class RecordResult
     /// </summary>
     /// <remarks>
     /// Refused only when this sport's ruleset has no metric that actually
-    /// moves the score — a volleyball point is a statistic, not something to
+    /// moves the score — a wally point is a statistic, not something to
     /// sum, so there is nothing here to tally and the manual form is the
     /// only way in. That used to be every sport decided in sets, but it no
-    /// longer is: a taekwondo kyorugi point or gam-jeom does affect the score
-    /// (see <c>AddTaekwondoKyorugiScoringEvents</c>), so this now asks the
-    /// catalog directly instead of assuming the answer from the score mode.
+    /// longer is: a taekwondo kyorugi point or gam-jeom, and a volleyball
+    /// point, ace, block_point or error, all do affect the score (see
+    /// <c>AddTaekwondoKyorugiScoringEvents</c> and
+    /// <c>AddVolleyballScoringMetrics</c>), so this now asks the catalog
+    /// directly instead of assuming the answer from the score mode.
     ///
     /// A sets-mode sport that does qualify still is not a cumulative one:
     /// <see cref="LiveScore.ComputePlayedPeriods"/> reports only the asaltos
@@ -177,44 +292,15 @@ public static class RecordResult
             return refusal;
         }
 
-        var enabledMetrics = rules!.Configuration.Metrics;
+        var (periods, _, deriveRefusal) =
+            await TryDerivePeriodsFromEventsAsync(match!, rules!, database, cancellationToken);
 
-        var puedeDerivarseDeEventos = await database.SportMetrics
-            .AsNoTracking()
-            .AnyAsync(
-                metric => metric.SportCode == rules.Sport.Code
-                    && metric.AffectsScore
-                    && (enabledMetrics == null || enabledMetrics.Contains(metric.Code)),
-                cancellationToken);
-
-        if (!puedeDerivarseDeEventos)
+        if (deriveRefusal is not null)
         {
-            return Results.Problem(
-                detail: $"{rules.Sport.Name} no tiene, bajo este reglamento, ningún evento que sume al " +
-                        "marcador — no hay nada que sumar. Cargá el resultado a mano.",
-                statusCode: StatusCodes.Status409Conflict);
+            return deriveRefusal;
         }
 
-        var events = await database.PlayerEvents
-            .AsNoTracking()
-            .Where(recorded => recorded.MatchId == id && recorded.Metric!.AffectsScore)
-            .Select(recorded => new ScoringEvent(
-                recorded.RosterEntry!.TeamId,
-                recorded.Metric!.ScorePoints,
-                recorded.Metric.CountsForOpponent,
-                recorded.Quantity,
-                recorded.PeriodNumber))
-            .ToListAsync(cancellationToken);
-
-        // LoadAsync already refused a match without both teams, so both are
-        // safe to unwrap here.
-        var periods = rules.Sport.ScoreMode == ScoreMode.Sets
-            ? LiveScore.ComputePlayedPeriods(
-                events, rules.Configuration.Periods.Count, match!.HomeTeamId!.Value, match.AwayTeamId!.Value)
-            : LiveScore.ComputePeriods(
-                events, rules.Configuration.Periods.Count, match!.HomeTeamId!.Value, match.AwayTeamId!.Value);
-
-        var violations = policy.Inspect(rules, periods);
+        var violations = policy.Inspect(rules!, periods!);
 
         if (violations.Count > 0)
         {
@@ -227,9 +313,127 @@ public static class RecordResult
             return Refuse(violations);
         }
 
+        if (RefuseUnpriceableTie(match!, rules!, periods!) is { } unpriceable)
+        {
+            return unpriceable;
+        }
+
         return await FinishAsync(
-            match, rules, periods, notes: null, database, outcomeRules, activeSanctions, organization, clock,
+            match!, rules!, periods!, notes: null, database, outcomeRules, activeSanctions, organization, clock,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// A match's periods, read from its own recorded events, when that is a
+    /// question this sport's score mode can even answer.
+    /// </summary>
+    /// <remarks>
+    /// The one place <see cref="HandleFromEventsAsync"/> and
+    /// <see cref="RefuseIfContradictsEventsAsync"/> both ask the same
+    /// question — whether this match's own events say anything, and what —
+    /// so a rule about reading events only has to be right once.
+    ///
+    /// <paramref name="match"/> is never queried from here: both callers
+    /// already hold one <see cref="LoadAsync"/> or a caller of its own
+    /// resolved, and re-reading it here would risk reading a second,
+    /// possibly different copy of the same row inside the one request.
+    /// </remarks>
+    /// <returns>
+    /// <see cref="HasEvents"/> is false exactly when nothing qualifying was
+    /// recorded for this match at all — distinct from <paramref name="Periods"/>
+    /// being non-null but describing a cumulative sport's silent, all-zero
+    /// periods, which is what zero events still produce for one. A caller
+    /// deciding whether there is anything to compare against needs this,
+    /// not just whether periods came back.
+    /// </returns>
+    internal static async Task<(IReadOnlyList<PeriodScore>? Periods, bool HasEvents, IResult? Refusal)>
+        TryDerivePeriodsFromEventsAsync(
+            Match match,
+            MatchRules rules,
+            SportFrogDbContext database,
+            CancellationToken cancellationToken)
+    {
+        var captureLevel = await database.Matches
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == match.Id)
+            .Select(candidate => candidate.Competition!.CaptureLevel)
+            .SingleAsync(cancellationToken);
+
+        if (captureLevel != CaptureLevel.Detailed)
+        {
+            // Mirrors EventPolicy.RefuseMatch: a competition that only
+            // records the score never has an event to read in the first
+            // place, so there is nothing here to derive from — the manual
+            // form is the only way in, same as it always was for this
+            // competition.
+            return (null, false, Results.Problem(
+                detail: "Esta competencia solo registra el marcador. No hay eventos de los que derivar un " +
+                        "resultado — cargá el resultado a mano.",
+                statusCode: StatusCodes.Status409Conflict));
+        }
+
+        var enabledMetrics = rules.Configuration.Metrics;
+
+        var puedeDerivarseDeEventos = await database.SportMetrics
+            .AsNoTracking()
+            .AnyAsync(
+                metric => metric.SportCode == rules.Sport.Code
+                    && metric.AffectsScore
+                    && (enabledMetrics == null || enabledMetrics.Contains(metric.Code)),
+                cancellationToken);
+
+        if (!puedeDerivarseDeEventos)
+        {
+            return (null, false, Results.Problem(
+                detail: $"{rules.Sport.Name} no tiene, bajo este reglamento, ningún evento que sume al " +
+                        "marcador — no hay nada que sumar. Cargá el resultado a mano.",
+                statusCode: StatusCodes.Status409Conflict));
+        }
+
+        var events = await database.PlayerEvents
+            .AsNoTracking()
+            .Where(recorded => recorded.MatchId == match.Id && recorded.Metric!.AffectsScore)
+            .Select(recorded => new ScoringEvent(
+                recorded.RosterEntry!.TeamId,
+                recorded.Metric!.ScorePoints,
+                recorded.Metric.CountsForOpponent,
+                recorded.Quantity,
+                recorded.PeriodNumber))
+            .ToListAsync(cancellationToken);
+
+        var hasEvents = events.Count > 0;
+
+        if (rules.Sport.ScoreMode == ScoreMode.Sets
+            && events.Any(recorded => recorded.PeriodNumber is not { } period
+                || period < 1 || period > rules.Configuration.Periods.Count))
+        {
+            // EventPolicy.InspectPeriod requires a period for every new or
+            // corrected event of a sets-mode sport, so this is a row that
+            // predates that rule, or one whose ruleset was reconfigured to
+            // fewer periods after it was recorded — not something a
+            // recorder using the app today can still produce. Refused here,
+            // before LiveScore.ComputePlayedPeriods, because it cannot
+            // refuse the same way: which set an unplaced event belongs to
+            // is the question a derived result exists to answer, not one it
+            // can answer for itself.
+            return (null, hasEvents, Results.Problem(
+                detail: $"Hay eventos de este partido sin {rules.Configuration.Periods.Label} asignado, o " +
+                        $"con uno que ya no existe. No se puede derivar un resultado por " +
+                        $"{PeriodLabel.Plural(rules.Configuration.Periods.Label)} sin saber a cuál perteneció " +
+                        "cada evento — corregilos en la lista de eventos del partido, o cargá el resultado " +
+                        "a mano.",
+                statusCode: StatusCodes.Status409Conflict));
+        }
+
+        // LoadAsync already refused a match without both teams, so both are
+        // safe to unwrap here.
+        var periods = rules.Sport.ScoreMode == ScoreMode.Sets
+            ? LiveScore.ComputePlayedPeriods(
+                events, rules.Configuration.Periods.Count, match.HomeTeamId!.Value, match.AwayTeamId!.Value)
+            : LiveScore.ComputePeriods(
+                events, rules.Configuration.Periods.Count, match.HomeTeamId!.Value, match.AwayTeamId!.Value);
+
+        return (periods, hasEvents, null);
     }
 
     /// <summary>
@@ -308,9 +512,66 @@ public static class RecordResult
     {
         var (home, away) = outcomeRules.For(rules.Sport.ScoreMode).Consolidate(periods);
 
+        try
+        {
+            await ApplyResultAsync(
+                match, home, away, periods, notes, database, organization, clock, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Somebody else saved a result for this same match between when
+            // this request read it and when it tried to save — the exact
+            // race two scorekeepers submitting near-simultaneously produces.
+            // Reported as a conflict instead of silently keeping whichever
+            // save happened to land last, which is what this used to do.
+            return Results.Problem(
+                detail: "Alguien más cargó o corrigió el resultado de este partido mientras vos lo " +
+                        "tenías abierto. Volvé a leerlo y aplicá tu corrección de nuevo si todavía hace falta.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // Read after the match is already saved: neither list changes what
+        // was just recorded, and the match being finished is what makes
+        // asking worthwhile — see RecordResult.FinishAsync's own class
+        // remarks on why this happens at the end of a match, not at the
+        // moment a card is shown.
+        var suggestedSanctions = await SuggestedSanctionsAsync(match, database, cancellationToken);
+        var suspendedPlayerWarnings = await SuspendedPlayerWarningsAsync(match, database, activeSanctions, cancellationToken);
+
+        return Results.Ok(new Response(home, away, suggestedSanctions, suspendedPlayerWarnings));
+    }
+
+    /// <summary>
+    /// The mechanical half of finishing a match — setting its score and
+    /// propagating a knockout winner — split from <see cref="FinishAsync"/>
+    /// so a caller with no HTTP response to build (<c>EventDrivenResult</c>,
+    /// keeping an already-finished match's score lined up with its events)
+    /// can apply the same score the same way without computing the
+    /// discipline follow-ups nobody there would read.
+    /// </summary>
+    /// <remarks>
+    /// Saves on its own, same as before this was split out: the decided
+    /// match and whatever <see cref="BracketWinnerPropagation"/> unlocks
+    /// commit together in one round trip. Throws
+    /// <see cref="DbUpdateConcurrencyException"/> rather than answering it —
+    /// what that means, and to whom, is the caller's business: a 409 to
+    /// report back for <see cref="FinishAsync"/>, a resync to quietly skip
+    /// for <c>EventDrivenResult</c>.
+    /// </remarks>
+    internal static async Task ApplyResultAsync(
+        Match match,
+        int homeTotal,
+        int awayTotal,
+        IReadOnlyList<PeriodScore> periods,
+        string? notes,
+        SportFrogDbContext database,
+        OrganizationContext organization,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
         match.PeriodScores = [.. periods.OrderBy(period => period.Period)];
-        match.HomeTotal = home;
-        match.AwayTotal = away;
+        match.HomeTotal = homeTotal;
+        match.AwayTotal = awayTotal;
         match.Status = MatchState.Finished;
 
         // A corrected score is not the score the shootout was played to
@@ -343,32 +604,7 @@ public static class RecordResult
 
         await BracketWinnerPropagation.ApplyAsync(match, database, cancellationToken);
 
-        try
-        {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Somebody else saved a result for this same match between when
-            // this request read it and when it tried to save — the exact
-            // race two scorekeepers submitting near-simultaneously produces.
-            // Reported as a conflict instead of silently keeping whichever
-            // save happened to land last, which is what this used to do.
-            return Results.Problem(
-                detail: "Alguien más cargó o corrigió el resultado de este partido mientras vos lo " +
-                        "tenías abierto. Volvé a leerlo y aplicá tu corrección de nuevo si todavía hace falta.",
-                statusCode: StatusCodes.Status409Conflict);
-        }
-
-        // Read after the match is already saved: neither list changes what
-        // was just recorded, and the match being finished is what makes
-        // asking worthwhile — see RecordResult.FinishAsync's own class
-        // remarks on why this happens at the end of a match, not at the
-        // moment a card is shown.
-        var suggestedSanctions = await SuggestedSanctionsAsync(match, database, cancellationToken);
-        var suspendedPlayerWarnings = await SuspendedPlayerWarningsAsync(match, database, activeSanctions, cancellationToken);
-
-        return Results.Ok(new Response(home, away, suggestedSanctions, suspendedPlayerWarnings));
+        await database.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>Red card code from the sport catalog — see <c>Features.Lists.Providers.CardsList</c>'s own narrower list for the sibling that also reads yellow cards.</summary>

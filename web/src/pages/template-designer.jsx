@@ -81,7 +81,7 @@ export default function TemplateDesignerPage() {
     if (!plantilla || cargado) return;
     var l = plantilla.layout || {};
     setNombre(plantilla.name || '');
-    setTamano(plantilla.pageSize || 'credential');
+    setTamano(plantilla.pageSize || 'a4');
     setPorDefecto(!!plantilla.isDefault);
     setCaras({
       front: l.front ? limpiarCara(l.front) : caraVacia(),

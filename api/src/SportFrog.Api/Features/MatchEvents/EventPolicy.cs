@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 
@@ -54,19 +55,32 @@ internal sealed class EventPolicy(SportFrogDbContext database)
             .Select(candidate => new
             {
                 candidate.Competition!.SportCode,
+                candidate.Competition.Format,
                 candidate.Competition.Sport!.ScoreMode,
                 candidate.Competition.CaptureLevel,
-
-                // The category's override where it has one, the competition's
-                // otherwise: which metrics may be recorded is part of the
-                // rules a division plays by.
-                RulesetId = candidate.Category!.RulesetId ?? candidate.Competition.RulesetId,
+                CategoryRulesetId = candidate.Category!.RulesetId,
+                CompetitionRulesetId = candidate.Competition.RulesetId,
             })
             .SingleAsync(cancellationToken);
 
+        // This fixture's own stage — see EffectiveRuleset and
+        // CompetitionStages.KindOfMatch — overriding the category's where it
+        // has one, the competition's otherwise: which metrics may be
+        // recorded is part of the rules a division plays by.
+        var stageKind = CompetitionStages.KindOfMatch(context.Format, context.ScoreMode, match.Phase);
+
+        var stageRulesetId = await database.CategoryStages
+            .AsNoTracking()
+            .Where(stage => stage.CategoryId == match.CategoryId && stage.Kind == stageKind)
+            .Select(stage => stage.RulesetId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var rulesetId = EffectiveRuleset.Of(
+            stageRulesetId, context.CategoryRulesetId, context.CompetitionRulesetId);
+
         var ruleset = await database.Rulesets
             .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == context.RulesetId, cancellationToken);
+            .SingleOrDefaultAsync(candidate => candidate.Id == rulesetId, cancellationToken);
 
         return ruleset is null
             ? null
@@ -317,17 +331,40 @@ internal sealed class EventPolicy(SportFrogDbContext database)
     }
 
     /// <summary>
-    /// The period has to be one the match has.
+    /// The period has to be one the match has — and, under
+    /// <see cref="ScoreMode.Sets"/>, it has to be there at all.
     /// </summary>
-    private static void InspectPeriod(
+    /// <remarks>
+    /// Under a running clock the period is a detail of when something
+    /// happened, and a cumulative total does not change depending on which
+    /// half a goal is filed under — so an organizer who does not write it
+    /// down still gets a correct score. Under <see cref="ScoreMode.Sets"/>
+    /// the period is not a detail, it is which set the point just played
+    /// belongs to, and that is exactly what
+    /// <see cref="SportFrog.Api.Features.Matches.RecordResult.HandleFromEventsAsync"/>
+    /// reads to tell one set from the next
+    /// (<see cref="SportFrog.Domain.Matches.LiveScore.ComputePlayedPeriods"/>).
+    /// Leaving it out there would not be a missing detail; it would be a
+    /// point nobody could ever say which set it decided.
+    /// </remarks>
+    internal static void InspectPeriod(
         MatchContext context,
         short? periodNumber,
         List<EventViolation> violations)
     {
         if (periodNumber is not { } period)
         {
-            // Not every organizer writes it down, and an event without a
-            // period still counts towards a total.
+            if (context.ScoreMode == ScoreMode.Sets)
+            {
+                violations.Add(new EventViolation(
+                    "PeriodNumber",
+                    $"Este partido se juega por {PeriodLabel.Plural(context.Rules.Periods.Label)}, así que " +
+                    "hay que indicar en cuál ocurrió esto."));
+            }
+
+            // Not every organizer writes it down under a running clock, and
+            // an event without a period still counts towards a cumulative
+            // total.
             return;
         }
 

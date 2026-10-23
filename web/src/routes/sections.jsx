@@ -10,6 +10,8 @@ import CircularProgress from "@mui/material/CircularProgress";
 
 var LandingPage = lazy(function() { return import("src/pages/landing-page"); });
 var SignInPage = lazy(function() { return import("src/pages/sign-in"); });
+var ForgotPasswordPage = lazy(function() { return import("src/pages/forgot-password"); });
+var ResetPasswordPage = lazy(function() { return import("src/pages/reset-password"); });
 var DashboardPage = lazy(function() { return import("src/pages/dashboard-page"); });
 var CompetitionsPage = lazy(function() { return import("src/pages/competitions-page"); });
 var CompetitionOverviewPage = lazy(function() { return import("src/pages/competitions/overview-page"); });
@@ -33,6 +35,7 @@ var TemplatesPage = lazy(function() { return import("src/pages/templates-page");
 var TemplateDesignerPage = lazy(function() { return import("src/pages/template-designer"); });
 var CredentialDesignsPage = lazy(function() { return import("src/pages/credential-designs-page"); });
 var DocumentsPage = lazy(function() { return import("src/pages/documents-page"); });
+var CredentialRequestsPage = lazy(function() { return import("src/pages/credential-requests-page"); });
 var AccreditationCatalogPage = lazy(function() { return import("src/pages/accreditation-catalog-page"); });
 var AccreditationAssignmentPage = lazy(function() { return import("src/pages/accreditation-assignment-page"); });
 var SanctionsPage = lazy(function() { return import("src/pages/sanctions-page"); });
@@ -78,6 +81,15 @@ export var routesSection = [
 
   // Auth
   { path: "/auth/jwt/sign-in", element: <GuestGuard><SignInPage /></GuestGuard> },
+  // Pedir el enlace si, teniendo sesion abierta, no hace falta.
+  { path: "/auth/jwt/forgot-password", element: <GuestGuard><LazyPage Component={ForgotPasswordPage} /></GuestGuard> },
+  // A donde apunta el enlace del correo (PasswordReset:ResetBaseUrl, ver
+  // PasswordResetOptions.cs / PasswordResetMail.Link). Sin GuestGuard, a
+  // diferencia de las dos de arriba: el token es la credencial y no depende
+  // de que no haya sesion -- quien sospecha que le entraron a la cuenta
+  // tiene que poder canjearlo con la sesion abierta, y mandarlo al
+  // dashboard dejaria el enlace sin usar. Ver reset-password.jsx.
+  { path: "/auth/jwt/reset-password", element: <LazyPage Component={ResetPasswordPage} /> },
   { path: "/auth", element: <Navigate to="/auth/jwt/sign-in" replace /> },
 
   // Dashboard
@@ -110,6 +122,7 @@ export var routesSection = [
       { path: "templates/:id/design", element: <LazyPage Component={TemplateDesignerPage} /> },
       { path: "credential-designs", element: <LazyPage Component={CredentialDesignsPage} /> },
       { path: "documents", element: <LazyPage Component={DocumentsPage} /> },
+      { path: "credential-requests", element: <LazyPage Component={CredentialRequestsPage} /> },
       { path: "accreditation-catalog", element: <LazyPage Component={AccreditationCatalogPage} /> },
       { path: "accreditation", element: <LazyPage Component={AccreditationAssignmentPage} /> },
       { path: "members", element: <LazyPage Component={MembersPage} /> },

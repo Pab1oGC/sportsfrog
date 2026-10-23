@@ -15,7 +15,7 @@ import { CrudDialog } from 'src/components/crud-dialog';
 import { EditDeleteActions } from 'src/components/edit-delete-actions';
 import { TIEBREAKER_CODES, etiquetasDesempate } from 'src/lib/tiebreaker-labels';
 import { esJuzgado } from 'src/lib/sport-shape';
-import { bloquearNoEnteros, soloDigitos } from 'src/lib/entero-sin-signo';
+import { bloquearNoEnteros, limpiarEntero } from 'src/lib/entero-sin-signo';
 import { desenlacesDeSets, etiquetaDesenlace, actualizarConfig } from 'src/pages/rulesets/outcome-config';
 
 const EMPTY_FORM = {
@@ -30,18 +30,6 @@ const EMPTY_FORM = {
     tiebreakers: ['score_difference', 'head_to_head'],
   },
 };
-
-// React no resincroniza el valor de un <input type="number"> mientras esta
-// enfocado (para no interrumpir mientras alguien termina de escribir "1." o
-// "-5"), asi que un cero que ya estaba en el campo se queda pegado en
-// pantalla hasta que se pierde el foco: se escribe "1" y se ve "01". Se
-// corrige a mano sobre el nodo del DOM -- eso si toma efecto de inmediato,
-// porque no pasa por la reconciliacion de React.
-function limpiarCeroInicial(e) {
-  const limpio = e.target.value.replace(/^0+(?=\d)/, '');
-  if (limpio !== e.target.value) e.target.value = limpio;
-  return limpio;
-}
 
 export default function RulesetsPage() {
   const { data: sports } = useApi(endpoints.sports);
@@ -190,15 +178,26 @@ export default function RulesetsPage() {
         <TextField
           label="Periodos"
           type="number"
-          value={form.config.periods.count}
+          // ?? '' en vez del 0 que dejaria un campo vacio: un partido de
+          // cero periodos no es nada, asi que al borrar el campo se vuelve
+          // a "sin cargar" en lugar de a un numero invalido que ademas se
+          // ve raro en pantalla.
+          value={form.config.periods.count ?? ''}
           // Un deporte juzgado se decide en una sola actuacion por lado —
           // JudgedRulesetShape.InspectPeriods rechaza cualquier otro numero
           // al guardar. Bloqueado aca en vez de dejar que el organizador lo
           // escriba y se entere recien al guardar.
           disabled={juzgado}
           helperText={juzgado ? `${sportInfo.name} se decide en una sola actuación por lado.` : undefined}
+          // Una cantidad de periodos es un entero sin signo (ver
+          // lib/entero-sin-signo): negativo o cero no es un partido que se
+          // pueda jugar, y RulesetShapeValidator los rechaza al guardar
+          // igual — esto evita que el organizador llegue a tipearlos.
+          onKeyDown={bloquearNoEnteros}
+          slotProps={{ htmlInput: { min: 1, max: 9, step: 1 } }}
           onChange={(e) => {
-            const count = +limpiarCeroInicial(e);
+            const limpio = limpiarEntero(e);
+            const count = limpio === '' ? null : +limpio;
             const nuevoWalkover = esPorSets && walkover
               ? { ...walkover, winnerScore: Math.ceil((count || 1) / 2) }
               : walkover;
@@ -220,7 +219,9 @@ export default function RulesetsPage() {
             label="Duración del período (minutos)"
             type="number"
             value={form.config.periods.minutes ?? ''}
-            onChange={(e) => { const v = limpiarCeroInicial(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, minutes: v === '' ? null : +v } } }); }}
+            onChange={(e) => { const v = limpiarEntero(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, minutes: v === '' ? null : +v } } }); }}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 1, max: 240, step: 1 } }}
             fullWidth
             // Precargada con el estandar del deporte elegido (ver el onChange
             // de "Deporte" mas arriba); el organizador la pisa si su liga
@@ -238,7 +239,7 @@ export default function RulesetsPage() {
             label="Tiempo adicional máximo (minutos)"
             type="number"
             value={form.config.periods.maxExtraMinutes ?? ''}
-            onChange={(e) => { const v = soloDigitos(e.target.value); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, maxExtraMinutes: v === '' ? null : +v } } }); }}
+            onChange={(e) => { const v = limpiarEntero(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, maxExtraMinutes: v === '' ? null : +v } } }); }}
             onKeyDown={bloquearNoEnteros}
             slotProps={{ htmlInput: { min: 0, max: 60, step: 1 } }}
             placeholder="20"
@@ -251,7 +252,9 @@ export default function RulesetsPage() {
             label="Descanso entre períodos (minutos)"
             type="number"
             value={form.config.periods.breakMinutes ?? ''}
-            onChange={(e) => { const v = limpiarCeroInicial(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, breakMinutes: v === '' ? null : +v } } }); }}
+            onChange={(e) => { const v = limpiarEntero(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, breakMinutes: v === '' ? null : +v } } }); }}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 0, max: 60, step: 1 } }}
             fullWidth
             helperText="Cuánto se descansa entre uno y el siguiente. Se usa junto a la duración para calcular solo cuánto ocupa un partido completo al armar el calendario."
           />
@@ -269,7 +272,9 @@ export default function RulesetsPage() {
             label="Duración total del partido (minutos)"
             type="number"
             value={form.config.periods.estimatedMinutes ?? ''}
-            onChange={(e) => { const v = limpiarCeroInicial(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, estimatedMinutes: v === '' ? null : +v } } }); }}
+            onChange={(e) => { const v = limpiarEntero(e); setForm({ ...form, config: { ...form.config, periods: { ...form.config.periods, estimatedMinutes: v === '' ? null : +v } } }); }}
+            onKeyDown={bloquearNoEnteros}
+            slotProps={{ htmlInput: { min: 1, max: 240, step: 1 } }}
             fullWidth
             required
             helperText={`${sportInfo?.name || 'Este deporte'} no corre por reloj — no hay forma de calcularla sola, así que hace falta cargarla para poder armar el calendario.`}
@@ -303,7 +308,8 @@ export default function RulesetsPage() {
                   label={etiquetaDesenlace(code)}
                   type="number"
                   value={form.config.points[code] ?? ''}
-                  onChange={(e) => updateConfig(`points.${code}`, +limpiarCeroInicial(e))}
+                  onChange={(e) => updateConfig(`points.${code}`, +limpiarEntero(e))}
+                  onKeyDown={bloquearNoEnteros}
                   fullWidth
                 />
               ))}
@@ -358,14 +364,16 @@ export default function RulesetsPage() {
                 value={walkover.winnerScore}
                 disabled={esPorSets}
                 helperText={esPorSets ? `Fijo: se gana en ${setsParaGanar} sets.` : undefined}
-                onChange={(e) => updateConfig('walkover', { ...walkover, winnerScore: +limpiarCeroInicial(e) })}
+                onChange={(e) => updateConfig('walkover', { ...walkover, winnerScore: +limpiarEntero(e) })}
+                onKeyDown={bloquearNoEnteros}
                 fullWidth
               />
               <TextField
                 label="Puntaje del que no se presento"
                 type="number"
                 value={walkover.loserScore}
-                onChange={(e) => updateConfig('walkover', { ...walkover, loserScore: +limpiarCeroInicial(e) })}
+                onChange={(e) => updateConfig('walkover', { ...walkover, loserScore: +limpiarEntero(e) })}
+                onKeyDown={bloquearNoEnteros}
                 fullWidth
               />
             </Box>

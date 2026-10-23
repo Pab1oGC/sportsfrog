@@ -196,9 +196,13 @@ internal sealed class RulesetPolicy(
 
         // Under a cumulative score the result is the sum of the scoring
         // events, so leaving one out does not merely stop it being counted as
-        // a statistic: it makes the score unreachable. Under sets the score
-        // comes from the periods won and no metric carries it, so there is
-        // nothing here to require.
+        // a statistic: it makes the score unreachable. The same is true
+        // under sets wherever a metric does carry it — kyorugi's point and
+        // gam-jeom (AddTaekwondoKyorugiScoringEvents), volleyball's point,
+        // ace, block_point and error (AddVolleyballScoringMetrics) — this
+        // check does not branch on score mode, only on AffectsScore. Wally
+        // has none, which is why this never fires for it: an empty set is
+        // vacuously satisfied.
         var scoring = sport.Metrics
             .Where(metric => metric.AffectsScore)
             .Select(metric => metric.Code)

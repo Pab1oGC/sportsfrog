@@ -24,6 +24,16 @@ public static class ReadSanctions
     /// One payment against a sanction's fine — the discipline module's
     /// counterpart to <c>Features.Tuition.ReadTuitionAccount.Payment</c>.
     /// </summary>
+    /// <param name="ReceiptUrl">
+    /// A signed link to the stored receipt, or null. Set only by
+    /// <see cref="ReadAsync"/> (one sanction, a handful of payments at
+    /// most) — never by <see cref="ListAsync"/>, which would otherwise sign
+    /// a link for every payment of every sanction in the competition on
+    /// every page load, almost all of them never opened.
+    /// <see cref="HasReceipt"/> stays true either way: it is what a caller
+    /// reading the list checks before asking <c>ReadAsync</c> for the one
+    /// sanction it actually wants to look at.
+    /// </param>
     public sealed record Payment(
         Guid Id,
         decimal Amount,
@@ -33,6 +43,7 @@ public static class ReadSanctions
         DateTimeOffset? VoidedAt,
         string? VoidReason,
         bool HasReceipt,
+        string? ReceiptUrl,
         DateTimeOffset CreatedAt);
 
     public sealed record Response(
@@ -118,8 +129,17 @@ public static class ReadSanctions
         var paymentsBySanction = await PaymentsBySanctionAsync(
             database, sanctions.Select(sanction => sanction.Id).ToList(), cancellationToken);
 
-        return Results.Ok(sanctions.Select(sanction =>
-            Project(sanction, matchesServed[sanction.Id], paymentsBySanction[sanction.Id])));
+        // receipts: null -- see Payment.ReceiptUrl's own remarks for why a
+        // list never signs one.
+        var responses = new List<Response>(sanctions.Count);
+
+        foreach (var sanction in sanctions)
+        {
+            responses.Add(await ProjectAsync(
+                sanction, matchesServed[sanction.Id], paymentsBySanction[sanction.Id], receipts: null, cancellationToken));
+        }
+
+        return Results.Ok(responses);
     }
 
     internal static async Task<IResult> ReadAsync(
@@ -127,6 +147,7 @@ public static class ReadSanctions
         Guid id,
         SportFrogDbContext database,
         SanctionProgress progress,
+        SanctionReceipt receipts,
         CancellationToken cancellationToken)
     {
         var sanction = await database.Sanctions
@@ -144,7 +165,12 @@ public static class ReadSanctions
         var matchesServed = await progress.MatchesServedAsync(competitionId, [sanction], cancellationToken);
         var paymentsBySanction = await PaymentsBySanctionAsync(database, [sanction.Id], cancellationToken);
 
-        return Results.Ok(Project(sanction, matchesServed[sanction.Id], paymentsBySanction[sanction.Id]));
+        // receipts: signed here -- one sanction's own payments are few
+        // enough that signing every one of them is cheap, and this is
+        // exactly the read SanctionPaymentsDialog asks for when it wants to
+        // show a receipt without a second round trip per row.
+        return Results.Ok(await ProjectAsync(
+            sanction, matchesServed[sanction.Id], paymentsBySanction[sanction.Id], receipts, cancellationToken));
     }
 
     /// <summary>
@@ -196,7 +222,9 @@ public static class ReadSanctions
     /// is voided — the same filter <c>Features.Tuition.ReadTuitionAccount</c>
     /// already applies to a pension charge's own payments.
     /// </remarks>
-    private static Response Project(Sanction sanction, int matchesServed, List<SanctionPayment> ownPayments)
+    private static async Task<Response> ProjectAsync(
+        Sanction sanction, int matchesServed, List<SanctionPayment> ownPayments,
+        SanctionReceipt? receipts, CancellationToken cancellationToken)
     {
         var finePaid = ownPayments
             .Where(payment => payment.VoidedAt is null && payment.ReviewState != ReceiptReviewState.Rejected)
@@ -212,12 +240,19 @@ public static class ReadSanctions
             lifted: sanction.LiftedAt is not null,
             voided: sanction.VoidedAt is not null);
 
-        var payments = ownPayments
-            .Select(payment => new Payment(
+        var payments = new List<Payment>(ownPayments.Count);
+
+        foreach (var payment in ownPayments)
+        {
+            var receiptUrl = receipts is null
+                ? null
+                : await receipts.LinkAsync(payment.ReceiptKey, cancellationToken);
+
+            payments.Add(new Payment(
                 payment.Id, payment.Amount, payment.Method, payment.ReviewState,
                 payment.ReviewReason, payment.VoidedAt, payment.VoidReason,
-                payment.ReceiptKey is not null, payment.CreatedAt))
-            .ToList();
+                payment.ReceiptKey is not null, receiptUrl, payment.CreatedAt));
+        }
 
         return new Response(
             sanction.Id,

@@ -19,10 +19,11 @@
  */
 // Si el deporte tiene al menos un evento que suma al marcador (goles en
 // futbol, punto/gam-jeom en taekwondo kyorugi desde que
-// AddTaekwondoKyorugiScoringEvents los activo), "Finalizar" puede cerrar el
+// AddTaekwondoKyorugiScoringEvents los activo, point/ace/block_point/error
+// en voley desde AddVolleyballScoringMetrics), "Finalizar" puede cerrar el
 // partido con lo ya cargado. No es lo mismo que "no es por sets": un
-// deporte por sets puede tener esto (kyorugi) o no (voley), asi que se
-// pregunta esto en vez de leer isPlayedInSets.
+// deporte por sets puede tener esto (kyorugi, voley) o no (wally), asi que
+// se pregunta esto en vez de leer isPlayedInSets.
 function tieneEventoDeMarcador(sportInfo) {
   return Array.isArray(sportInfo && sportInfo.metrics)
     && sportInfo.metrics.some(function(metrica) { return metrica.affectsScore; });
@@ -40,11 +41,11 @@ export function buildLiveActions(m, {
       onClick: () => doStatus(m.id, 'in_progress'),
     },
 
-    // Futbol, basquet, taekwondo kyorugi: los goles o los puntos ya se
-    // cargaron como eventos mientras se jugaba, asi que "Finalizar" cierra
-    // el partido con esa cuenta en un solo click -- pedir el mismo numero
-    // otra vez a mano no suma nada. Un deporte por sets sin metricas de
-    // marcador (voley, wally) no tiene forma de derivarlo de los eventos,
+    // Futbol, basquet, taekwondo kyorugi, voley: los goles o los puntos ya
+    // se cargaron como eventos mientras se jugaba, asi que "Finalizar"
+    // cierra el partido con esa cuenta en un solo click -- pedir el mismo
+    // numero otra vez a mano no suma nada. Wally, el unico deporte por sets
+    // sin metricas de marcador, no tiene forma de derivarlo de los eventos,
     // asi que ese sigue pidiendo el resultado a mano. sportInfo &&
     // tieneEventoDeMarcador(sportInfo), no solo la funcion sola: mientras
     // todavia esta cargando (sportInfo undefined) el boton seguro es el

@@ -70,6 +70,41 @@ export async function signOut() {
   await limpiar();
 }
 
+/**
+ * Pide el enlace para elegir una contraseña nueva sin saber la actual.
+ *
+ * No devuelve nada util a proposito: la API contesta igual exista o no una
+ * cuenta con ese correo (ver RequestPasswordReset.cs), asi que la pantalla
+ * no tiene -- ni debe tener -- con que decir cual de los dos casos fue.
+ */
+export async function requestPasswordReset({ email }) {
+  await axios.post(endpoints.auth.requestPasswordReset, { email });
+}
+
+/**
+ * Canjea el token que llego por correo por una contraseña nueva.
+ *
+ * La API revoca todas las sesiones de la cuenta al cambiarla, asi que lo que
+ * haya guardado en este navegador ya no sirve: se limpia aca mismo en vez de
+ * llamar a signOut(), que empezaria pidiendo una revocacion que el servidor
+ * acaba de hacer igual.
+ */
+export async function resetPassword({ token, password }) {
+  await axios.post(endpoints.auth.resetPassword, { token, newPassword: password });
+  await limpiar();
+}
+
+/**
+ * Cambia la contraseña de la sesion abierta, sabiendo la actual.
+ *
+ * Misma consecuencia que resetPassword: la API cierra todas las sesiones,
+ * incluida esta, y hay que volver a iniciar sesion con la nueva.
+ */
+export async function changePassword({ currentPassword, newPassword }) {
+  await axios.post(endpoints.auth.changePassword, { currentPassword, newPassword });
+  await limpiar();
+}
+
 async function limpiar() {
   setSession(null);
   olvidarRenovacion();

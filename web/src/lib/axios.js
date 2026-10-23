@@ -79,6 +79,13 @@ axiosInstance.interceptors.response.use(
     if (
       response?.status === 401 && config && !config._retriedAfterRenewal
       && config.url !== endpoints.auth.renew && config.url !== endpoints.auth.signIn
+      // Mismo motivo que el login: canjear un enlace de recuperación
+      // contesta 401 por sí mismo cuando el token es desconocido, venció o
+      // ya se usó. Quien está en esa pantalla no tiene sesión que renovar,
+      // así que sin esta excepción el 401 lo mandaría al login y el error
+      // -- el único que explica por qué el enlace no sirvió -- nunca se
+      // vería.
+      && config.url !== endpoints.auth.resetPassword
     ) {
       config._retriedAfterRenewal = true;
       const nuevoToken = await renovarSesion();
@@ -137,6 +144,14 @@ export const endpoints = {
     renew: `${api}/auth/session/renewal`,
     signOut: `${api}/auth/session/revocation`,
     signUp: `${api}/organizations`,
+    // Recuperación de contraseña: pedir el enlace y canjearlo. El primero
+    // contesta 202 pase lo que pase -- a propósito, ver
+    // RequestPasswordReset.cs; el segundo contesta 401 cuando el enlace no
+    // sirve, y por eso está exceptuado del reintento de arriba.
+    requestPasswordReset: `${api}/auth/password/reset-requests`,
+    resetPassword: `${api}/auth/password/reset`,
+    // Cambiar la propia contraseña sabiendo la actual (ChangePassword.cs).
+    changePassword: `${api}/auth/password`,
   },
 
   // Organizations
@@ -159,7 +174,11 @@ export const endpoints = {
   competition: (id) => `${api}/competitions/${id}`,
   competitionStatus: (id) => `${api}/competitions/${id}/status`,
   competitionPublication: (id) => `${api}/competitions/${id}/publication`,
+  competitionPublicSettings: (id) => `${api}/competitions/${id}/settings/public`,
+  competitionBulletinSettings: (id) => `${api}/competitions/${id}/settings/bulletin`,
   competitionSchedule: (id) => `${api}/competitions/${id}/schedule`,
+  competitionStages: (id) => `${api}/competitions/${id}/stages`,
+  competitionStageSchedule: (id, kind) => `${api}/competitions/${id}/stages/${kind}/schedule`,
   competitionBulletinPdf: (id) => `${api}/competitions/${id}/bulletin.pdf`,
   competitionBulletinWord: (id) => `${api}/competitions/${id}/bulletin.docx`,
   competitionMatches: (id) => `${api}/competitions/${id}/matches`,
@@ -169,6 +188,7 @@ export const endpoints = {
   // Categories
   categories: (compId) => `${api}/competitions/${compId}/categories`,
   category: (compId, catId) => `${api}/competitions/${compId}/categories/${catId}`,
+  categoryDisplayOrder: (compId, catId) => `${api}/competitions/${compId}/categories/${catId}/display-order`,
   categoryMatches: (catId) => `${api}/categories/${catId}/matches`,
   categoryDraw: (catId) => `${api}/categories/${catId}/draw`,
   categoryDrawGroups: (catId) => `${api}/categories/${catId}/draw/groups`,
@@ -204,6 +224,12 @@ export const endpoints = {
   staffMember: (id) => `${api}/staff/${id}`,
   staffRole: (id) => `${api}/staff/${id}/role`,
   staffWithdrawal: (id) => `${api}/staff/${id}/withdrawal`,
+  // Alta masiva del cuerpo tecnico desde Excel -- su propia planilla, con su
+  // propia hoja de datos ("CuerpoTecnico"), para no mezclar a quienes no
+  // juegan con la nomina de jugadores (rosterTemplate/rosterImport* arriba).
+  staffTemplate: (teamId) => `${api}/teams/${teamId}/staff/import/template`,
+  staffImportPreview: (teamId) => `${api}/teams/${teamId}/staff/import/preview`,
+  staffImportApply: (teamId) => `${api}/teams/${teamId}/staff/import`,
   // Sanciones disciplinarias de una competencia: se cumplen con partidos,
   // con una multa, o con las dos -- ver SanctionLedger del lado del API,
   // que resuelve el estado (activa/cumplida/levantada/anulada) cada vez,
@@ -219,12 +245,17 @@ export const endpoints = {
   // pensiones (method/receipt/review_state), sin bifurcar esos enums.
   sanctionPayments: (competitionId, sanctionId) =>
     `${api}/competitions/${competitionId}/sanctions/${sanctionId}/payments`,
+  // Un pago puntual, con el link firmado a su comprobante -- para volver a
+  // verlo después de registrado (ya revisado, o con la sanción levantada o
+  // cumplida), cosa que la lista de la sanción no trae: ahí HasReceipt es
+  // solo una bandera, firmar un link por cada fila de una lista que nadie
+  // pidió abrir sería trabajo de más.
+  sanctionPayment: (competitionId, id) =>
+    `${api}/competitions/${competitionId}/sanction-payments/${id}`,
   sanctionPaymentReview: (competitionId, id) =>
     `${api}/competitions/${competitionId}/sanction-payments/${id}/review`,
   sanctionPaymentVoid: (competitionId, id) =>
     `${api}/competitions/${competitionId}/sanction-payments/${id}/void`,
-  sanctionPendingReceipts: (competitionId) =>
-    `${api}/competitions/${competitionId}/sanctions/pending-receipts`,
   // El otro lado del mismo QR: lo que un steward logueado en la organización
   // ve al escanear una credencial -- foto, motivo de una revocación, el
   // detalle de una sanción activa -- que VerifyDocument (anónimo) nunca
@@ -312,6 +343,16 @@ export const endpoints = {
   documentBatch: (id) => `${api}/documents/batches/${id}`,
   issuedDocuments: `${api}/documents/issued`,
   revokeDocument: (id) => `${api}/documents/issued/${id}/revoke`,
+
+  // Solo SportFrog (frogtech-solutions) puede emitir credenciales -- ver
+  // PlatformAuthority del lado del servidor. El resto de las organizaciones
+  // piden en su lugar, y la plataforma aprueba o rechaza el pedido.
+  credentialRequests: `${api}/credential-requests`,
+  credentialRequest: (id) => `${api}/credential-requests/${id}`,
+  cancelCredentialRequest: (id) => `${api}/credential-requests/${id}/cancel`,
+  pendingCredentialRequests: `${api}/credential-requests/pending`,
+  approveCredentialRequest: (id) => `${api}/credential-requests/${id}/approve`,
+  rejectCredentialRequest: (id) => `${api}/credential-requests/${id}/reject`,
 
   // Accreditation catalog (credenciales decretadas) -- items (disciplina,
   // recinto, servicio, zona) y categorías, ambos por competencia.

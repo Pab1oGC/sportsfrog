@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Competitions;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 
@@ -76,10 +77,9 @@ internal static class StandingsQuery
                 candidate.Competition!.SportCode,
                 candidate.Competition.Format,
 
-                // The category's own ruleset where it has one, the
-                // competition's otherwise: a division is ranked by the rules
-                // it plays under.
-                RulesetId = candidate.RulesetId ?? candidate.Competition.RulesetId,
+                // See EffectiveRuleset: a division is ranked by the rules it
+                // plays under.
+                RulesetId = EffectiveRuleset.Of(candidate.RulesetId, candidate.Competition.RulesetId),
 
                 candidate.QualifiersPerGroup,
             })

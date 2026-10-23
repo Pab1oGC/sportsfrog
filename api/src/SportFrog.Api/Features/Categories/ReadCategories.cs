@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -95,11 +96,11 @@ public static class ReadCategories
     /// the same category differently.
     /// </summary>
     /// <remarks>
-    /// The effective ruleset is resolved here rather than left to the caller.
-    /// Whoever reads a category is about to score a match under it, and the
-    /// rule — the override if there is one, otherwise the competition's — is
-    /// the same every time; answering it once here is safer than trusting
-    /// every consumer to remember the fallback.
+    /// The effective ruleset is resolved here rather than left to the caller
+    /// — see <see cref="EffectiveRuleset"/> for the rule itself.
+    /// Whoever reads a category is about to score a match under it, and
+    /// answering the fallback once here is safer than trusting every
+    /// consumer to remember it.
     ///
     /// The override is still reported separately, because "this category sets
     /// its own rules" and "this category follows the competition" are
@@ -111,7 +112,7 @@ public static class ReadCategories
             category.CompetitionId,
             category.RulesetId,
             category.Ruleset!.Name,
-            category.RulesetId ?? category.Competition!.RulesetId,
+            EffectiveRuleset.Of(category.RulesetId, category.Competition!.RulesetId),
             category.Name,
             category.Gender,
             category.BirthDateFrom,

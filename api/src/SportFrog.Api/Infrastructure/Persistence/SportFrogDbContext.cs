@@ -29,6 +29,14 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    /// <summary>
+    /// Single-use proofs that let an account whose password is no longer
+    /// known set a new one. Alongside <see cref="RefreshTokens"/> because it
+    /// is the same kind of thing — a revocable secret belonging to a person
+    /// rather than to an organization — see <see cref="PasswordResetToken"/>.
+    /// </summary>
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
     public DbSet<Club> Clubs => Set<Club>();
 
     public DbSet<Athlete> Athletes => Set<Athlete>();
@@ -46,7 +54,11 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<Competition> Competitions => Set<Competition>();
 
+    public DbSet<CompetitionStage> CompetitionStages => Set<CompetitionStage>();
+
     public DbSet<Category> Categories => Set<Category>();
+
+    public DbSet<CategoryStage> CategoryStages => Set<CategoryStage>();
 
     public DbSet<Team> Teams => Set<Team>();
 
@@ -108,6 +120,8 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
 
     public DbSet<SanctionPayment> SanctionPayments => Set<SanctionPayment>();
 
+    public DbSet<DocumentRequest> DocumentRequests => Set<DocumentRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -126,6 +140,7 @@ public sealed class SportFrogDbContext(DbContextOptions<SportFrogDbContext> opti
         modelBuilder.HasPostgresEnum<ScopeType>("public", "membership_scope_type");
         modelBuilder.HasPostgresEnum<StaffRole>("public", "staff_role");
         modelBuilder.HasPostgresEnum<SanctionCompletionRule>("public", "sanction_completion_rule");
+        modelBuilder.HasPostgresEnum<DocumentRequestState>("public", "document_request_state");
 
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }

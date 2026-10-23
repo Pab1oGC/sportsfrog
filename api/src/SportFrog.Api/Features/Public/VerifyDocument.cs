@@ -27,10 +27,13 @@ public enum VerificationState
     /// an unresolved sanction — see <c>SportFrog.Domain.Discipline.SanctionLedger</c>.
     /// </summary>
     /// <remarks>
-    /// Says only that, never why: the reason behind a sanction is exactly
-    /// the disciplinary detail this endpoint already refuses for a
-    /// revocation, and extending that refusal here is the whole point of
-    /// answering a state rather than the sanction itself.
+    /// <see cref="Response.ActiveSanctions"/> says which kind — by matches,
+    /// by a fine, or both, and how much of each remains — because a steward
+    /// (or anybody else holding the card) is expected to act on that, not
+    /// merely be told the door is shut. What stays withheld is the free-text
+    /// reason the sanction carries: that is the actual disciplinary story
+    /// behind it, an internal matter the same way a revocation's own reason
+    /// is (RNF-16), not the shape of what still blocks entry today.
     /// </remarks>
     Blocked,
 }
@@ -60,9 +63,41 @@ public enum VerificationState
 /// of a scanner's business and are not here (RNF-16) — and neither is the
 /// reason a document was revoked, which is an internal matter about a person
 /// and not part of the answer "this card is no longer valid".
+///
+/// <see cref="Response.ActiveSanctions"/> is the one deliberate exception to
+/// "nothing the card does not already say": a person standing at a gate
+/// needs to know what is actually blocking someone to do anything about it,
+/// not just that something is. It names the kind of sanction and how much
+/// of it remains — never the free-text reason behind it, which stays exactly
+/// as internal as a revocation's own reason. See
+/// <c>public_active_sanctions</c> (AddPublicSanctionDetail) for the
+/// SECURITY DEFINER function this reads through, the same shape
+/// <c>sanction_blocks_entry</c> already used for the bare boolean this
+/// replaces.
 /// </remarks>
 public static class VerifyDocument
 {
+    /// <summary>
+    /// One sanction still blocking entry, reduced to what anybody holding
+    /// the card may see.
+    /// </summary>
+    /// <remarks>
+    /// The public counterpart to <c>Features.Documents.ScanCredential.ActiveSanction</c>
+    /// — same shape, minus <c>Id</c>, <c>AthleteId</c> and, above all,
+    /// <c>Reason</c>: the sanction's own disciplinary story stays an
+    /// authenticated-only read.
+    /// </remarks>
+    public sealed record PublicActiveSanction(
+        SanctionCompletionRule CompletionRule,
+
+        /// <summary>Null on a sanction cleared by a fine alone.</summary>
+        int? MatchesRemaining,
+
+        /// <summary>Null on a sanction cleared by matches alone.</summary>
+        decimal? FineBalance,
+
+        bool CredentialWithheld);
+
     public sealed record Response(
         string SerialNumber,
 
@@ -86,7 +121,10 @@ public static class VerifyDocument
         DateOnly? ValidFrom,
         DateOnly? ValidTo,
         DateOnly IssuedOn,
-        DateOnly? RevokedOn);
+        DateOnly? RevokedOn,
+
+        /// <summary>Empty unless <see cref="Status"/> is <see cref="VerificationState.Blocked"/>.</summary>
+        IReadOnlyList<PublicActiveSanction> ActiveSanctions);
 
     public static IEndpointRouteBuilder MapVerifyDocument(this IEndpointRouteBuilder routes)
     {
@@ -147,23 +185,31 @@ public static class VerifyDocument
                     .SingleAsync(cancellationToken);
 
                 var status = State(document.Status, document.ValidFrom, document.ValidTo, today);
+                var activeSanctions = new List<PublicActiveSanction>();
 
                 // Only asked where it could change the answer: a document
                 // already revoked or expired needs no second reason, and a
                 // document issued to a team names nobody a sanction could
                 // name either. sportfrog_public has no grant on sanctions
-                // itself — see this call's own migration for why a bare
-                // boolean is what crosses that line instead.
+                // itself — see public_active_sanctions' own migration
+                // (AddPublicSanctionDetail) for what crosses that line
+                // instead, and for why this reads a SECURITY DEFINER
+                // function rather than the tables directly.
                 if (status == VerificationState.Valid && document.AthleteId is { } athleteId)
                 {
-                    var blocked = await database.Database
-                        .SqlQuery<bool>(
+                    activeSanctions = await database.Database
+                        .SqlQuery<PublicActiveSanction>(
                             $"""
-                             SELECT sanction_blocks_entry({athleteId}, {document.CompetitionId}) AS "Value"
+                             SELECT
+                                 completion_rule AS "CompletionRule",
+                                 matches_remaining AS "MatchesRemaining",
+                                 fine_balance AS "FineBalance",
+                                 credential_withheld AS "CredentialWithheld"
+                             FROM public_active_sanctions({athleteId}, {document.CompetitionId})
                              """)
-                        .SingleAsync(cancellationToken);
+                        .ToListAsync(cancellationToken);
 
-                    if (blocked)
+                    if (activeSanctions.Count > 0)
                     {
                         status = VerificationState.Blocked;
                     }
@@ -193,7 +239,8 @@ public static class VerifyDocument
                     DateOnly.FromDateTime(document.IssuedAt.UtcDateTime),
                     document.RevokedAt is { } revoked
                         ? DateOnly.FromDateTime(revoked.UtcDateTime)
-                        : null);
+                        : null,
+                    activeSanctions);
             },
             cancellationToken);
 
@@ -219,8 +266,9 @@ public static class VerifyDocument
     /// Internal rather than private: <c>Features.Documents.ScanCredential</c>,
     /// the authenticated counterpart reached by a steward's own session,
     /// reuses this exact mapping so the two never answer a document's own
-    /// dates and revocation differently — only in how (or whether) a
-    /// sanction is layered on top does the authenticated side say more.
+    /// dates and revocation differently — the photograph, the revocation's
+    /// own reason, and a sanction's free-text reason are the only things
+    /// the authenticated side still says that this one does not.
     /// </remarks>
     internal static VerificationState State(
         DocumentState status,

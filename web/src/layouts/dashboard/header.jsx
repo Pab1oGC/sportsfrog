@@ -14,11 +14,13 @@ import { alpha } from "@mui/material/styles";
 import { Iconify } from "src/components/iconify";
 import { signOut } from "src/auth/context/jwt";
 import { useAuthContext } from "src/auth/hooks";
+import { ChangePasswordDialog } from "./change-password-dialog";
 
 export function Header({ onToggleNav }) {
   const navigate = useNavigate();
   const { user, checkSession } = useAuthContext();
   const [anchorEl, setAnchorEl] = useState(null);
+  const [cambiarContrasenaAbierto, setCambiarContrasenaAbierto] = useState(false);
   const orgs = user?.organizations || [];
   const currentOrg = orgs[0];
 
@@ -47,8 +49,10 @@ export function Header({ onToggleNav }) {
           {/* Al inicio, no al formulario de acceso: quien cierra sesión se está
               yendo, no volviendo a entrar. Y con replace, para que el botón de
               atrás no lo devuelva al panel del que acaba de salir. */}
+          <MenuItem onClick={() => { setAnchorEl(null); setCambiarContrasenaAbierto(true); }}><Iconify icon="eva:lock-fill" sx={{ mr: 1 }} />Cambiar contraseña</MenuItem>
           <MenuItem onClick={async () => { await signOut(); await checkSession(); navigate("/", { replace: true }); }}><Iconify icon="eva:log-out-fill" sx={{ mr: 1 }} />Cerrar sesión</MenuItem>
         </Menu>
+        <ChangePasswordDialog open={cambiarContrasenaAbierto} onClose={() => setCambiarContrasenaAbierto(false)} />
       </Toolbar>
     </AppBar>
   );

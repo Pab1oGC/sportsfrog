@@ -41,5 +41,11 @@ internal sealed class RulesetUsage(SportFrogDbContext database)
             .AnyAsync(competition => competition.RulesetId == rulesetId, cancellationToken)
         || await database.Categories
             .IgnoreQueryFilters()
-            .AnyAsync(category => category.RulesetId == rulesetId, cancellationToken);
+            .AnyAsync(category => category.RulesetId == rulesetId, cancellationToken)
+        // A stage counts as a use the same way a category does: only when it
+        // overrides the ruleset itself, never through the category or
+        // competition it falls back to otherwise.
+        || await database.CategoryStages
+            .IgnoreQueryFilters()
+            .AnyAsync(stage => stage.RulesetId == rulesetId, cancellationToken);
 }

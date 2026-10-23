@@ -12,14 +12,18 @@ const celdaDeTexto = { whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeigh
 
 /**
  * Lo que haria una importacion de Excel, fila por fila -- la vista previa de
- * la nomina de un equipo y la de una delegacion. `conCategoria` agrega la
- * columna de categoria, que solo tiene sentido en la de delegacion (cada fila
- * elige la suya; ver DelegationRosterSheet.Category en el backend).
+ * la nomina de un equipo, la de una delegacion, y la del cuerpo tecnico.
+ * `conCategoria` agrega la columna de categoria, que solo tiene sentido en
+ * la de delegacion (cada fila elige la suya; ver
+ * DelegationRosterSheet.Category en el backend). `conCargo` agrega la de
+ * cargo, que solo tiene sentido en la del cuerpo tecnico (ver
+ * StaffSheet.Role): ninguna de las dos pisa a la otra porque ninguna
+ * importacion pide las dos juntas.
  *
  * El contenedor necesita ser ancho para que esto se lea sin scroll: ver
  * `ANCHO_CON_VISTA_PREVIA`.
  */
-export function ImportPreviewGrid({ rows, conCategoria = false }) {
+export function ImportPreviewGrid({ rows, conCategoria = false, conCargo = false }) {
   const columns = [
     { field: 'number', headerName: '#', width: 60 },
     { field: 'document', headerName: 'Documento', width: 150 },
@@ -29,6 +33,10 @@ export function ImportPreviewGrid({ rows, conCategoria = false }) {
     },
     conCategoria && {
       field: 'category', headerName: 'Categoria', width: 190,
+      renderCell: ({ value }) => <Box sx={celdaDeTexto}>{value || '--'}</Box>,
+    },
+    conCargo && {
+      field: 'role', headerName: 'Cargo', width: 170,
       renderCell: ({ value }) => <Box sx={celdaDeTexto}>{value || '--'}</Box>,
     },
     {

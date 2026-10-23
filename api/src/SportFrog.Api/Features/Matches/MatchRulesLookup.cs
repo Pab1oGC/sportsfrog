@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 
@@ -27,11 +28,12 @@ internal sealed class MatchRulesLookup(SportFrogDbContext database)
             .Select(candidate => new
             {
                 candidate.Competition!.SportCode,
-
-                // The override where the category sets one, and the
-                // competition's otherwise. Resolved in the query so the
-                // fallback is not a rule every caller has to remember.
-                RulesetId = candidate.Category!.RulesetId ?? candidate.Competition.RulesetId,
+                candidate.Competition.Format,
+                candidate.Competition.Sport!.ScoreMode,
+                candidate.CategoryId,
+                candidate.Phase,
+                CategoryRulesetId = candidate.Category!.RulesetId,
+                CompetitionRulesetId = candidate.Competition.RulesetId,
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -40,13 +42,27 @@ internal sealed class MatchRulesLookup(SportFrogDbContext database)
             return null;
         }
 
+        // This fixture's own stage — see EffectiveRuleset and
+        // CompetitionStages.KindOfMatch — overriding the category's where it
+        // has one, the competition's otherwise.
+        var stageKind = CompetitionStages.KindOfMatch(context.Format, context.ScoreMode, context.Phase);
+
+        var stageRulesetId = await database.CategoryStages
+            .AsNoTracking()
+            .Where(stage => stage.CategoryId == context.CategoryId && stage.Kind == stageKind)
+            .Select(stage => stage.RulesetId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var rulesetId = EffectiveRuleset.Of(
+            stageRulesetId, context.CategoryRulesetId, context.CompetitionRulesetId);
+
         var sport = await database.Sports
             .AsNoTracking()
             .SingleOrDefaultAsync(candidate => candidate.Code == context.SportCode, cancellationToken);
 
         var ruleset = await database.Rulesets
             .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == context.RulesetId, cancellationToken);
+            .SingleOrDefaultAsync(candidate => candidate.Id == rulesetId, cancellationToken);
 
         return sport is null || ruleset is null ? null : new MatchRules(sport, ruleset.Config);
     }

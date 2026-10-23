@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SportFrog.Api.Features.Accreditation;
 using SportFrog.Api.Features.Documents;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Auth;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
@@ -43,6 +44,7 @@ public static class CreateCompetition
         // paying for the same lookup twice.
         var ruleset = await database.Rulesets
             .AsNoTracking()
+            .Include(candidate => candidate.Sport)
             .SingleOrDefaultAsync(candidate => candidate.Id == contract.RulesetId, cancellationToken);
 
         if (ruleset is null)
@@ -121,6 +123,12 @@ public static class CreateCompetition
         };
 
         database.Competitions.Add(competition);
+
+        // See CompetitionStageSeeding: the stages its own format and sport
+        // already imply, written now so a stage reglamento override has
+        // something to attach to from the moment the competition exists.
+        database.CompetitionStages.AddRange(
+            CompetitionStageSeeding.BuildCompetitionStages(competition, ruleset.Sport!.ScoreMode));
 
         // Written in the same save as the competition itself, so a competition
         // is never left behind without the catalogue it was created with.

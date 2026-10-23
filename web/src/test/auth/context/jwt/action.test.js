@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import axios, { endpoints } from "src/lib/axios";
-import { signIn, signUp, renewSession, signOut } from "src/auth/context/jwt/action";
+import {
+  signIn, signUp, renewSession, signOut,
+  requestPasswordReset, resetPassword, changePassword,
+} from "src/auth/context/jwt/action";
 import { guardarRenovacion, leerRenovacion, seRecuerda, olvidarRenovacion } from "src/auth/context/jwt/session-store";
 import { JWT_STORAGE_KEY } from "src/auth/context/jwt/constant";
 
@@ -15,6 +18,9 @@ vi.mock("src/lib/axios", () => ({
       renew: "/api/auth/session/renewal",
       signOut: "/api/auth/session/revocation",
       signUp: "/api/organizations",
+      requestPasswordReset: "/api/auth/password/reset-requests",
+      resetPassword: "/api/auth/password/reset",
+      changePassword: "/api/auth/password",
     },
   },
 }));
@@ -173,5 +179,112 @@ describe("signOut", () => {
 
     expect(localStorage.getItem("organizations")).toBeNull();
     expect(localStorage.getItem("expires_in")).toBeNull();
+  });
+});
+
+describe("requestPasswordReset", () => {
+  it("manda el correo al endpoint de pedidos y no devuelve nada", async () => {
+    axios.post.mockResolvedValue({ status: 202, data: "" });
+
+    const resultado = await requestPasswordReset({ email: "coach@club.test" });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      endpoints.auth.requestPasswordReset, { email: "coach@club.test" });
+    // La API contesta igual exista o no la cuenta, así que no hay nada que
+    // devolverle a la pantalla con lo que pueda distinguir los dos casos.
+    expect(resultado).toBeUndefined();
+  });
+
+  it("no toca nada de la sesión guardada", async () => {
+    guardarRenovacion("refresh-activo", true);
+    sessionStorage.setItem(JWT_STORAGE_KEY, "a1");
+    axios.post.mockResolvedValue({ status: 202, data: "" });
+
+    await requestPasswordReset({ email: "x@x.test" });
+
+    expect(leerRenovacion()).toBe("refresh-activo");
+    expect(sessionStorage.getItem(JWT_STORAGE_KEY)).toBe("a1");
+  });
+
+  it("propaga el error del limitador de intentos", async () => {
+    axios.post.mockRejectedValue(new Error("Demasiadas solicitudes."));
+
+    await expect(requestPasswordReset({ email: "x@x.test" }))
+      .rejects.toThrow("Demasiadas solicitudes.");
+  });
+});
+
+describe("resetPassword", () => {
+  it("manda el token y la contraseña nueva con el nombre que espera la API", async () => {
+    axios.post.mockResolvedValue({ status: 204 });
+
+    await resetPassword({ token: "t-1", password: "Nueva-Clave-2026!" });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      endpoints.auth.resetPassword, { token: "t-1", newPassword: "Nueva-Clave-2026!" });
+  });
+
+  it("limpia la sesión local al terminar: la API ya revocó todas", async () => {
+    guardarRenovacion("refresh-viejo", true);
+    sessionStorage.setItem(JWT_STORAGE_KEY, "token-que-ya-no-vale");
+    localStorage.setItem("organizations", JSON.stringify([{ id: 1 }]));
+    localStorage.setItem("expires_in", "3600");
+    axios.post.mockResolvedValue({ status: 204 });
+
+    await resetPassword({ token: "t-1", password: "Nueva-Clave-2026!" });
+
+    expect(sessionStorage.getItem(JWT_STORAGE_KEY)).toBeNull();
+    expect(leerRenovacion()).toBeNull();
+    expect(localStorage.getItem("refresh_token")).toBeNull();
+    expect(localStorage.getItem("organizations")).toBeNull();
+    expect(localStorage.getItem("expires_in")).toBeNull();
+  });
+
+  it("no revoca por su cuenta: el servidor ya lo hizo, un POST más no agrega nada", async () => {
+    guardarRenovacion("refresh-viejo", true);
+    axios.post.mockResolvedValue({ status: 204 });
+
+    await resetPassword({ token: "t-1", password: "Nueva-Clave-2026!" });
+
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post).not.toHaveBeenCalledWith(endpoints.auth.signOut, expect.anything());
+  });
+
+  it("si la API rechaza el enlace, propaga el error y deja la sesión como estaba", async () => {
+    guardarRenovacion("refresh-activo", true);
+    axios.post.mockRejectedValue(new Error("El enlace de recuperación no es válido o ya venció."));
+
+    await expect(resetPassword({ token: "vencido", password: "Nueva-Clave-2026!" }))
+      .rejects.toThrow("no es válido o ya venció");
+
+    // No se cambió ninguna contraseña, así que nada hay que limpiar: quien
+    // tenía sesión abierta la conserva.
+    expect(leerRenovacion()).toBe("refresh-activo");
+  });
+});
+
+describe("changePassword", () => {
+  it("manda la actual y la nueva, y limpia la sesión local (la API revoca todas)", async () => {
+    guardarRenovacion("refresh-activo", true);
+    sessionStorage.setItem(JWT_STORAGE_KEY, "a1");
+    axios.post.mockResolvedValue({ status: 204 });
+
+    await changePassword({ currentPassword: "Vieja-2026!", newPassword: "Nueva-Clave-2026!" });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      endpoints.auth.changePassword,
+      { currentPassword: "Vieja-2026!", newPassword: "Nueva-Clave-2026!" });
+    expect(sessionStorage.getItem(JWT_STORAGE_KEY)).toBeNull();
+    expect(leerRenovacion()).toBeNull();
+  });
+
+  it("si la contraseña actual es incorrecta, propaga el error y conserva la sesión", async () => {
+    guardarRenovacion("refresh-activo", true);
+    axios.post.mockRejectedValue(new Error("La contraseña actual es incorrecta."));
+
+    await expect(changePassword({ currentPassword: "mal", newPassword: "Nueva-Clave-2026!" }))
+      .rejects.toThrow("La contraseña actual es incorrecta.");
+
+    expect(leerRenovacion()).toBe("refresh-activo");
   });
 });

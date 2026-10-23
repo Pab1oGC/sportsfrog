@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SportFrog.Api.Features.Rulebook;
 using SportFrog.Api.Infrastructure.Persistence;
 using SportFrog.Api.Infrastructure.Persistence.Entities;
 
@@ -51,7 +52,8 @@ internal static class LeadersQuery
                 candidate.Id,
                 candidate.Name,
                 candidate.Competition!.SportCode,
-                RulesetId = candidate.RulesetId ?? candidate.Competition.RulesetId,
+                // See EffectiveRuleset.
+                RulesetId = EffectiveRuleset.Of(candidate.RulesetId, candidate.Competition.RulesetId),
             })
             .SingleOrDefaultAsync(cancellationToken);
 

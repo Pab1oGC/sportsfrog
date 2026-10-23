@@ -26,6 +26,7 @@ import { SetupChecklist } from 'src/pages/competitions/setup-checklist';
 import { CategoriesPanel } from 'src/pages/categories/categories-panel';
 import { TeamsPanel } from 'src/pages/teams/teams-panel';
 import { RosterPanel } from 'src/pages/roster/roster-panel';
+import { SanctionsPanel } from 'src/pages/sanctions/sanctions-panel';
 
 // "aaaa-mm-dd" (DateOnly del servidor) a "dd/mm/aaaa". Nada de Date() de por
 // medio: un DateOnly no tiene hora ni zona, y pasarlo por Date lo
@@ -40,12 +41,12 @@ const dateOnly = (iso) => (iso ? iso.split('-').reverse().join('/') : null);
  * fijo -- igual que CollectionSummary en Cobranza -- y las pestañas de abajo
  * son lo que hoy todavía son pantallas aparte.
  *
- * "Categorías", "Equipos" y "Nómina" ya se mudaron de pantalla propia a
- * pestaña (ver CategoriesPanel/TeamsPanel/RosterPanel, de donde sale su
- * contenido real): configurar una competencia entera -- sus divisiones, sus
- * equipos, sus planteles -- no exige salir de esta página. "Partidos" sigue
- * siendo una tarjeta que lleva a su pantalla de siempre -- a propósito: es
- * la única isla que queda sin migrar.
+ * "Categorías", "Equipos", "Nómina" y "Sanciones" ya se mudaron de pantalla
+ * propia a pestaña (ver CategoriesPanel/TeamsPanel/RosterPanel/SanctionsPanel,
+ * de donde sale su contenido real): configurar una competencia entera -- sus
+ * divisiones, sus equipos, sus planteles, sus sanciones -- no exige salir de
+ * esta página. "Partidos" sigue siendo una tarjeta que lleva a su pantalla
+ * de siempre -- a propósito: es la única isla que queda sin migrar.
  *
  * Todo lo que se muestra sale de datos que ya existen (GET /competitions/
  * {id} y GET /competitions/{id}/matches): nada nuevo que pedirle al
@@ -176,6 +177,7 @@ export default function CompetitionOverviewPage() {
         <Tab value="categorias" label="Categorías" />
         <Tab value="equipos" label="Equipos" />
         <Tab value="nomina" label="Nómina" />
+        <Tab value="sanciones" label="Sanciones" />
       </Tabs>
 
       {tab === 'resumen' && (
@@ -257,6 +259,7 @@ export default function CompetitionOverviewPage() {
       {tab === 'categorias' && <CategoriesPanel competitionId={comp.id} />}
       {tab === 'equipos' && <TeamsPanel competitionId={comp.id} />}
       {tab === 'nomina' && <RosterPanel competitionId={comp.id} />}
+      {tab === 'sanciones' && <SanctionsPanel competitionId={comp.id} />}
     </Box>
   );
 }

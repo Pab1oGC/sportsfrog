@@ -13,6 +13,14 @@ namespace SportFrog.Api.Features.Documents;
 /// Asks for a batch of documents and answers straight away.
 /// </summary>
 /// <remarks>
+/// Platform-only, for both kinds: an organization no longer raises either
+/// one for itself, the same reason <see cref="CreateTemplate"/> is no
+/// longer something an organization calls for its own certificate design.
+/// <see cref="RequestDocumentRequest"/> and <see cref="ApproveDocumentRequest"/>
+/// are what an organization is left with instead; this is what that
+/// approval itself raises from, and what the platform organization calls
+/// directly for its own competitions.
+///
 /// What it pins at this moment, rather than looking up when the worker gets
 /// round to it, differs by kind. A certificate pins the design it prints
 /// from: a batch requested on Monday afternoon and printed on Monday evening
@@ -81,7 +89,7 @@ public static class RequestDocumentBatch
         return routes;
     }
 
-    private static async Task<IResult> HandleAsync(
+    internal static async Task<IResult> HandleAsync(
         Request request,
         HttpContext context,
         SportFrogDbContext database,
@@ -89,6 +97,28 @@ public static class RequestDocumentBatch
         IBackgroundJobClient jobs,
         CancellationToken cancellationToken)
     {
+        var organizationId = organization.RequireOrganizationId();
+
+        // Both kinds are issued by SportFrog itself now, never by the
+        // organization a batch is about — see this type's own remarks.
+        // Checked against the organization actually active for this
+        // request, not merely a role claim the caller's token happens to
+        // carry: a platform operator who also holds a role in some other
+        // organization and switches into it must still not be able to raise
+        // that organization's batch directly — RequestDocumentRequest and
+        // ApproveDocumentRequest are the one door left for that, and a claim
+        // check alone would not close it, since a token can carry a role for
+        // more than one organization at once (see JwtAccessTokenIssuer's own
+        // tests) while only one of them is active for any given request.
+        if (organizationId != await PlatformAuthority.OrganizationIdAsync(database, cancellationToken))
+        {
+            return Results.Problem(
+                // Same wording every other role refusal in this codebase
+                // uses — nothing about which role would have been enough.
+                detail: "Esta operación no está permitida.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
         var kind = WireEnum.Parse<DocumentKind>(request.Kind);
 
         var competition = await database.Competitions
@@ -149,8 +179,6 @@ public static class RequestDocumentBatch
             snapshot = resolved.Snapshot;
         }
 
-        var organizationId = organization.RequireOrganizationId();
-
         var batch = new DocumentBatch
         {
             Id = Guid.NewGuid(),
@@ -190,7 +218,13 @@ public static class RequestDocumentBatch
             $"/documents/batches/{batch.Id}", new Response(batch.Id, DocumentBatchState.Queued));
     }
 
-    private static async Task<(IResult? Refusal, DocumentTemplate? Template)> ResolveTemplateAsync(
+    /// <summary>
+    /// Reused by <see cref="RequestDocumentRequest"/> and
+    /// <see cref="ApproveDocumentRequest"/>: naming a design and asking for
+    /// it to be printed are two different moments, but "is this a real
+    /// design, of the right kind" is the same question both times.
+    /// </summary>
+    internal static async Task<(IResult? Refusal, DocumentTemplate? Template)> ResolveTemplateAsync(
         SportFrogDbContext database, Guid templateId, DocumentKind kind, CancellationToken cancellationToken)
     {
         var template = await database.DocumentTemplates
